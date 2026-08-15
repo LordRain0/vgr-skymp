@@ -1,0 +1,28 @@
+{
+  "files": [
+    "_ResourcePack.bsa",
+    "_ResourcePack.esl",
+    "ccBGSSSE001-Fish.bsa",
+    "ccBGSSSE001-Fish.esm",
+    "ccBGSSSE025-AdvDSGS.bsa",
+    "ccBGSSSE025-AdvDSGS.esm",
+    "ccBGSSSE037-Curios.bsa",
+    "ccBGSSSE037-Curios.esl",
+    "ccQDRSSE001-SurvivalMode.bsa",
+    "ccQDRSSE001-SurvivalMode.esl"
+  ],
+  "pluginOrder": [
+    "ccBGSSSE001-Fish.esm",
+    "ccQDRSSE001-SurvivalMode.esl",
+    "ccBGSSSE037-Curios.esl",
+    "ccBGSSSE025-AdvDSGS.esm",
+    "_ResourcePack.esl"
+  ],
+  "modlistOrder": [
+    "_ResourcePack",
+    "ccBGSSSE001-Fish",
+    "ccBGSSSE025-AdvDSGS",
+    "ccBGSSSE037-Curios",
+    "ccQDRSSE001-SurvivalMode"
+  ]
+}

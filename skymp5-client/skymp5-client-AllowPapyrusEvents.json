@@ -1,0 +1,49 @@
+{
+  "Events": {
+    "StartsWith_Allow": [
+		"RSM_",
+		"RSMDT_"
+    ],
+    "AllowExplicit": [
+		"ToggleLight"
+    ]
+  },
+  "Scripts": {
+    "StartsWith_Allow": [
+		"RaceMenu"
+    ],
+    "AllowExplicit": [
+		"NiOverride",
+		"CharGen",
+		"XPMSELib",
+		"RaceMenuPluginXPMSE",
+		"FHIS_PlayerAliasScript",
+		"FHIS_SelfBuffTrigger",
+		"ParryAttack",
+		"FH_Ragdoll",
+		
+		"aaaBowChargeScript",
+		"FHBFCO_ParryArmScript",
+		"FHBFCO_ParryScript",
+		"FHBFCO_PlayerAliasScript",
+		
+		"JITR_LightController",
+		"JITR_LightControllerTimer",
+		"JITR_LightControllerTrigger",
+		  
+		  
+		"cnt_tr_ds",
+		"cnt_tr_en",
+		"cnt",
+		"xmk_tr_ds",
+		"xmk_tr_en",
+
+		"wbptlightonscript",
+		"wbptlightswitchscript",
+
+		"SHESON_DynDOLOD_ObjectEnabler",
+		"SHESON_DynDOLOD_LODObject",
+		"SHESON_DynDOLOD_Worshipper"
+    ]
+  }
+}

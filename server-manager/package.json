@@ -1,0 +1,46 @@
+{
+  "name": "vgr-server-manager",
+  "version": "1.0.0",
+  "description": "Desktop control panel for the Vengeful Realms server: services, console, news, players and settings",
+  "main": "src/main.js",
+  "author": "Vengeful Realms",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win"
+  },
+  "dependencies": {
+    "mongodb": "^6.21.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "electron": "41.2.0",
+    "electron-builder": "26.8.1"
+  },
+  "build": {
+    "appId": "com.vengefulrealms.manager",
+    "productName": "VGR Server Manager",
+    "directories": {
+      "output": "../build/server-manager"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

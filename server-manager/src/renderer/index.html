@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- img-src file:/https: lets the News tab preview gifs from the backend's public/images folder and remote-URL entries. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: https:;" />
+  <title>VGR Server Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav id="tabs">
+    <button class="tab active" data-tab="console">Console</button>
+    <button class="tab" data-tab="news">News</button>
+    <button class="tab" data-tab="players">Players</button>
+    <button class="tab" data-tab="build">Build</button>
+    <button class="tab" data-tab="modlist">Modlist</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <main>
+    <section id="console" class="panel active">
+      <div id="services" class="services"></div>
+      <pre id="log" class="log"></pre>
+      <form id="cmd-form" class="row">
+        <input id="cmd" type="text" placeholder="Type a command and press Enter - 'help' lists manager commands…" autocomplete="off" />
+        <button class="action" type="submit">Send</button>
+      </form>
+    </section>
+
+    <section id="news" class="panel">
+      <div class="row">
+        <button id="news-add" class="action go">Add entry</button>
+        <button id="news-refresh" class="action">Reload</button>
+        <span id="news-status" class="status"></span>
+      </div>
+      <div class="split">
+        <ul id="news-list" class="news-list"></ul>
+        <div id="news-editor" class="detail">
+          <p class="muted">Select an entry to edit it, or click “Add entry”. Entries appear in the launcher top to bottom.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="players" class="panel">
+      <div class="row">
+        <input id="player-search" type="text" placeholder="Search name, Discord ID, or character…" autocomplete="off" />
+        <label class="chk"><input type="checkbox" id="players-online-only" /> Online only</label>
+        <button id="players-refresh" class="action">Refresh</button>
+        <span id="players-count" class="status"></span>
+      </div>
+      <div class="split">
+        <ul id="players-list" class="players"></ul>
+        <div id="player-detail" class="detail">
+          <p class="muted">Select a player to view and edit their details.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="build" class="panel">
+      <div class="build-cols">
+        <div class="build-col">
+          <h3>Gamemode</h3>
+          <div id="gm-status" class="muted small-text">…</div>
+          <small>Merges <code>vgr-gamemode/</code> (loader + extensions) onto the live server. Never deletes server-only files; overwritten ones are backed up. Restart the Game service afterwards - extensions load once at startup.</small>
+          <div class="row">
+            <button id="gm-refresh" class="action small">Refresh status</button>
+            <button id="gm-sync" class="action go">Sync to server</button>
+          </div>
+        </div>
+        <div class="build-col">
+          <h3>Game server</h3>
+          <small>Bundles the TypeScript (<code>skymp5-server</code>) and deploys <code>dist_back/skymp5-server.js</code> to the live server (previous bundle backed up). Restart the Game service to run it. <code>scam_native.node</code> comes from the CI <em>PR Windows Flatrim</em> artifacts.</small>
+          <button id="build-server" class="action go">Build &amp; deploy bundle</button>
+        </div>
+        <div class="build-col">
+          <h3>Launcher</h3>
+          <div class="field">
+            <label>Version</label>
+            <div class="row">
+              <input id="launcher-version" type="text" placeholder="2.0.7" />
+              <button id="launcher-save" class="action small">Save</button>
+            </div>
+          </div>
+          <small id="launcher-version-note">Writes <code>package.json</code>, <code>LAUNCHER_LATEST_VERSION</code> in <code>.env</code>, and <code>routes/version.js</code>. Restart the Backend to serve it.</small>
+          <button id="build-launcher" class="action go">Build installer</button>
+        </div>
+        <div class="build-col">
+          <h3>Client files</h3>
+          <div id="files-version" class="muted small-text">…</div>
+          <small>Rebuilds <code>skymp5-client.js</code> into the CI payload at <code>build/dist/client</code>, overlays <code>vgr-frontend</code>, and packages <code>skymp-client.zip</code> + <code>files-version.json</code>. Mind the CLIENT_ZIP_URL warning in the log.</small>
+          <button id="build-client" class="action go">Build client files</button>
+        </div>
+      </div>
+      <pre id="build-log" class="log"></pre>
+    </section>
+
+    <section id="modlist" class="panel">
+      <div class="row">
+        <button id="modlist-refresh" class="action">Read MO2 profile</button>
+        <button id="modlist-update" class="action go">Update manifest</button>
+      </div>
+      <div id="modlist-summary" class="cards"></div>
+      <pre id="modlist-log" class="log small"></pre>
+    </section>
+
+    <section id="settings" class="panel">
+      <div class="subtabs">
+        <button class="subtab active" data-cfg="serverSettings">server-settings.json</button>
+        <button class="subtab" data-cfg="backendEnv">backend .env</button>
+      </div>
+      <div class="row">
+        <button id="settings-reload" class="action">Reload</button>
+        <button id="settings-save" class="action go">Save</button>
+        <span id="settings-status" class="status"></span>
+      </div>
+      <div id="settings-form" class="settings-form"></div>
+    </section>
+  </main>
+
+  <div id="char-modal" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="cm-title">Character</h3>
+        <span id="cm-status" class="status"></span>
+        <button id="cm-delete" class="action small stop">Delete character</button>
+        <button id="cm-close" class="action small">Close</button>
+      </div>
+      <div id="cm-meta" class="muted"></div>
+      <small>Edits write straight to the character store. Apply them while the game server is stopped (or at least while this player is offline) - a running server can overwrite them at any time.</small>
+      <div class="modal-cols">
+        <div class="modal-col" id="cm-appearance"></div>
+        <div class="modal-col" id="cm-inventory"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="img-modal" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Choose a news image</h3>
+        <span id="im-status" class="status"></span>
+        <button id="im-import" class="action small">Import from disk…</button>
+        <button id="im-close" class="action small">Close</button>
+      </div>
+      <div id="im-dir" class="muted"></div>
+      <div id="im-grid" class="img-grid"></div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
