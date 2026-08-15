@@ -13,7 +13,6 @@ export interface GamemodeApiCtx {
     _view: FormViewArray | undefined;
     i: number;
     getFormIdInServerFormat: (clientsideFormId: number) => number;
-    getMyFormIdInServerFormat: () => number;
     getFormIdInClientFormat: (serversideFormId: number) => number;
     get: (propName: string) => unknown;
     respawn: () => void;

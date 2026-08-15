@@ -3,7 +3,6 @@ import { ConnectionMessage } from "../events/connectionMessage";
 import { CustomEventMessage } from "../messages/customEventMessage";
 import { UpdateGamemodeDataMessage } from "../messages/updateGameModeDataMessage";
 import { ClientListener, CombinedController, Sp } from "./clientListener";
-import { RemoteServer } from "./remoteServer";
 import { MsgType } from "../../messages";
 import { GamemodeApiEventSourceCtx } from "../messages_gamemode/gamemodeApiEventSourceCtx";
 
@@ -107,9 +106,6 @@ export class GamemodeEventSourceService extends ClientListener {
                     },
                     getFormIdInServerFormat: (clientsideFormId: number) => {
                         return localIdToRemoteId(clientsideFormId);
-                    },
-                    getMyFormIdInServerFormat: () => {
-                        return this.controller.lookupListener(RemoteServer).getMyRemoteRefrId();
                     },
                     getFormIdInClientFormat: (serversideFormId: number) => {
                         return remoteIdToLocalId(serversideFormId);

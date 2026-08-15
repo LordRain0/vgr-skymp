@@ -1009,7 +1009,38 @@ void MpActor::SendAndSetDeathState(bool isDead, bool shouldTeleport)
   auto position = GetSpawnPoint();
 
   auto respawnMsg = GetDeathStateMsg(position, isDead, shouldTeleport);
-  GetActorToSendTo().SendToUser(respawnMsg, true);
+
+  // Primary recipient: the owner for an online actor (player), or the host for
+  // an offline NPC. Deliver to it exactly as before.
+  auto& primaryRecipient = GetActorToSendTo();
+  primaryRecipient.SendToUser(respawnMsg, true);
+
+  // Death must reach every client that can see this actor, not just the host.
+  // Otherwise non-host clients learn of an offline NPC's death only indirectly
+  // via the host's movement-stream isDead flag; if the host disconnects at
+  // death time they keep a live-looking NPC until the NPC re-streams. Broadcast
+  // the DeathStateContainerMessage to the remaining listeners so each client's
+  // onDeathStateContainerMessage fires applyDeathStateEvent(isDead=true).
+  //  - Online players (GetUserId() != InvalidUserId) are excluded: the owner
+  //    already got the message and its movement stream carries death to others.
+  //  - Respawn (isDead == false) is excluded: its container carries a teleport
+  //    + change-values that must not be replayed on remote copies, and
+  //    RespawnEvent already broadcasts a bare isDead=false property to listeners.
+  // We iterate listeners manually (not SendMessageToActorListeners) because an
+  // offline NPC's own self-listener routes back to the host; skipping `this`
+  // and the primary recipient guarantees the host processes death exactly once.
+  if (isDead && GetUserId() == Networking::InvalidUserId) {
+    for (auto listener : GetActorListeners()) {
+      if (listener == this) {
+        continue;
+      }
+      auto& recipient = listener->GetActorToSendTo();
+      if (&recipient == &primaryRecipient) {
+        continue;
+      }
+      recipient.SendToUser(respawnMsg, true);
+    }
+  }
 
   EditChangeForm([&](MpChangeForm& changeForm) {
     changeForm.isDead = isDead;

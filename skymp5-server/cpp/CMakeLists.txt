@@ -16,6 +16,16 @@ if(WIN32)
   apply_default_settings(TARGETS MpClientPlugin)
   list(APPEND VCPKG_DEPENDENT MpClientPlugin)
 
+  # Voice chat support (requires LiveKit C++ SDK + miniaudio)
+  option(SKYMP_VOICE_CHAT "Enable voice chat via LiveKit" OFF)
+  if(SKYMP_VOICE_CHAT)
+    find_package(LiveKit CONFIG REQUIRED)
+    target_compile_definitions(MpClientPlugin PRIVATE SKYMP_VOICE_CHAT_ENABLED)
+    target_link_libraries(MpClientPlugin PRIVATE LiveKit::livekit)
+    # miniaudio is header-only, included directly from client/miniaudio.h
+    target_include_directories(MpClientPlugin PRIVATE "${CMAKE_CURRENT_LIST_DIR}/client")
+  endif()
+
   # Not mistake that skyrim-platform depends on MpClientPlugin
   # skyrim-platform is a logical target that invokes dev_service
   # dev_service wants to access built MpClientPlugin.dll

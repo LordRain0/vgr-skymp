@@ -1,6 +1,5 @@
 #include "libespm/Browser.h"
 #include "libespm/ACHR.h"
-#include "libespm/CELL.h"
 #include "libespm/COBJ.h"
 #include "libespm/CellOrGridPos.h"
 #include "libespm/CompressedFieldsCache.h"
@@ -47,7 +46,6 @@ struct Browser::Impl
   std::vector<const RecordHeader*> factions;
   std::vector<const RecordHeader*> quests;
   std::vector<const RecordHeader*> worlds;
-  std::vector<const RecordHeader*> cells;
 
   GroupStack grStack;
   std::vector<std::unique_ptr<GroupStack>> grStackCopies;
@@ -131,11 +129,8 @@ const std::vector<const RecordHeader*>& Browser::GetRecordsByType(
   if (!std::strcmp(type, espm::WRLD::kType)) {
     return pImpl->worlds;
   }
-  if (!std::strcmp(type, espm::CELL::kType)) {
-    return pImpl->cells;
-  }
   throw std::runtime_error("GetRecordsByType currently supports only REFR, "
-                           "COBJ, KYWD, FACT, QUST, WRLD and CELL records");
+                           "COBJ, KYWD and QUST records");
 }
 
 const std::vector<const RecordHeader*>& Browser::GetRecordsAtPos(
@@ -269,10 +264,6 @@ bool Browser::ReadAny(const GroupStack* parentGrStack)
 
     if (utils::Is<espm::WRLD>(t)) {
       pImpl->worlds.push_back(recHeader);
-    }
-
-    if (utils::Is<espm::CELL>(t)) {
-      pImpl->cells.push_back(recHeader);
     }
 
     pImpl->pos += sizeof(RecordHeader) + *pDataSize;

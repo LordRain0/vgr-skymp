@@ -9,3 +9,20 @@ node_modules
 # vim
 .*.swp
 skyrim_data_files/
+
+# Build logs
+*.log
+
+# Deploy staging artifacts
+deploy-staging/
+
+# npm lockfile (project uses yarn)
+skymp5-server/package-lock.json
+
+# Compiled Go binaries
+voice-agent/voice-agent
+voice-agent/voice-agent-linux
+
+# Local secrets and runtime state (never commit)
+skymp5-backend/.env
+skymp5-launcher/.env

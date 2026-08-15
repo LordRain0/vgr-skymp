@@ -1,0 +1,27 @@
+/**
+ * Launcher configuration - developer-only.
+ *
+ * apiUrl  - Base URL of the Vengeful Realms backend (skymp5-backend).
+ *           Overridden by the API_URL environment variable (set in .env for
+ *           local dev, or as a real env var in a packaged/CI build).
+ *           The available game servers are fetched from GET /api/servers
+ *           at runtime so they never need a launcher rebuild to update.
+ *           The fallback below is what packaged builds use - it points at the
+ *           production VGR backend. For local dev against skymp5-backend, set
+ *           API_URL=http://localhost:4000 in .env and run with --dev.
+ */
+module.exports = {
+  apiUrl: process.env.API_URL || 'https://api.vengefulrealms.com',
+
+  // Nexus login, in preference order:
+  //  1. OAuth (users.nexusmods.com, authorization code + PKCE) when a client
+  //     id is set. The callback URL to register with the Nexus team is
+  //     http://127.0.0.1:<nexusOauthPort>/nexus/callback
+  //  2. Websocket SSO (the older Vortex/MO2/Wabbajack flow) when only the
+  //     application slug is set.
+  // Defaults are the registered public "SkyRP" app (a public PKCE client, so
+  // no secret ships here); packaged builds have no .env, they rely on these.
+  nexusOauthClientId: process.env.NEXUS_OAUTH_CLIENT_ID || 'skyrp',
+  nexusOauthPort:     parseInt(process.env.NEXUS_OAUTH_PORT || '48521', 10),
+  nexusAppSlug:       process.env.NEXUS_APP_SLUG || 'skyrp',
+}

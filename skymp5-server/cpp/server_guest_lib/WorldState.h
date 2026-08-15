@@ -250,6 +250,7 @@ public:
   std::unordered_map<std::string, NpcSettingsEntry> npcSettings;
   NpcSettingsEntry defaultSetting;
   bool enableConsoleCommandsForAll = false;
+  bool disableVanillaContainerLoot = false;
 
   bool disableVanillaScriptsInExterior = true;
 

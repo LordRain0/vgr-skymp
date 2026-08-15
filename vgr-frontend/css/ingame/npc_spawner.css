@@ -1,0 +1,128 @@
+/* ---------- ADMIN NPC SPAWNER ---------- */
+
+.npc-subtabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 109, 62, 0.3);
+}
+.npc-subtab {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(214, 194, 160, 0.7);
+  font: inherit;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.npc-subtab:hover { color: #ead7b7; }
+.npc-subtab.active {
+  color: #ead7b7;
+  border-bottom-color: #c7b38a;
+}
+.npc-subpanel { display: none; }
+.npc-subpanel.active { display: block; }
+
+.npc-picker-row-input,
+.npc-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.npc-picker-row {
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(110, 77, 42, 0.25);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.npc-picker-row:hover { background: rgba(92, 7, 6, 0.28); }
+.npc-picker-name { color: #ead7b7; font-size: 13px; }
+.npc-picker-meta { color: rgba(199, 179, 138, 0.7); font-size: 11px; letter-spacing: 0.04em; white-space: nowrap; }
+
+/* base picker row: readonly input + browse button */
+#tab-npc .npc-picker-row input[readonly],
+.npc-picker-row > input[readonly] { flex: 1; }
+.npc-picker-row + .npc-preset-grid { margin-top: 8px; }
+#tab-npc .npc-picker-row {
+  justify-content: flex-start;
+  padding: 0;
+  border: none;
+  cursor: default;
+  margin-bottom: 8px;
+}
+#tab-npc .npc-picker-row:hover { background: none; }
+#tab-npc .npc-picker-row input { flex: 1; }
+
+.npc-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+.npc-preset-btn {
+  padding: 7px 8px;
+  font-size: 12px;
+  color: #cfe2f2;
+  background: rgba(30, 48, 66, 0.7);
+  border: 1px solid rgba(94, 140, 176, 0.5);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.npc-preset-btn:hover { border-color: #9cc4e0; background: rgba(40, 62, 84, 0.85); }
+
+/* chip lists (inventory / abilities) */
+.npc-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 20px;
+}
+.npc-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  background: rgba(20, 16, 12, 0.7);
+  border: 1px solid rgba(148, 109, 62, 0.5);
+  font-size: 12px;
+  color: #ead7b7;
+}
+.npc-chip-name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.npc-chip-count {
+  width: 48px;
+  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(148, 109, 62, 0.4);
+  color: #ead7b7;
+  font: inherit;
+}
+.npc-chip-x {
+  background: none;
+  border: none;
+  color: #d98a8a;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.npc-chip-x:hover { color: #ff9a9a; }
+
+/* existing NPC list */
+.npc-existing-list { display: flex; flex-direction: column; gap: 6px; }
+.npc-existing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(20, 16, 12, 0.6);
+  border: 1px solid rgba(110, 77, 42, 0.4);
+}
+.npc-existing-info { display: flex; flex-direction: column; gap: 2px; }
+.npc-existing-name { color: #ead7b7; font-size: 13px; }
+.npc-existing-meta { color: rgba(199, 179, 138, 0.7); font-size: 11px; }
+.npc-existing-meta em { color: #d98a8a; font-style: normal; }
+
+.muted { color: rgba(214, 194, 160, 0.5); }

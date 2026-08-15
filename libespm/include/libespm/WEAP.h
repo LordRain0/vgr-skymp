@@ -49,6 +49,7 @@ public:
   {
     const WeapData* weapData = nullptr;
     const DNAM* weapDNAM = nullptr;
+    uint32_t enchantmentFormId = 0; // EITM (same semantics as ARMO's)
   };
 
   Data GetData(CompressedFieldsCache& compressedFieldsCache) const noexcept;

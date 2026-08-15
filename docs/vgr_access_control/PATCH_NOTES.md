@@ -1,0 +1,23 @@
+# Patch Notes
+
+- Added `vgr_access_control.js` server extension with server-side activation enforcement.
+- Added `vgr_access_permissions.js` for named permission checks using server-trusted profile, Discord ID, and Discord roles.
+- Added `vgr_access_identity.js` profile identity helpers.
+- Added `vgr_access_door_pair.js` for XTEL door-pair resolution and stable door IDs.
+- Added disabled-by-default `vgr_access_door_probe.js`.
+- Added `access_control` browser registry entry, UI markup, CSS, and JavaScript.
+- Added dry-run-first legacy migration tool.
+- Added a config kill switch through `vgrAccessControl.enabled: false`.
+- Removed the active experimental `_vgrScrewYourself2` K-key event source from `gamemode.js`.
+- Removed `KeyX` from the generic UI focus-key registry so X is reserved for contextual access-control inspection.
+- Reverted the temporary offline-dev memory store; local testing now uses the same Mongo-backed fail-closed path as production.
+- Hardened access-control modal visibility so hidden search/confirm overlays cannot intercept clicks, and placed the active access UI above legacy overlays.
+- Changed locked-object activation policy: locked managed objects cannot be opened by normal activation until unlocked, even by the owner or an access administrator.
+- Added passive managed-object hints while looking at registered doors/containers, showing locked/unlocked state and owner name without opening the `X` menu.
+- Moved the passive managed-object hint above Skyrim's native activation prompt and removed the redundant locked toast on normal activation.
+- Suppressed passive managed-object hints while the `X` access-control menu is open.
+- Removed the passive hint's backing box and removed the `Object locked/unlocked` toast after toggling lock state in the management UI.
+- Changed the admin owner UI to use `Replace` for existing owners instead of exposing the normal `Remove owner` action that leaves an object unassigned.
+- Added owner-replacement wording and a no-op guard when an admin selects the current owner again.
+- Restricted non-admin owners to lock/unlock plus guest removal; adding guests and ownership assignment/replacement remain admin-only.
+- Left old `locks` frontend assets in place but the new access-control extension does not use them.

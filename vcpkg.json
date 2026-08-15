@@ -103,6 +103,15 @@
           "platform": "windows"
         }
       ]
+    },
+    "voice-chat": {
+      "description": "Enable LiveKit-based proximity voice chat",
+      "dependencies": [
+        {
+          "name": "livekit-cpp-sdk",
+          "platform": "windows"
+        }
+      ]
     }
   }
 }

@@ -1956,6 +1956,14 @@ void MpObjectReference::EnsureBaseContainerAdded(espm::Loader& espm)
   }
 
   auto actor = AsActor();
+
+  if (!actor && worldState->disableVanillaContainerLoot) {
+    EditChangeForm([&](MpChangeFormREFR& changeForm) {
+      changeForm.baseContainerAdded = true;
+    });
+    return;
+  }
+
   const std::vector<FormDesc> kEmptyTemplateChain;
   const std::vector<FormDesc>& templateChain =
     actor ? actor->GetTemplateChain() : kEmptyTemplateChain;

@@ -1,0 +1,435 @@
+{
+  "version": 2,
+  "comment": "Levels & Skills tuning, node-based per the proposal mockups. Each tree is a vertical chain of named nodes; nodes cost 1 skill point each and require the tree XP shown (first node always 0). 'unlocks' on mining nodes gates which ores the player may harvest. All XP numbers are PLACEHOLDERS pending balance. Branching trees (the mockup's parallel Smithing weapon/armour paths) are a planned extension - chains only for now.",
+  "baseSkillPoints": 3,
+  "levelCap": 10,
+  "levelXp": [
+    0,
+    100,
+    250,
+    450,
+    700,
+    1000,
+    1350,
+    1750,
+    2200,
+    2700,
+    3250
+  ],
+  "gather": {
+    "mining": {
+      "treeXpPerItem": 5,
+      "generalXpPerItem": 2
+    },
+    "woodcutting": {
+      "treeXpPerItem": 4,
+      "generalXpPerItem": 2
+    },
+    "alchemy": {
+      "treeXpPerItem": 8,
+      "generalXpPerItem": 3
+    },
+    "enchanting": {
+      "treeXpPerItem": 12,
+      "generalXpPerItem": 4
+    }
+  },
+  "trees": {
+    "mining": {
+      "name": "Mining",
+      "desc": "Harvest ores from veins. Each node unlocks richer veins.",
+      "gatherGated": true,
+      "nodes": [
+        {
+          "name": "Iron",
+          "xpReq": 0,
+          "unlocks": [
+            "Iron"
+          ]
+        },
+        {
+          "name": "Corundum",
+          "xpReq": 100,
+          "unlocks": [
+            "Corundum"
+          ]
+        },
+        {
+          "name": "Silver",
+          "xpReq": 250,
+          "unlocks": [
+            "Silver",
+            "Quicksilver"
+          ]
+        },
+        {
+          "name": "Gold",
+          "xpReq": 500,
+          "unlocks": [
+            "Gold"
+          ]
+        },
+        {
+          "name": "Moonstone",
+          "xpReq": 1000,
+          "unlocks": [
+            "Moonstone"
+          ]
+        },
+        {
+          "name": "Orichalcum",
+          "xpReq": 1500,
+          "unlocks": [
+            "Orichalcum"
+          ]
+        },
+        {
+          "name": "Malachite & Ebony",
+          "xpReq": 2500,
+          "unlocks": [
+            "Malachite",
+            "Ebony"
+          ]
+        }
+      ],
+      "specialization": "Blackreach Excavator"
+    },
+    "woodcutting": {
+      "name": "Woodcutting",
+      "desc": "Chop firewood at woodcutting blocks.",
+      "gatherGated": false,
+      "nodes": [
+        {
+          "name": "Woodcutter",
+          "xpReq": 0
+        },
+        {
+          "name": "Seasoned Logger",
+          "xpReq": 100
+        },
+        {
+          "name": "Timber Hauler",
+          "xpReq": 250
+        },
+        {
+          "name": "Master Feller",
+          "xpReq": 500
+        },
+        {
+          "name": "Old Growth",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Forester"
+    },
+    "smithing": {
+      "name": "Smithing",
+      "desc": "Smelt ingots and forge weapons and armour.",
+      "nodes": [
+        {
+          "name": "Smelt Ingots",
+          "xpReq": 0
+        },
+        {
+          "name": "Basic Iron",
+          "xpReq": 100
+        },
+        {
+          "name": "Adv Iron",
+          "xpReq": 250
+        },
+        {
+          "name": "Basic Steel",
+          "xpReq": 500
+        },
+        {
+          "name": "Adv Steel",
+          "xpReq": 1000
+        },
+        {
+          "name": "Elven",
+          "xpReq": 1500
+        },
+        {
+          "name": "Dwemer",
+          "xpReq": 2000
+        },
+        {
+          "name": "Glass",
+          "xpReq": 2500
+        }
+      ],
+      "specialization": "Skyforge Disciple"
+    },
+    "jeweller": {
+      "name": "Jeweller",
+      "desc": "Cut gems and craft rings and amulets.",
+      "nodes": [
+        {
+          "name": "Gem Cutting",
+          "xpReq": 0
+        },
+        {
+          "name": "Silver Settings",
+          "xpReq": 100
+        },
+        {
+          "name": "Gold Settings",
+          "xpReq": 250
+        },
+        {
+          "name": "Fine Amulets",
+          "xpReq": 500
+        },
+        {
+          "name": "Court Pieces",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Royal Jeweller"
+    },
+    "hunting": {
+      "name": "Hunting",
+      "desc": "Track and slay wild creatures. Only hunters receive animal skin drops.",
+      "nodes": [
+        {
+          "name": "Small Game",
+          "xpReq": 0
+        },
+        {
+          "name": "Deer & Elk",
+          "xpReq": 100
+        },
+        {
+          "name": "Predators",
+          "xpReq": 250
+        },
+        {
+          "name": "Great Beasts",
+          "xpReq": 500
+        },
+        {
+          "name": "Legendary Prey",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Beastmaster"
+    },
+    "leatherworking": {
+      "name": "Leatherworking",
+      "desc": "Tan hides and work leather goods.",
+      "nodes": [
+        {
+          "name": "Tanning",
+          "xpReq": 0
+        },
+        {
+          "name": "Basic Leather",
+          "xpReq": 100
+        },
+        {
+          "name": "Hardened Leather",
+          "xpReq": 250
+        },
+        {
+          "name": "Fine Leathers",
+          "xpReq": 500
+        },
+        {
+          "name": "Exotic Hides",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Master Tanner"
+    },
+    "tailoring": {
+      "name": "Tailoring",
+      "desc": "Weave cloth and sew fine garments.",
+      "nodes": [
+        {
+          "name": "Spinning",
+          "xpReq": 0
+        },
+        {
+          "name": "Common Wear",
+          "xpReq": 100
+        },
+        {
+          "name": "Fine Garments",
+          "xpReq": 250
+        },
+        {
+          "name": "Noble Attire",
+          "xpReq": 500
+        },
+        {
+          "name": "Court Fashion",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Court Couturier"
+    },
+    "alchemy": {
+      "name": "Alchemy",
+      "desc": "Brew potions and poisons.",
+      "nodes": [
+        {
+          "name": "Herb Lore",
+          "xpReq": 0
+        },
+        {
+          "name": "Minor Potions",
+          "xpReq": 100
+        },
+        {
+          "name": "Salves & Poisons",
+          "xpReq": 250
+        },
+        {
+          "name": "Potent Mixtures",
+          "xpReq": 500
+        },
+        {
+          "name": "Grand Elixirs",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Potion of Magnus"
+    },
+    "brewing": {
+      "name": "Brewing",
+      "desc": "Ferment meads and ales.",
+      "nodes": [
+        {
+          "name": "Home Brew",
+          "xpReq": 0
+        },
+        {
+          "name": "Common Ale",
+          "xpReq": 100
+        },
+        {
+          "name": "Fine Mead",
+          "xpReq": 250
+        },
+        {
+          "name": "Spiced Wine",
+          "xpReq": 500
+        },
+        {
+          "name": "Reserve Casks",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Honningbrew Heir"
+    },
+    "cooking": {
+      "name": "Cooking",
+      "desc": "Prepare hearty meals at cooking pots.",
+      "nodes": [
+        {
+          "name": "Camp Cooking",
+          "xpReq": 0
+        },
+        {
+          "name": "Hearty Stews",
+          "xpReq": 100
+        },
+        {
+          "name": "Baker's Craft",
+          "xpReq": 250
+        },
+        {
+          "name": "Feast Fare",
+          "xpReq": 500
+        },
+        {
+          "name": "Jarl's Table",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Gourmet"
+    },
+    "farming": {
+      "name": "Farming",
+      "desc": "Tend crops and harvest the land.",
+      "nodes": [
+        {
+          "name": "Field Hand",
+          "xpReq": 0
+        },
+        {
+          "name": "Crop Rotation",
+          "xpReq": 100
+        },
+        {
+          "name": "Livestock",
+          "xpReq": 250
+        },
+        {
+          "name": "Estate Farming",
+          "xpReq": 500
+        },
+        {
+          "name": "Land Steward",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Landed Gentry"
+    },
+    "combat": {
+      "name": "Combat",
+      "desc": "Prowess in battle against man and beast.",
+      "nodes": [
+        {
+          "name": "Brawler",
+          "xpReq": 0
+        },
+        {
+          "name": "Soldier",
+          "xpReq": 100
+        },
+        {
+          "name": "Veteran",
+          "xpReq": 250
+        },
+        {
+          "name": "Warrior",
+          "xpReq": 500
+        },
+        {
+          "name": "Champion",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Champion of the Pit"
+    },
+    "enchanting": {
+      "name": "Enchanting",
+      "desc": "Imbue weapons and armor with magical power.",
+      "nodes": [
+        {
+          "name": "Soul Binding",
+          "xpReq": 0
+        },
+        {
+          "name": "Apprentice Enchants",
+          "xpReq": 100
+        },
+        {
+          "name": "Adept Enchants",
+          "xpReq": 250
+        },
+        {
+          "name": "Expert Enchants",
+          "xpReq": 500
+        },
+        {
+          "name": "Master Enchants",
+          "xpReq": 1000
+        }
+      ],
+      "specialization": "Sigil of Arcana"
+    }
+  }
+}

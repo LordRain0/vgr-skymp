@@ -116,6 +116,27 @@ void ActionListener::OnCustomPacket(const RawMessageData& rawMsgData,
 void ActionListener::OnUpdateMovement(const RawMessageData& rawMsgData,
                                       const UpdateMovementMessage& msg)
 {
+  // Fix respawn "ghost window": a still-hosting client can keep streaming
+  // isDead=true from its not-yet-resurrected local clone after the server has
+  // already respawned the actor (RespawnEvent -> SendAndSetDeathState(false)
+  // sets changeForm.isDead=false synchronously). SendToNeighbours forwards the
+  // raw movement bytes verbatim, so that stale isDead=true reaches other
+  // clients and re-kills their freshly respawned clones. Drop movement whose
+  // death state contradicts the server's authoritative *alive* state. This
+  // never loses a real death: movement isDead is only a client->client relay
+  // (this handler never uses it to change server state), authoritative NPC
+  // death comes from OnHit/OnChangeValues->Kill and is broadcast via the
+  // DeathState channel. Once the server marks the actor dead, a matching
+  // isDead=true is relayed again, so legitimate re-death still propagates.
+  if (msg.data.isDead) {
+    MpForm* form = partOne.worldState.LookupFormByIdx(msg.idx);
+    if (MpActor* targetActor = form ? form->AsActor() : nullptr) {
+      if (!targetActor->IsDead()) {
+        return;
+      }
+    }
+  }
+
   auto actor = SendToNeighbours(msg.idx, rawMsgData);
   if (actor) {
     bool teleportFlag = actor->GetTeleportFlag();
@@ -682,7 +703,7 @@ void ActionListener::OnHostAttempt(const RawMessageData& rawMsgData,
   if (hoster == 0 || !lastRemoteUpdate ||
       std::chrono::system_clock::now() - *lastRemoteUpdate >
         hostResetTimeout) {
-    partOne.GetLogger().info("Hoster changed from {0:x} to {0:x}", prevHoster,
+    partOne.GetLogger().info("Hoster changed from {0:x} to {1:x}", prevHoster,
                              me->GetFormId());
     hoster = me->GetFormId();
     remote.UpdateHoster(hoster);

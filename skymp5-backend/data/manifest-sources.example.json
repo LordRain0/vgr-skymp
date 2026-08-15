@@ -1,0 +1,13 @@
+{
+  "//": "Optional overrides for compile-manifest.js. Copy to manifest-sources.json and edit. Both fields are optional.",
+  "// urls": "Give non-Nexus archives in MO2's downloads\\ a direct download URL, keyed by exact filename. Without one they are reported as 'manual' and the launcher cannot fetch them.",
+  "urls": {
+    "skse64_2_02_06.7z": "https://example.com/skse64_2_02_06.7z"
+  },
+  "// rootInclude": "Game-root files (relative to --game) to capture, e.g. SKSE preloaders. skse64_*.exe/.dll are auto-detected and need not be listed.",
+  "rootInclude": [
+    "IpHlpAPI.dll",
+    "tbb.dll",
+    "tbbmalloc.dll"
+  ]
+}

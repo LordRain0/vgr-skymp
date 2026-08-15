@@ -19,6 +19,36 @@ declare module "skyrimPlatform" {
     function getTextRefrNode(textId: number): string;
     function getTextRefrOffset(textId: number): number[];
     function getTextRefrScreenOffset(textId: number): number[];
+
+    interface TESModPlatform {
+        setNpcBlockedFileIndices(blockedIndices: number[]): void;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-namespace
+    namespace TESModPlatform {
+        function setNpcBlockedFileIndices(blockedIndices: number[]): void;
+    }
+
+    interface MpClientPlugin {
+        initVoiceChat?(livekitUrl: string, token: string, sampleRate: number, numChannels: number): boolean;
+        shutdownVoiceChat?(): void;
+        isVoiceChatInitialized?(): boolean;
+        startTalking?(): void;
+        stopTalking?(): void;
+        isTalking?(): boolean;
+        setVoiceMode?(mode: number): void;
+        setVoiceInputGain?(gain: number): void;
+        setVoiceOutputVolume?(volume: number): void;
+        tickVoiceChat?(): void;
+        needsVoiceReconnect?(): boolean;
+        setVoiceParticipantPosition?(identity: string, x: number, y: number, z: number): void;
+        setVoiceListenerPosition?(x: number, y: number, z: number, dirX: number, dirY: number, dirZ: number): void;
+        setVoiceRange?(range: number): void;
+        setVoiceNoiseGateEnabled?(enabled: boolean): void;
+        setVoiceNoiseGateThreshold?(threshold: number): void;
+        setVoiceNormalizationEnabled?(enabled: boolean): void;
+        setVoiceNormalizationTarget?(target: number): void;
+        getVoiceRemoteParticipants?(): string;
+    }
 }
 
 export type Sp = Omit<typeof sp, "on" | "once">;

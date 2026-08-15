@@ -6,6 +6,7 @@
 #include "RawMessageData.h"
 #include "WorldState.h"
 #include "gamemode_events/CraftEvent.h"
+#include "gamemode_events/CustomCraftAttemptEvent.h"
 #include <algorithm>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -57,10 +58,17 @@ void CraftService::OnCraftItem(const RawMessageData& rawMsgData,
     FindRecipe(me, workbenchKeywordIds, br, inputObjects, resultObjectId);
 
   if (recipesList.empty()) {
-    return spdlog::error(
-      "Recipe not found: inputObjects={}, workbenchId={:#x}, "
-      "resultObjectId={:#x}",
-      inputObjects.ToJson().dump(), workbenchId, resultObjectId);
+    // Non-COBJ stations (alchemy labs, etc.) produce dynamic forms the server
+    // can't resolve, so no recipe ever matches. Forward the attempt with its
+    // inputs to gamemode JS, which can grant a canonical static result
+    // (see vgr_alchemy.js onCustomCraftAttempt).
+    spdlog::info("Recipe not found, firing onCustomCraftAttempt: "
+                 "inputObjects={}, workbenchId={:#x}, resultObjectId={:#x}",
+                 inputObjects.ToJson().dump(), workbenchId, resultObjectId);
+    CustomCraftAttemptEvent event(me->GetFormId(), workbench.GetBaseId(),
+                                  inputObjects);
+    event.Fire(&partOne.worldState);
+    return;
   }
 
   if (recipesList.size() > 1) {

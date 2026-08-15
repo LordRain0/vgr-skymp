@@ -253,6 +253,10 @@ void PartOne::DestroyActor(uint32_t actorFormId)
   std::shared_ptr<MpActor> destroyedForm;
   worldState.DestroyForm<MpActor>(actorFormId, &destroyedForm);
 
+  // The destroyed form can no longer be hosted; drop any dangling entry so a
+  // later reuse of this NPC doesn't inherit a stale hoster.
+  worldState.hosters.erase(actorFormId);
+
   serverState.actorsMap.Erase(destroyedForm.get());
 }
 
@@ -455,6 +459,23 @@ void PartOne::HandlePacket(void* partOneInstance, Networking::UserId userId,
           // TODO: apply dependency inversion here: connection handling code
           // should not depend on animation system
           this_->animationSystem.ClearInfo(actor);
+
+          // The departing player was hosting these NPCs (simulating their AI
+          // and streaming movement). Drop those host relationships now so the
+          // next client to notice the stalled NPC re-hosts immediately (the
+          // hoster==0 fast path in OnHostAttempt) instead of waiting out the
+          // ~2s staleness gate, and so entries don't linger forever if no one
+          // else re-attempts. hosters values are normal actor formIds, which
+          // is exactly what GetFormId() returns here.
+          const uint32_t departingActorId = actor->GetFormId();
+          auto& hosters = this_->worldState.hosters;
+          for (auto it = hosters.begin(); it != hosters.end();) {
+            if (it->second == departingActorId) {
+              it = hosters.erase(it);
+            } else {
+              ++it;
+            }
+          }
         }
         this_->serverState.Disconnect(userId);
         this_->serverState.disconnectingUserId = Networking::InvalidUserId;

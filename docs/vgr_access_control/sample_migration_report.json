@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-08-05T00:00:00.000Z",
+  "mode": "dry-run",
+  "source": {
+    "database": "vengeful_realms",
+    "collection": "locked_objects"
+  },
+  "target": {
+    "database": "vengeful_realms",
+    "collection": "vgr_access_objects"
+  },
+  "scanned": 0,
+  "planned": 0,
+  "inserted": 0,
+  "skipped": [],
+  "unresolvedIdentities": [],
+  "objects": []
+}

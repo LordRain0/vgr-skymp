@@ -189,6 +189,18 @@ Name of a database driver which would be used to store server data. `file` by de
 }
 ```
 
+## disableVanillaContainerLoot
+
+When `true`, plain containers (chests, barrels, sacks — anything that is not an actor) receive **no** base-game loot when first accessed, and stay empty when relooted. Use this when loot is provided by a custom gamemode system instead (write the `inventory` property of the container reference). NPC inventories and outfits are unaffected. Defaults to `false` (vanilla leveled-list loot).
+
+Note: containers that were already opened before enabling this keep whatever they held until their next reloot cycle; wipe the world database for an immediately clean state.
+
+```json
+{
+  "disableVanillaContainerLoot": true
+}
+```
+
 ## reloot
 
 A time before a game object restores its original state in milliseconds. Unlike Skyrim SE, Skyrim Multiplayer doesn't have a built-in Cell Reset mechanism. The server resets every object in the world every hour instead. With this option, you can change this time interval for every kind of game object. `"CONT"`, for example, means "Container" - chests, barrels, etc. See "record types" on [UESP](https://en.uesp.net/wiki/Skyrim_Mod:Mod_File_Format).

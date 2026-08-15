@@ -39,6 +39,7 @@ private:
   [[nodiscard]] float DetermineDamageFromSource(uint32_t source) const;
   [[nodiscard]] float CalcUnarmedDamage() const;
   [[nodiscard]] float CalcArmorDamagePenalty() const;
+  [[nodiscard]] float CalcWeaponEnchantmentDamage() const;
 };
 
 TES5DamageFormulaImpl::TES5DamageFormulaImpl(const MpActor& aggressor_,
@@ -140,6 +141,42 @@ float TES5DamageFormulaImpl::CalcArmorDamagePenalty() const
                      maxArmorRating));
 }
 
+float TES5DamageFormulaImpl::CalcWeaponEnchantmentDamage() const
+{
+  if (IsUnarmedAttack(hitData.source)) {
+    return 0.f;
+  }
+
+  const auto lookupResult =
+    espmProvider->GetEspm().GetBrowser().LookupById(hitData.source);
+  const auto weapon = espm::Convert<espm::WEAP>(lookupResult.rec);
+  if (!weapon) {
+    return 0.f;
+  }
+
+  const auto weapData = weapon->GetData(espmProvider->GetEspmCache());
+  if (!weapData.enchantmentFormId) {
+    return 0.f;
+  }
+
+  // Sum the enchantment's hostile health-damaging effects (fire/frost/shock
+  // damage all have primaryAV == Health; soul trap, fear, etc. don't and are
+  // correctly excluded). Mirrors the spell-damage MGEF filter below.
+  float damage = 0.f;
+  const auto enchantmentData =
+    espm::GetData<espm::ENCH>(weapData.enchantmentFormId, espmProvider);
+  for (const auto& effect : enchantmentData.effects) {
+    const auto mgefData =
+      espm::GetData<espm::MGEF>(effect.effectId, espmProvider).data;
+    const bool hostile = mgefData.IsFlagSet(espm::MGEF::Flags::Hostile) ||
+      mgefData.IsFlagSet(espm::MGEF::Flags::Detrimental);
+    if (hostile && mgefData.primaryAV == espm::ActorValue::Health) {
+      damage += effect.magnitude;
+    }
+  }
+  return damage;
+}
+
 float TES5DamageFormulaImpl::CalculateDamage() const
 {
   const float incomingDamage = DetermineDamageFromSource(hitData.source);
@@ -162,7 +199,15 @@ float TES5DamageFormulaImpl::CalculateDamage() const
     damage *= 1.3f;
   }
 
-  return damage;
+  // Weapon enchantment (magic) damage: bypasses armor rating, is not doubled
+  // by power attacks or sneak, but blocked hits still mitigate it. No charge
+  // model server-side yet - enchanted weapons never run dry (known limit).
+  float enchantmentDamage = CalcWeaponEnchantmentDamage();
+  if (hitData.isHitBlocked) {
+    enchantmentDamage *= 0.1f;
+  }
+
+  return damage + enchantmentDamage;
 }
 
 class TES5SpellDamageFormulaImpl

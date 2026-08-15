@@ -1,0 +1,29 @@
+{
+  "databaseUri": "mongodb://127.0.0.1:27017/skymp",
+  "databaseName": "skymp",
+  "vgrAccessControl": {
+    "enabled": true,
+    "databaseName": "vengeful_realms",
+    "collection": "vgr_access_objects",
+    "backendDatabaseName": "skymp-backend",
+    "charactersCollection": "characters",
+    "maxInteractionDistance": 350,
+    "maxUsersPerObject": 50,
+    "sessionTargetTtlMs": 15000,
+    "sessionIdleMs": 60000,
+    "sessionAbsoluteMs": 300000,
+    "searchRateMs": 700,
+    "permissions": {
+      "vgr.access.manage": {
+        "profileIds": [],
+        "discordIds": [],
+        "discordRoleIds": ["DISCORD_ROLE_ID_ALLOWED_TO_MANAGE_ACCESS"]
+      }
+    },
+    "doorPairProbe": {
+      "enabled": false,
+      "formDescs": [],
+      "startupDelayMs": 2500
+    }
+  }
+}

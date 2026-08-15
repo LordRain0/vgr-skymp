@@ -298,6 +298,25 @@ ScampServer::ScampServer(const Napi::CallbackInfo& info)
       }
     }
 
+    if (serverSettings.find("disableVanillaContainerLoot") !=
+        serverSettings.end()) {
+      if (serverSettings.at("disableVanillaContainerLoot").is_boolean()) {
+        bool disableVanillaContainerLoot =
+          serverSettings["disableVanillaContainerLoot"].get<bool>();
+        partOne->worldState.disableVanillaContainerLoot =
+          disableVanillaContainerLoot;
+        spdlog::info("disableVanillaContainerLoot is explicitly set to {}; "
+                     "containers will {}",
+                     disableVanillaContainerLoot,
+                     disableVanillaContainerLoot
+                       ? "start empty (custom loot expected)"
+                       : "receive vanilla loot");
+      } else {
+        spdlog::error("Unexpected value of disableVanillaContainerLoot "
+                      "setting, should be true or false");
+      }
+    }
+
     partOne->worldState.isPapyrusHotReloadEnabled =
       serverSettings.count("isPapyrusHotReloadEnabled") != 0 &&
       serverSettings.at("isPapyrusHotReloadEnabled").get<bool>();

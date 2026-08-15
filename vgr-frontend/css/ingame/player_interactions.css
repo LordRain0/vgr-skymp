@@ -1,0 +1,205 @@
+#vgr-player-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: 36vh;
+  transform: translateX(-50%);
+  z-index: 1200;
+  min-width: 180px;
+  text-align: center;
+  color: #d9c47c;
+  font-family: Georgia, "Times New Roman", serif;
+  text-shadow: 0 2px 3px #000, 0 0 8px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  user-select: none;
+}
+
+#vgr-player-prompt[hidden] {
+  display: none !important;
+}
+
+#vgr-player-prompt .player-prompt-key {
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#vgr-player-prompt .player-prompt-name {
+  margin-top: 2px;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#vgr-player-interaction,
+#vgr-trade-request {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+  color: #eadca4;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+#vgr-player-interaction.visible,
+#vgr-trade-request.visible {
+  display: flex;
+}
+
+#vgr-player-interaction[hidden],
+#vgr-trade-request[hidden] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+#vgr-game-layer .player-interaction-panel,
+#vgr-game-layer .trade-request-panel {
+  width: min(520px, 86vw);
+  border: 1px solid rgba(190, 151, 75, 0.56);
+  background:
+    linear-gradient(180deg, rgba(20, 15, 10, 0.96), rgba(6, 5, 4, 0.96)),
+    radial-gradient(circle at 50% 0%, rgba(126, 71, 28, 0.28), transparent 70%);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.72);
+}
+
+#vgr-game-layer .player-interaction-header,
+#vgr-game-layer .trade-request-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid rgba(190, 151, 75, 0.28);
+}
+
+#vgr-game-layer .player-interaction-kicker,
+#vgr-game-layer .trade-request-kicker {
+  display: block;
+  color: #c7a45b;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .player-interaction-header h2,
+#vgr-game-layer .trade-request-header h2 {
+  margin: 4px 0 0;
+  color: #f2e6bb;
+  font-size: 25px;
+  letter-spacing: 0.02em;
+}
+
+#vgr-game-layer .player-interaction-close,
+#vgr-game-layer .trade-request-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(190, 151, 75, 0.48);
+  background: rgba(0, 0, 0, 0.16);
+  color: #eadca4;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+#vgr-game-layer .player-interaction-actions,
+#vgr-game-layer .bind-option-list,
+#vgr-game-layer .trade-request-actions {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px 24px;
+}
+
+#vgr-game-layer .player-interaction-button,
+#vgr-game-layer .bind-option-button,
+#vgr-game-layer .trade-request-button {
+  min-height: 44px;
+  border: 1px solid rgba(208, 155, 67, 0.62);
+  background: linear-gradient(180deg, rgba(105, 12, 12, 0.92), rgba(77, 5, 5, 0.92));
+  color: #f2e6bb;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#vgr-game-layer .player-interaction-button:hover:not(:disabled),
+#vgr-game-layer .player-interaction-button.selected:not(:disabled),
+#vgr-game-layer .bind-option-button:hover:not(:disabled),
+#vgr-game-layer .trade-request-button:hover:not(:disabled) {
+  border-color: rgba(240, 213, 135, 0.92);
+  filter: brightness(1.14);
+}
+
+#vgr-game-layer .player-interaction-button:disabled,
+#vgr-game-layer .bind-option-button:disabled,
+#vgr-game-layer .trade-request-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+  background: linear-gradient(180deg, rgba(44, 39, 33, 0.88), rgba(22, 19, 16, 0.88));
+}
+
+#vgr-game-layer .player-interaction-reason {
+  display: block;
+  margin-top: 3px;
+  color: #bda86f;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+#vgr-game-layer .player-interaction-pending {
+  padding: 0 22px 18px;
+  min-height: 18px;
+  color: #d6be76;
+  font-size: 13px;
+  text-align: center;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .trade-request-body {
+  padding: 22px 22px 6px;
+  text-align: center;
+}
+
+#vgr-game-layer .trade-request-body p {
+  margin: 0;
+  color: #f2e6bb;
+  font-size: 17px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .trade-request-countdown {
+  margin-top: 10px;
+  color: #c7a45b;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .trade-request-button.secondary {
+  background: linear-gradient(180deg, rgba(47, 39, 31, 0.95), rgba(22, 18, 14, 0.95));
+}
+
+#vgr-game-layer .player-interaction-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 20vh;
+  transform: translateX(-50%);
+  min-width: 220px;
+  max-width: 520px;
+  padding: 10px 14px;
+  border: 1px solid rgba(190, 151, 75, 0.5);
+  background: rgba(0, 0, 0, 0.82);
+  color: #eadca4;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+#vgr-game-layer .player-interaction-toast.visible {
+  opacity: 1;
+}

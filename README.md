@@ -11,6 +11,14 @@ SkyMP is built on top of the [SkyrimPlatform](docs/docs_skyrim_platform.md) - a 
 
 This repo hosts all sources to ease local setup and contributing. See [CONTRIBUTING](CONTRIBUTING.md) for build instructions.
 
+### VGR Access Control
+
+The VGR door/container access-control feature is documented in [docs/vgr_access_control/README.md](docs/vgr_access_control/README.md). It covers server settings, MongoDB collections, the legacy lock migration tool, security notes, rollback, and manual acceptance tests.
+
+### VGR Player Interactions
+
+The VGR contextual player interaction feature is documented in [docs/vgr_player_interactions/README.md](docs/vgr_player_interactions/README.md). It covers shared X routing, directional introductions, exact-target trade requests, bindings/restraints, settings, security notes, compatibility, rollback, and acceptance tests.
+
 ### Terms of Use
 
 See [TERMS.md](TERMS.md). TL;DR disclose the source code of your forks.

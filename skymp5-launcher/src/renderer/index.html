@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vengeful Realms · Launcher</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Frameless-window chrome: drag strip along the top + window buttons -->
+  <div class="drag-strip"></div>
+  <div class="window-controls">
+    <button class="win-btn" id="btn-minimize" title="Minimize">&#8722;</button>
+    <button class="win-btn" id="btn-maximize" title="Maximize">&#9633;</button>
+    <button class="win-btn close" id="btn-close" title="Close">&#10005;</button>
+  </div>
+
+  <div class="launcher-shell" id="app">
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
+    <aside class="launcher-sidebar">
+      <div class="crest-block">
+        <div class="crest-ring">
+          <img src="../../assets/logo.png" alt="Vengeful Realms crest">
+        </div>
+        <div>
+          <div class="eyebrow">VENGEFUL</div>
+          <h1>REALMS</h1>
+          <span>Official Launcher</span>
+        </div>
+      </div>
+
+      <nav class="launcher-nav" aria-label="Launcher sections">
+        <button class="nav-item active" data-section="play">
+          <img src="../../assets/icons/play.svg" alt="">
+          <span>Play</span>
+        </button>
+        <button class="nav-item" data-section="realms">
+          <img src="../../assets/icons/server.svg" alt="">
+          <span>Realms</span>
+        </button>
+        <button class="nav-item" data-section="mods">
+          <img src="../../assets/icons/forge.svg" alt="">
+          <span>Mod Pack</span>
+        </button>
+        <button class="nav-item" data-section="news">
+          <img src="../../assets/icons/scroll.svg" alt="">
+          <span>Notices</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-card account-card">
+        <div class="small-label">ACCOUNT</div>
+        <div id="discord-topbar-slot"></div>
+        <div id="nexus-topbar-slot"></div>
+      </div>
+
+      <div class="sidebar-card build-card">
+        <div class="small-label">BUILD</div>
+        <div class="build-version" id="launcher-version">&mdash;</div>
+        <span>Vengeful Realms Launcher</span>
+      </div>
+    </aside>
+
+    <!-- ── Main column ─────────────────────────────────────────────────── -->
+    <main class="launcher-main">
+      <header class="topbar">
+        <div class="topbar-title">
+          <span class="small-label">SELECTED REALM</span>
+          <h2 id="footer-server-name">&mdash;</h2>
+          <select class="realm-select" id="footer-server-select" hidden></select>
+        </div>
+        <div class="topbar-actions">
+          <a class="topbar-link-button" data-href="patreon" title="Open Patreon">Patreon</a>
+          <a class="topbar-link-button" data-href="discord" title="Join Discord">Discord</a>
+          <button class="topbar-link-button" id="btn-stats" title="Server statistics">Stats</button>
+          <button class="icon-button" id="btn-gear" title="Settings">
+            <img src="../../assets/icons/settings.svg" alt="Settings">
+          </button>
+        </div>
+      </header>
+
+      <!-- Server info strip -->
+      <div class="server-info-strip" id="server-info-strip" hidden>
+        <span class="sinfo-item" id="sinfo-name"></span>
+        <span class="sinfo-sep">|</span>
+        <span class="sinfo-item" id="sinfo-capacity"></span>
+        <span class="sinfo-sep" id="sinfo-mode-sep" hidden>|</span>
+        <span class="sinfo-item sinfo-mode" id="sinfo-mode" hidden></span>
+        <span class="sinfo-sep" id="sinfo-discord-sep" hidden>|</span>
+        <span class="sinfo-item sinfo-discord" id="sinfo-discord" hidden>Discord login required</span>
+        <span class="sinfo-sep" id="sinfo-locked-sep" hidden>|</span>
+        <span class="sinfo-item sinfo-locked" id="sinfo-locked" hidden>Server locked</span>
+      </div>
+
+      <!-- ── Play ──────────────────────────────────────────────────────── -->
+      <section class="hero-panel section-panel active" id="section-play">
+        <div class="ambient-bg" aria-hidden="true"></div>
+        <div class="ambient-shade" aria-hidden="true"></div>
+
+        <div class="hero-copy">
+          <span class="small-label">VENGEFUL REALMS</span>
+          <h3>Enter a living and breathing Skyrim roleplay experience.</h3>
+          <p>
+            Select your realm, verify your mod pack, and launch into Vengeful Realms.
+            Time to create your story!
+          </p>
+
+          <div class="status-grid">
+            <div class="status-tile" id="badge-status">
+              <span class="tile-dot" id="badge-dot"></span>
+              <div>
+                <strong id="badge-label">CHECKING</strong>
+                <span id="badge-players" hidden></span>
+              </div>
+            </div>
+            <div class="status-tile">
+              <img src="../../assets/icons/download.svg" alt="">
+              <div>
+                <strong>Client Files</strong>
+                <span id="client-version">&mdash;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="launch-card">
+          <div class="round-emblem">
+            <img src="../../assets/icons/swords.svg" alt="Launch emblem">
+          </div>
+          <span class="small-label">READY CHECK</span>
+          <h4 id="ready-state-title">Checking&hellip;</h4>
+          <p id="ready-state-desc">Verifying your installation and login.</p>
+          <button class="launch-button" id="btn-connect">&#9654; PLAY</button>
+          <span class="update-pill" id="update-pill" hidden>&#10515; UPDATE AVAILABLE</span>
+          <div class="launch-note" id="connect-warning"></div>
+        </div>
+      </section>
+
+      <!-- ── Realms ────────────────────────────────────────────────────── -->
+      <section class="realm-panel section-panel" id="section-realms">
+        <div class="panel-heading">
+          <div>
+            <span class="small-label">REALM SELECTION</span>
+            <h3>Choose your destination</h3>
+          </div>
+          <span class="panel-hint">The selected realm is the one the Play button connects to.</span>
+        </div>
+
+        <div class="server-grid" id="server-grid">
+          <!-- populated by renderer.js -->
+        </div>
+      </section>
+
+      <!-- ── Mod Pack ──────────────────────────────────────────────────── -->
+      <section class="mods-panel section-panel" id="section-mods">
+        <div class="panel-heading">
+          <div>
+            <span class="small-label">MOD PACK</span>
+            <h3>Installation status</h3>
+          </div>
+          <span class="modlist-count" id="modlist-count"></span>
+        </div>
+
+        <div class="mod-status-card">
+          <div class="mod-status-top">
+            <div>
+              <h4>Vengeful Realms Required Collection</h4>
+              <span id="install-status-mo2">No active install</span>
+            </div>
+          </div>
+          <div class="mod-actions">
+            <button class="skyrim-small-button" id="btn-install-mo2" disabled>Install Modpack via MO2</button>
+            <button class="skyrim-small-button" id="btn-open-install">Open Folder</button>
+          </div>
+        </div>
+
+        <div class="modlist-panel" id="modlist">
+          <!-- populated by renderer.js -->
+        </div>
+      </section>
+
+      <!-- ── Notices ───────────────────────────────────────────────────── -->
+      <section class="news-panel section-panel" id="section-news">
+        <div class="panel-heading">
+          <div>
+            <span class="small-label">REALM NOTICES</span>
+            <h3>Latest updates</h3>
+          </div>
+        </div>
+
+        <div class="news-grid" id="news-grid">
+          <!-- populated by renderer.js -->
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <!-- ── Settings modal ──────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-settings" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <img src="../../assets/icons/settings.svg" alt="">
+        <span class="modal-title">Launcher Settings</span>
+        <button class="modal-close" id="modal-close" title="Close">&#10005;</button>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="install">Installation</button>
+        <button class="modal-tab" data-tab="settings">Settings</button>
+        <button class="modal-tab" data-tab="trouble">Troubleshooting</button>
+      </div>
+
+      <div class="modal-body">
+
+        <!-- Installation tab -->
+        <div class="tab-panel" id="tab-install">
+
+          <div class="settings-group">
+            <label class="setting-label">Skyrim Installation Path</label>
+            <div class="setting-path-row">
+              <input class="setting-input" id="setting-skyrim-path" type="text"
+                     placeholder="C:\Program Files (x86)\Steam\steamapps\common\Skyrim Special Edition" />
+              <button class="skyrim-small-button" id="btn-browse">Browse&hellip;</button>
+            </div>
+            <p class="setting-hint">Skyrim Install Location - Needs to be a clean install</p>
+          </div>
+
+          <div class="settings-group" id="isolated-install-group">
+            <label class="setting-label">Game Installation</label>
+            <div class="status-row">
+              <button class="skyrim-small-button" id="btn-create-isolated">Choose Install Location</button>
+              <span class="status-dot" id="isolated-status-dot"></span>
+              <span class="status-text" id="isolated-status-text">Checking&hellip;</span>
+            </div>
+            <div class="install-status" id="install-status-iso"></div>
+            <p class="setting-hint">After the game copy is ready, install the modpack from the Mod Pack tab.</p>
+          </div>
+
+        </div>
+
+        <!-- Settings tab -->
+        <div class="tab-panel" id="tab-settings" hidden>
+
+          <details class="settings-collapse" open>
+            <summary>Graphics</summary>
+            <div class="settings-group">
+              <label class="setting-label">Window Mode</label>
+              <select class="setting-input" id="gfx-windowmode">
+                <option value="windowed">Windowed</option>
+                <option value="fullscreen">Full screen</option>
+                <option value="borderless">Borderless window</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label class="setting-label">Resolution</label>
+              <select class="setting-input" id="gfx-resolution"></select>
+            </div>
+            <div class="settings-group">
+              <label class="setting-label">Fade distances</label>
+              <div class="settings-grid">
+                <label class="grid-field">Actor<input type="number" step="0.1" id="gfx-fade-actor" /></label>
+                <label class="grid-field">Item<input type="number" step="0.1" id="gfx-fade-item" /></label>
+                <label class="grid-field">Object<input type="number" step="0.1" id="gfx-fade-object" /></label>
+                <label class="grid-field">Grass<input type="number" step="100" id="gfx-fade-grass" /></label>
+                <label class="grid-field">Shadow<input type="number" step="100" id="gfx-fade-shadow" /></label>
+              </div>
+            </div>
+            <p class="setting-hint" id="gfx-path-hint"></p>
+          </details>
+
+          <details class="settings-collapse">
+            <summary>Server Hotkeys</summary>
+            <div class="settings-group"><label class="setting-label">Activate Chat</label><select class="setting-input hotkey-select" id="hk-chat"></select></div>
+            <div class="settings-group"><label class="setting-label">Release Mouse</label><select class="setting-input hotkey-select" id="hk-cursor"></select></div>
+            <div class="settings-group"><label class="setting-label">Housing Menu</label><select class="setting-input hotkey-select" id="hk-housing"></select></div>
+            <div class="settings-group"><label class="setting-label">Player Actions Menu</label><select class="setting-input hotkey-select" id="hk-interact"></select></div>
+            <div class="settings-group"><label class="setting-label">Personal Menu</label><select class="setting-input hotkey-select" id="hk-personal"></select></div>
+            <div class="settings-group"><label class="setting-label">Faction Menu</label><select class="setting-input hotkey-select" id="hk-faction"></select></div>
+            <p class="setting-hint">Enter always focuses chat. Changes apply after the client reloads.</p>
+          </details>
+
+          <details class="settings-collapse">
+            <summary>Game Hotkeys</summary>
+            <label class="setting-checkbox-row"><input type="checkbox" id="gfx-invert-y" /><span>Invert Y axis</span></label>
+            <p class="setting-hint">Full control remapping is coming soon - remap other controls in-game for now.</p>
+          </details>
+
+        </div>
+
+        <!-- Troubleshooting tab -->
+        <div class="tab-panel" id="tab-trouble" hidden>
+
+          <div class="settings-group">
+            <label class="setting-label">Client Files</label>
+            <div class="install-status" id="install-status-client"></div>
+            <button class="skyrim-small-button" id="btn-install-client">Reinstall / Update Client Files</button>
+          </div>
+
+          <div class="settings-group">
+            <label class="setting-label">Portable Skyrim Mode</label>
+            <label class="setting-checkbox-row">
+              <input type="checkbox" id="setting-isolated-game" />
+              <span>Disable this if you are short on disk space.</span>
+            </label>
+          </div>
+
+          <div class="settings-group">
+            <label class="setting-label">Mod Organizer 2</label>
+            <label class="setting-checkbox-row" id="mo2-enable-row">
+              <input type="checkbox" id="setting-mo2-enabled" />
+              <span id="mo2-enable-text">Enable MO2 - Disable to use manual installation</span>
+            </label>
+            <div class="status-row" id="mo2-status-row">
+              <span class="status-dot" id="mo2-status-dot"></span>
+              <span class="status-text" id="mo2-status-text">Checking&hellip;</span>
+            </div>
+            <div class="status-row">
+              <button class="skyrim-small-button" id="btn-open-mo2">Open &amp; Configure MO2</button>
+              <span class="setting-hint" id="mo2-open-warning" hidden>Warning: MO2 takes a moment to start up.</span>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <label class="setting-label">Manual Launch</label>
+            <p class="setting-hint">Use these if the Play button isn't working.</p>
+            <div class="setting-path-row">
+              <button class="skyrim-small-button" id="btn-launch-mo2">Launch via MO2</button>
+              <button class="skyrim-small-button" id="btn-launch-direct">Launch from directory</button>
+            </div>
+            <div class="install-status" id="trouble-launch-status"></div>
+          </div>
+
+        </div>
+
+        <!-- Actions (always visible) -->
+        <div class="modal-actions">
+          <button class="skyrim-small-button btn-save" id="btn-save">Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Metrics modal ───────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-metrics" hidden>
+    <div class="modal-box modal-box--wide">
+      <div class="modal-header">
+        <img src="../../assets/icons/compass.svg" alt="">
+        <span class="modal-title">Server Stats</span>
+        <button class="modal-close" id="metrics-close" title="Close">&#10005;</button>
+      </div>
+      <div class="modal-body">
+        <div class="metrics-grid" id="metrics-grid">
+          <div class="metrics-loading" id="metrics-loading">Loading&hellip;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
