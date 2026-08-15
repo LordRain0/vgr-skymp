@@ -13,7 +13,10 @@ const path    = require('path')
 const crypto  = require('crypto')
 const zlib    = require('zlib')
 const { execFileSync } = require('child_process')
-const SEVEN   = require('7zip-bin').path7za
+const BUNDLED_SEVEN = require('7zip-bin').path7za
+const SEVEN   = process.env.SKYRP_7Z && fs.existsSync(process.env.SKYRP_7Z)
+  ? process.env.SKYRP_7Z
+  : BUNDLED_SEVEN
 
 // Args
 
@@ -43,7 +46,9 @@ const DATA_DIR    = path.join(__dirname, '..', 'data')
 const OUT         = args.out ? path.resolve(args.out) : path.join(DATA_DIR, 'install-manifest.json')
 const MODLIST_OUT = path.join(DATA_DIR, 'modlist.json')
 
-const INLINE_WARN = 50 * 1024 * 1024   // warn when inlining anything this large
+const DEFAULT_INLINE_LIMIT = 50 * 1024 * 1024
+const INLINE_LIMIT = parseInlineLimit(process.env.SKYRP_INLINE_LIMIT_MB)
+const INLINE_WARN = Math.min(INLINE_LIMIT, DEFAULT_INLINE_LIMIT)
 
 let sources = { urls: {}, rootInclude: [] }
 try {
@@ -53,7 +58,53 @@ try {
 // Hash helpers
 
 function sha256Buf(buf)  { return crypto.createHash('sha256').update(buf).digest('hex') }
-function crc32hex(buf)   { return (zlib.crc32(buf) >>> 0).toString(16).toUpperCase().padStart(8, '0') }
+function crc32ToHex(crc) { return (crc >>> 0).toString(16).toUpperCase().padStart(8, '0') }
+
+function parseInlineLimit(value) {
+  if (value == null || value === '') return DEFAULT_INLINE_LIMIT
+  const mb = Number(value)
+  if (!Number.isFinite(mb) || mb < 0) return DEFAULT_INLINE_LIMIT
+  return Math.floor(mb * 1024 * 1024)
+}
+
+function humanSize(bytes) {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${bytes} B`
+}
+
+function fileFingerprint(absFile, collectInline) {
+  const st = fs.statSync(absFile)
+  const h = crypto.createHash('sha256')
+  const chunks = collectInline ? [] : null
+  const fd = fs.openSync(absFile, 'r')
+  const buf = Buffer.allocUnsafe(1024 * 1024)
+  let crc = 0
+  let total = 0
+
+  try {
+    for (;;) {
+      const n = fs.readSync(fd, buf, 0, buf.length, null)
+      if (n === 0) break
+      const chunk = buf.subarray(0, n)
+      h.update(chunk)
+      crc = zlib.crc32(chunk, crc)
+      total += n
+      if (chunks) chunks.push(Buffer.from(chunk))
+    }
+  } finally {
+    fs.closeSync(fd)
+  }
+
+  return {
+    size: st.size,
+    bytesRead: total,
+    sha256: h.digest('hex'),
+    crc: crc32ToHex(crc),
+    inline: chunks ? Buffer.concat(chunks, total).toString('base64') : null,
+  }
+}
 
 function sha256File(p) {
   return new Promise((resolve, reject) => {
@@ -77,27 +128,62 @@ function walk(dir, base = dir, out = []) {
   return out
 }
 
+function normalizeGameName(value) {
+  const v = String(value || '').trim()
+  if (/^skyrim$/i.test(v)) return 'Skyrim'
+  if (/^skyrimse$/i.test(v)) return 'SkyrimSE'
+  return ''
+}
+
+function archiveNameKey(value) {
+  return path.basename(String(value || '').trim()).toLowerCase()
+}
+
+function archiveStemKey(value) {
+  return archiveNameKey(value).replace(/\.(7z|zip|rar)$/i, '')
+}
+
+function collectArchiveNameHints(meta) {
+  const names = new Set()
+  for (const line of String(meta || '').split(/\r?\n/)) {
+    const m = line.match(/^[^=]*=\s*(.+?\.(?:7z|zip|rar))(?:\s|$)/i)
+    if (m) names.add(archiveNameKey(m[1]))
+  }
+  return names
+}
+
 /** Read a download's .meta sidecar for Nexus mod/file ids. */
 function readDownloadMeta(name) {
   try {
-    const meta   = fs.readFileSync(path.join(DOWNLOADS, name + '.meta'), 'utf8')
-    const modId  = (meta.match(/^modID\s*=\s*(\d+)/im)  || [])[1]
-    const fileId = (meta.match(/^fileID\s*=\s*(\d+)/im) || [])[1]
-    return { modId: modId ? Number(modId) : 0, fileId: fileId ? Number(fileId) : 0 }
-  } catch { return { modId: 0, fileId: 0 } }
+    const meta     = fs.readFileSync(path.join(DOWNLOADS, name + '.meta'), 'utf8')
+    const modId    = (meta.match(/^modID\s*=\s*(\d+)/im)    || [])[1]
+    const fileId   = (meta.match(/^fileID\s*=\s*(\d+)/im)   || [])[1]
+    const gameName = (meta.match(/^gameName\s*=\s*([^\r\n]+)/im) || [])[1]
+    return {
+      modId:    modId ? Number(modId) : 0,
+      fileId:   fileId ? Number(fileId) : 0,
+      gameName: normalizeGameName(gameName),
+    }
+  } catch { return { modId: 0, fileId: 0, gameName: '' } }
 }
 
-/** Read a mod folder's MO2 meta.ini for its Nexus mod id. */
-function readModId(modDir) {
+/** Read a mod folder's MO2 meta.ini for its Nexus metadata. */
+function readModMeta(modDir) {
   try {
-    const id = (fs.readFileSync(path.join(modDir, 'meta.ini'), 'utf8').match(/^modid\s*=\s*(\d+)/im) || [])[1]
-    return id ? Number(id) : 0
-  } catch { return 0 }
+    const meta     = fs.readFileSync(path.join(modDir, 'meta.ini'), 'utf8')
+    const id       = (meta.match(/^modid\s*=\s*(\d+)/im) || [])[1]
+    const gameName = (meta.match(/^gameName\s*=\s*([^\r\n]+)/im) || [])[1]
+    return {
+      modId: id ? Number(id) : 0,
+      gameName: normalizeGameName(gameName),
+      archiveNames: collectArchiveNameHints(meta),
+    }
+  } catch { return { modId: 0, gameName: '', archiveNames: new Set() } }
 }
 
 /** List archive entries as [{ path, size, crc }] (files only, with a CRC). */
 function listEntries(archivePath) {
-  const out = execFileSync(SEVEN, ['l', '-slt', '-ba', archivePath], {
+  const out = execFileSync(SEVEN, ['l', '-slt', '-ba', '-sccUTF-8', archivePath], {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
     timeout: 5 * 60 * 1000,
@@ -122,13 +208,66 @@ function listEntries(archivePath) {
 async function main() {
   if (!fs.existsSync(MODS)) throw new Error(`mods folder not found: ${MODS}`)
 
-  // 1. Index every archive's entries by (size, CRC32)
+  // 1. Resolve the enabled mod order before archive indexing, so disabled-only
+  // Nexus downloads cannot accidentally satisfy files from enabled mods.
+  const modFolders = fs.readdirSync(MODS, { withFileTypes: true })
+    .filter(e => e.isDirectory())
+    .map(e => e.name)
+
+  let order = []
+  let disabledProfileMods = new Set()
+  try {
+    const profileEntries = fs.readFileSync(path.join(PROFILE_DIR, 'modlist.txt'), 'utf8')
+      .split(/\r?\n/)
+      .map(l => ({ state: l[0], name: l.slice(1).trim() }))
+      .filter(e => (e.state === '+' || e.state === '-') && e.name)
+
+    order = profileEntries
+      .filter(e => e.state === '+' || (e.state === '-' && e.name.endsWith('_separator')))
+      .map(e => e.name)
+
+    disabledProfileMods = new Set(profileEntries
+      .filter(e => e.state === '-' && !e.name.endsWith('_separator'))
+      .map(e => e.name))
+  } catch { /* no profile: fall back to every folder below */ }
+
+  if (order.length === 0) {
+    order = modFolders
+    console.warn(`No profiles/${args.profile}/modlist.txt found - using all ${order.length} mod folders (unordered).`)
+  }
+
+  const enabledModNames = new Set(order.filter(n => !n.endsWith('_separator')))
+  const allModIds = new Set()
+  const enabledModIds = new Set()
+  const enabledArchiveKeys = new Set()
+  const disabledArchiveKeys = new Set()
+  const enabledArchiveStems = new Set()
+  const disabledArchiveStems = new Set()
+  for (const modName of modFolders) {
+    const modMeta = readModMeta(path.join(MODS, modName))
+    const isEnabled = enabledModNames.has(modName)
+    const isDisabled = disabledProfileMods.has(modName)
+    if (modMeta.modId) {
+      allModIds.add(modMeta.modId)
+      if (isEnabled) enabledModIds.add(modMeta.modId)
+    }
+    for (const archiveName of modMeta.archiveNames) {
+      if (isEnabled) enabledArchiveKeys.add(archiveName)
+      else if (isDisabled) disabledArchiveKeys.add(archiveName)
+    }
+    const folderStem = archiveStemKey(modName)
+    if (isEnabled) enabledArchiveStems.add(folderStem)
+    else if (isDisabled) disabledArchiveStems.add(folderStem)
+  }
+
+  // 2. Index eligible archive entries by (size, CRC32)
   const archives = []                 // { id, hash, size, name, source, _entries }
   const index    = new Map()          // "size:CRC" -> { id, from }
   const referenced = new Set()
+  let skippedDisabledArchives = 0
 
   const dlNames = fs.existsSync(DOWNLOADS)
-    ? fs.readdirSync(DOWNLOADS).filter(n => !/\.(meta|unfinished)$/i.test(n))
+    ? fs.readdirSync(DOWNLOADS).filter(n => !/\.(meta|unfinished|bak)$/i.test(n))
     : []
 
   for (const name of dlNames) {
@@ -137,13 +276,30 @@ async function main() {
     try { st = fs.statSync(full) } catch { continue }
     if (!st.isFile()) continue
 
+    const meta = readDownloadMeta(name)
+    if (meta.modId && allModIds.has(meta.modId) && !enabledModIds.has(meta.modId)) {
+      skippedDisabledArchives++
+      continue
+    }
+    const nameKey = archiveNameKey(name)
+    const stemKey = archiveStemKey(name)
+    if ((disabledArchiveKeys.has(nameKey) && !enabledArchiveKeys.has(nameKey)) ||
+        (disabledArchiveStems.has(stemKey) && !enabledArchiveStems.has(stemKey))) {
+      skippedDisabledArchives++
+      continue
+    }
+
     let entries
     try { entries = listEntries(full) } catch { continue }   // not an archive
     if (entries.length === 0) continue
 
-    const meta = readDownloadMeta(name)
     let source
-    if (meta.modId && meta.fileId) source = { type: 'nexus', modId: meta.modId, fileId: meta.fileId }
+    if (meta.modId && meta.fileId) source = {
+      type: 'nexus',
+      modId: meta.modId,
+      fileId: meta.fileId,
+      ...(meta.gameName ? { gameName: meta.gameName } : {}),
+    }
     else if (sources.urls[name])   source = { type: 'url', url: sources.urls[name] }
     else                           source = { type: 'manual', name }
 
@@ -158,22 +314,9 @@ async function main() {
     console.log(`  indexed ${name} (${entries.length} entries, ${source.type})`)
   }
 
-  // 2. Resolve the enabled mod order + plugin load order from the profile
-  let order = []
-  try {
-    order = fs.readFileSync(path.join(PROFILE_DIR, 'modlist.txt'), 'utf8')
-      .split(/\r?\n/)
-      .filter(l => l.startsWith('+') || (l.startsWith('-') && l.slice(1).trim().endsWith('_separator')))
-      .map(l => l.slice(1).trim())
-      .filter(Boolean)
-  } catch { /* no profile: fall back to every folder below */ }
+  const archiveById = new Map(archives.map(a => [a.id, a]))
 
-  if (order.length === 0) {
-    order = fs.readdirSync(MODS, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
-    console.warn(`No profiles/${args.profile}/modlist.txt found - using all ${order.length} mod folders (unordered).`)
-  }
-
-  // plugins.txt: the esp/esm load order (MO2's "*" prefix marks an enabled plugin).
+  // 3. Resolve plugin load order from the profile. MO2's "*" prefix marks an enabled plugin.
   let plugins = []
   try {
     plugins = fs.readFileSync(path.join(PROFILE_DIR, 'plugins.txt'), 'utf8')
@@ -182,7 +325,7 @@ async function main() {
       .filter(l => l && !l.startsWith('#'))
   } catch { /* no plugins.txt: load order then comes from the server at launch */ }
 
-  // 3. Emit a directive per file in each mod folder
+  // 4. Emit a directive per file in each mod folder
   const mods = []
   const inlineWarnings = []
 
@@ -191,15 +334,50 @@ async function main() {
     sha256Buf(Buffer.from(files.map(f => `${f.to}:${f.sha256}`).sort().join('\n')))
 
   function directiveFor(absFile, toRel) {
-    const buf = fs.readFileSync(absFile)
-    const sha = sha256Buf(buf)
-    const hit = index.get(buf.length + ':' + crc32hex(buf))
+    const st = fs.statSync(absFile)
+    const canInline = st.size <= INLINE_LIMIT
+    const fp = fileFingerprint(absFile, canInline)
+    if (fp.bytesRead !== fp.size) throw new Error(`failed to read complete file: ${absFile}`)
+
+    const hit = index.get(fp.size + ':' + fp.crc)
     if (hit) {
       referenced.add(hit.id)
-      return { to: toRel, archive: hit.id, from: hit.from, sha256: sha, size: buf.length }
+      return { to: toRel, archive: hit.id, from: hit.from, sha256: fp.sha256, size: fp.size }
     }
-    if (buf.length > INLINE_WARN) inlineWarnings.push(`${toRel} (${(buf.length / 1048576).toFixed(0)} MB)`)
-    return { to: toRel, inline: buf.toString('base64'), sha256: sha, size: buf.length }
+
+    if (!canInline) {
+      const rel = path.relative(MO2, absFile) || absFile
+      throw new Error(
+        `large file is not present in any indexed download archive: ${rel} (${humanSize(fp.size)}). ` +
+        `Put the original archive in "${DOWNLOADS}" or make sure full 7-Zip can read it; ` +
+        `the builder will not inline files larger than ${humanSize(INLINE_LIMIT)}.`
+      )
+    }
+
+    if (INLINE_WARN > 0 && fp.size >= INLINE_WARN) inlineWarnings.push(`${toRel} (${humanSize(fp.size)})`)
+    return { to: toRel, inline: fp.inline, sha256: fp.sha256, size: fp.size }
+  }
+
+  function gameNameFromReferencedArchives(modName, files, fallback) {
+    const fallbackGame = normalizeGameName(fallback)
+    const seen = new Set()
+    const gameNames = []
+    for (const f of files) {
+      const source = archiveById.get(f.archive)?.source
+      if (source?.type !== 'nexus') continue
+      const gameName = normalizeGameName(source.gameName)
+      if (!gameName || seen.has(gameName)) continue
+      seen.add(gameName)
+      gameNames.push(gameName)
+    }
+
+    if (gameNames.length === 1) return gameNames[0]
+    if (gameNames.length > 1) {
+      if (fallbackGame && seen.has(fallbackGame)) return fallbackGame
+      console.warn(`multiple Nexus gameName values for ${modName}; using ${gameNames[0]} (${gameNames.join(', ')})`)
+      return gameNames[0]
+    }
+    return fallbackGame
   }
 
   for (const modName of order) {
@@ -209,10 +387,18 @@ async function main() {
     if (rels.length === 0) continue
 
     const files = rels.map(rel => directiveFor(path.join(modDir, rel.split('/').join(path.sep)), rel))
-    mods.push({ name: modName, modId: readModId(modDir), files, hash: contentHash(files) })
+    const modMeta = readModMeta(modDir)
+    const gameName = gameNameFromReferencedArchives(modName, files, modMeta.gameName)
+    mods.push({
+      name: modName,
+      modId: modMeta.modId,
+      ...(gameName ? { gameName } : {}),
+      files,
+      hash: contentHash(files),
+    })
   }
 
-  // 4. Optional game-root files (preloaders, etc.)
+  // 5. Optional game-root files (preloaders, etc.)
   const root = []
   if (args.game) {
     const gameRoot = path.resolve(args.game)
@@ -223,7 +409,7 @@ async function main() {
     }
   }
 
-  // 5. Write the manifest (only referenced archives carry over)
+  // 6. Write the manifest (only referenced archives carry over)
   const usedArchives = archives
     .filter(a => referenced.has(a.id))
     .map(({ id, hash, size, name, source }) => ({ id, hash, size, name, source }))
@@ -240,7 +426,7 @@ async function main() {
     rootHash: contentHash(root),
   }
   fs.mkdirSync(DATA_DIR, { recursive: true })
-  fs.writeFileSync(OUT, JSON.stringify(manifest))
+  fs.writeFileSync(OUT, JSON.stringify(manifest, null, '\t') + '\n')
 
   // Lightweight display list so /api/modlist (the launcher's Modlist panel) keeps its shape without a second source of truth
   const display = [
@@ -249,6 +435,7 @@ async function main() {
       name: m.name, required: true, enabled: true,
       source: m.modId ? 'nexus' : 'url',
       ...(m.modId ? { nexusId: m.modId } : {}),
+      ...(m.gameName ? { gameName: m.gameName } : {}),
     })),
   ]
   fs.writeFileSync(MODLIST_OUT, JSON.stringify(display, null, 2) + '\n')
@@ -256,7 +443,8 @@ async function main() {
   // Report
   const inlineCount = mods.reduce((n, m) => n + m.files.filter(f => f.inline != null).length, 0) +
                       root.filter(f => f.inline != null).length
-  console.log(`\narchives:    ${usedArchives.length} referenced (${archives.length} scanned)`)
+  const skippedSuffix = skippedDisabledArchives ? `, ${skippedDisabledArchives} skipped disabled` : ''
+  console.log(`\narchives:    ${usedArchives.length} referenced (${archives.length} scanned${skippedSuffix})`)
   console.log(`mods:        ${mods.length}`)
   console.log(`separators:  ${order.filter(n => n.endsWith('_separator')).length}`)
   console.log(`plugins:     ${plugins.length}`)

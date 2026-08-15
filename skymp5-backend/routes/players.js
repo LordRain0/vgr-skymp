@@ -10,12 +10,12 @@ const factions          = require('../sources/factionWhitelist')
 const router = Router()
 
 router.get('/', requirePermission('players.view'), async (_req, res) => {
-  res.json({ players: await enrichPlayers(players.list()) })
+  res.json({ players: await enrichPlayers(await players.list()) })
 })
 
 router.post('/', requirePermission('players.manage'), async (req, res) => {
   try {
-    const player = players.createManual(req.body || {})
+    const player = await players.createManual(req.body || {})
     res.status(201).json(await enrichPlayer(player))
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'failed to create player' })
@@ -23,14 +23,14 @@ router.post('/', requirePermission('players.manage'), async (req, res) => {
 })
 
 router.get('/:profileId', requirePermission('players.view'), async (req, res) => {
-  const player = players.getByProfileId(req.params.profileId)
+  const player = await players.getByProfileId(req.params.profileId)
   if (!player) return res.status(404).json({ error: 'player not found' })
   res.json(await enrichPlayer(player))
 })
 
 router.put('/:profileId', requirePermission('players.manage'), async (req, res) => {
   try {
-    res.json(await enrichPlayer(players.updateByProfileId(req.params.profileId, req.body || {})))
+    res.json(await enrichPlayer(await players.updateByProfileId(req.params.profileId, req.body || {})))
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'failed to update player' })
   }
@@ -44,9 +44,9 @@ router.put('/:profileId/ban', requirePermission('players.manage'), async (req, r
   await mutateAccess(req, res, 'ban')
 })
 
-router.post('/:profileId/factions', requirePermission('factions.manage'), (req, res) => {
+router.post('/:profileId/factions', requirePermission('factions.manage'), async (req, res) => {
   try {
-    const discordId = requireDiscordId(req.params.profileId)
+    const discordId = await requireDiscordId(req.params.profileId)
     const assignment = factions.createAssignment({
       ...req.body,
       discordId,
@@ -57,9 +57,9 @@ router.post('/:profileId/factions', requirePermission('factions.manage'), (req, 
   }
 })
 
-router.delete('/:profileId/factions/:assignmentId', requirePermission('factions.manage'), (req, res) => {
+router.delete('/:profileId/factions/:assignmentId', requirePermission('factions.manage'), async (req, res) => {
   try {
-    const discordId = requireDiscordId(req.params.profileId)
+    const discordId = await requireDiscordId(req.params.profileId)
     const belongsToPlayer = factions
       .getPlayerAssignments(discordId)
       .some(assignment => assignment.id === req.params.assignmentId)
@@ -77,19 +77,19 @@ router.delete('/:profileId/factions/:assignmentId', requirePermission('factions.
 
 async function mutateAccess(req, res, type) {
   try {
-    const discordId = requireDiscordId(req.params.profileId)
+    const discordId = await requireDiscordId(req.params.profileId)
     const enabled = req.body && req.body.enabled === true
     const result = type === 'whitelist'
       ? await serverAccess.setWhitelisted(discordId, enabled)
       : await serverAccess.setBanned(discordId, enabled)
-    res.json({ ok: true, ...result, player: await enrichPlayer(players.getByProfileId(req.params.profileId)) })
+    res.json({ ok: true, ...result, player: await enrichPlayer(await players.getByProfileId(req.params.profileId)) })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'failed to update access' })
   }
 }
 
-function requireDiscordId(profileId) {
-  const discordId = profiles.getDiscordIdByProfileId(profileId)
+async function requireDiscordId(profileId) {
+  const discordId = await profiles.getDiscordIdByProfileId(profileId)
   if (!discordId) {
     const err = new Error('player not found')
     err.status = 404

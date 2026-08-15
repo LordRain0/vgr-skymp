@@ -14,6 +14,7 @@ const fs                 = require('fs')
 const { execFileSync }   = require('child_process')
 const archiver           = require('archiver')
 const config             = require('../config')
+const { copyVgrUi }      = require('./copy-vgr-ui')
 
 const ROOT = path.join(__dirname, '..')
 
@@ -21,6 +22,7 @@ const CLIENT_SRC   = path.join(ROOT, 'sources', 'client')
 const OUTPUT_DIR   = path.join(config.clientFilesDir, 'root')
 const ZIP_PATH     = path.join(config.clientFilesDir, config.clientZipName)
 const VERSION_FILE = path.join(ROOT, 'data', 'files-version.json')
+const DIST_UI_DIR  = path.join(ROOT, '..', 'build', 'dist', 'client', 'Data', 'Platform', 'UI')
 
 // Version helpers
 
@@ -91,8 +93,15 @@ async function mergeSourcesIntoRoot() {
 
   const SKIP_ALWAYS = new Set(['.git', '.gitignore', '.gitattributes'])
 
-  const clientFiles = copyDir(CLIENT_SRC, OUTPUT_DIR, SKIP_ALWAYS)
-  console.log(`[merge] Files merged: ${clientFiles} total in ${Date.now() - startMs}ms`)
+  let clientFiles = 0
+  if (fs.existsSync(CLIENT_SRC)) {
+    clientFiles = copyDir(CLIENT_SRC, OUTPUT_DIR, SKIP_ALWAYS)
+  } else {
+    console.log(`[merge] Optional client overlay not found, skipping: ${CLIENT_SRC}`)
+  }
+  copyVgrUi([DIST_UI_DIR])
+  const uiFiles = copyVgrUi([path.join(OUTPUT_DIR, 'Data', 'Platform', 'UI')])
+  console.log(`[merge] Files merged: ${clientFiles + uiFiles} total in ${Date.now() - startMs}ms`)
 
   console.log('[merge] Building zip…')
   const zipStart = Date.now()
@@ -105,12 +114,12 @@ async function mergeSourcesIntoRoot() {
   fs.writeFileSync(VERSION_FILE, JSON.stringify({
     version,
     builtAt:   new Date().toISOString(),
-    fileCount: clientFiles,
+    fileCount: clientFiles + uiFiles,
     zipSize,
   }, null, 2) + '\n')
   console.log(`[merge] Version: ${version}`)
 
-  return { clientFiles, total: clientFiles, zipSize }
+  return { clientFiles, uiFiles, total: clientFiles + uiFiles, zipSize }
 }
 
 // CLI entry

@@ -1,5 +1,8 @@
 const path = require('path')
+const http = require('http')
 const config = require('./config')
+const publicKeys = require('./sources/publicKeys')
+const characterDeletion = require('./sources/characterDeletion')
 
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException] Server kept alive:', err.message)
@@ -12,9 +15,16 @@ process.on('unhandledRejection', (reason) => {
 // Start WS relay alongside Express (independent port, see WS_PORT in .env)
 require('./sources/wsRelay')
 
+// Create data/public-keys.json from server-settings.json when possible, so
+// clients can verify server-signed JS without manually maintaining the file.
+publicKeys.ensurePublicKeys()
+
 // Start Discord bot for role-based access checks
 const discordBot = require('./sources/discordBot')
 discordBot.start()
+
+// Finalize characters whose deletion grace period has elapsed.
+characterDeletion.start()
 
 // Start the management dashboard on its own port/subdomain target.
 const dashboardServer = require('./sources/dashboardServer')
@@ -48,6 +58,7 @@ const rolePermissionsRoute  = require('./routes/role-permissions')
 const serverAccessRoute     = require('./routes/server-access')
 const playersRoute          = require('./routes/players')
 const launchCheckRoute      = require('./routes/launch-check')
+const queueWs               = require('./sources/queueWs')
 
 const app  = express()
 const PORT = process.env.PORT || 4000
@@ -98,6 +109,9 @@ app.use('/api/server-access',      serverAccessRoute)
 app.use('/api/players',            playersRoute)
 app.use('/api/launch-check',       launchCheckRoute)
 
-app.listen(PORT, () => {
+const server = http.createServer(app)
+queueWs.attach(server)
+
+server.listen(PORT, () => {
   console.log(`SkyRP backend running on http://localhost:${PORT}`)
 })

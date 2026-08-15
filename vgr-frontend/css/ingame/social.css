@@ -1,0 +1,907 @@
+﻿#vgr-game-layer .friends-container,
+#vgr-game-layer .party-panel,
+#vgr-game-layer .popup-container,
+#vgr-game-layer .popup-chat-window,
+#vgr-game-layer #vgr-locks {
+  pointer-events: auto;
+}
+/* Shared Skyrim panel treatment */
+#vgr-game-layer .friends-container,
+#vgr-game-layer .party-panel,
+#vgr-game-layer .popup-chat-window {
+  position: relative;
+  color: var(--parchment);
+  background:
+    linear-gradient(180deg, rgba(3, 3, 3, 0.46), rgba(0, 0, 0, 0.24)),
+    radial-gradient(circle at center 30%, rgba(120, 82, 42, 0.08), transparent 56%);
+  border: 1px solid rgba(110, 77, 42, 0.46);
+  box-shadow:
+    inset 0 0 36px rgba(0, 0, 0, 0.62),
+    0 22px 38px rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(3.5px) saturate(0.68);
+  overflow: hidden;
+}
+
+#vgr-game-layer .friends-container::before,
+#vgr-game-layer .friends-container::after,
+#vgr-game-layer .party-panel::before,
+#vgr-game-layer .party-panel::after,
+#vgr-game-layer .popup-chat-window::before,
+#vgr-game-layer .popup-chat-window::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(197, 163, 110, 0.42), transparent);
+  z-index: 2;
+}
+
+#vgr-game-layer .friends-container::before,
+#vgr-game-layer .party-panel::before,
+#vgr-game-layer .popup-chat-window::before {
+  top: 10px;
+}
+
+#vgr-game-layer .friends-container::after,
+#vgr-game-layer .party-panel::after,
+#vgr-game-layer .popup-chat-window::after {
+  bottom: 10px;
+}
+/* ========== PARTY PANEL ========== */
+#vgr-game-layer .party-panel {
+  display: none;
+  position: fixed;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 280px;
+  transition: all var(--fast);
+}
+
+#vgr-game-layer .party-header,
+#vgr-game-layer .friends-header,
+#vgr-game-layer .popup-header {
+  background:
+    linear-gradient(180deg, rgba(92, 7, 6, 0.62), rgba(16, 6, 5, 0.72)),
+    linear-gradient(90deg, transparent, rgba(197, 163, 110, 0.06), transparent);
+  border-bottom: 1px solid rgba(197, 163, 110, 0.46);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.72);
+}
+
+#vgr-game-layer .party-header {
+  padding: 18px 16px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+#vgr-game-layer .party-icon {
+  color: rgba(214, 194, 160, 0.50);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .party-title {
+  color: #ead7b7;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+#vgr-game-layer .party-size,
+#vgr-game-layer .friend-count-badge {
+  min-width: 48px;
+  padding: 4px 8px;
+  color: rgba(214, 194, 160, 0.72) !important;
+  background: rgba(3, 3, 3, 0.34) !important;
+  border: 1px solid rgba(197, 163, 110, 0.38) !important;
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-align: center;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.38);
+}
+
+#vgr-game-layer .party-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 14px 12px;
+  scrollbar-width: thin;
+}
+
+#vgr-game-layer .party-member,
+#vgr-game-layer .friend-card {
+  background:
+    linear-gradient(180deg, rgba(28, 27, 25, 0.50), rgba(6, 6, 6, 0.30));
+  border: 1px solid rgba(81, 59, 37, 0.62);
+  border-left: 3px solid rgba(197, 163, 110, 0.54);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.42), 0 7px 12px rgba(0, 0, 0, 0.26);
+  transition: background var(--fast), border-color var(--fast), transform var(--fast), box-shadow var(--fast);
+}
+
+#vgr-game-layer .party-member {
+  margin: 8px 0;
+  padding: 11px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#vgr-game-layer .party-member:hover,
+#vgr-game-layer .friend-card:hover {
+  background: rgba(64, 56, 43, 0.54);
+  border-color: rgba(197, 163, 110, 0.76);
+  box-shadow: inset 0 0 18px rgba(197, 163, 110, 0.05), 0 9px 14px rgba(0, 0, 0, 0.34);
+}
+
+#vgr-game-layer .party-member:hover {
+  transform: translateX(3px);
+}
+
+#vgr-game-layer .friend-card:hover {
+  transform: translateX(4px);
+}
+
+#vgr-game-layer .party-member-info,
+#vgr-game-layer .friend-info,
+#vgr-game-layer .popup-header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#vgr-game-layer .party-member-avatar,
+#vgr-game-layer .avatar,
+#vgr-game-layer .popup-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #ead7b7;
+  background:
+    radial-gradient(circle, rgba(197, 163, 110, 0.12), rgba(0, 0, 0, 0.28)),
+    rgba(7, 7, 7, 0.54);
+  border: 1px solid rgba(197, 163, 110, 0.34);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.52), 0 2px 8px rgba(0, 0, 0, 0.42);
+  text-transform: uppercase;
+  font-weight: 400;
+}
+
+#vgr-game-layer .party-member-avatar,
+#vgr-game-layer .popup-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+#vgr-game-layer .avatar {
+  width: 42px;
+  height: 42px;
+  font-size: 18px;
+}
+
+#vgr-game-layer .party-member-name,
+#vgr-game-layer .friend-name,
+#vgr-game-layer .popup-name {
+  color: #ead7b7;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.88);
+}
+
+#vgr-game-layer .party-member-name {
+  font-size: 13px;
+}
+
+#vgr-game-layer .friend-name {
+  font-size: 16px;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .popup-name {
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .party-member-status,
+#vgr-game-layer .friend-status,
+#vgr-game-layer .popup-status-badge,
+#vgr-game-layer .message-time {
+  color: rgba(214, 194, 160, 0.54);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .status-online {
+  color: rgba(202, 221, 171, 0.78);
+  text-shadow: none;
+}
+
+#vgr-game-layer .status-away {
+  color: rgba(218, 196, 157, 0.74);
+}
+
+#vgr-game-layer .status-offline {
+  color: rgba(169, 150, 117, 0.52);
+}
+
+#vgr-game-layer .party-member-kick,
+#vgr-game-layer .icon-btn,
+#vgr-game-layer .popup-close {
+  background: rgba(3, 3, 3, 0.24);
+  border: 1px solid rgba(148, 109, 62, 0.36);
+  color: rgba(214, 194, 160, 0.66);
+  cursor: pointer;
+  transition: background var(--fast), color var(--fast), border-color var(--fast), transform var(--fast);
+}
+
+#vgr-game-layer .party-member-kick {
+  padding: 5px 9px;
+  font-size: 13px;
+}
+
+#vgr-game-layer .party-member-kick:hover,
+#vgr-game-layer .icon-btn:hover,
+#vgr-game-layer .popup-close:hover {
+  color: #f0dfbd;
+  border-color: rgba(197, 163, 110, 0.72);
+  background: rgba(76, 16, 12, 0.58);
+  transform: scale(1.035);
+}
+
+#vgr-game-layer .remove-btn:hover {
+  background: rgba(92, 7, 6, 0.72);
+}
+
+#vgr-game-layer .party-empty,
+#vgr-game-layer .empty-message {
+  text-align: center;
+  color: rgba(214, 194, 160, 0.50);
+  font-style: normal;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0.06em;
+}
+
+#vgr-game-layer .party-empty {
+  padding: 24px 12px;
+}
+
+#vgr-game-layer .empty-message {
+  padding: 34px 18px;
+}
+
+#vgr-game-layer .party-actions {
+  padding: 14px;
+  border-top: 1px solid rgba(197, 163, 110, 0.24);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+#vgr-game-layer .party-leave-btn,
+#vgr-game-layer .action-btn,
+#vgr-game-layer .add-friend-panel button,
+#vgr-game-layer .popup-input-area button {
+  border: 1px solid var(--gold-line);
+  background: linear-gradient(180deg, rgba(20, 14, 12, 0.72), rgba(3, 3, 3, 0.74));
+  color: rgba(214, 194, 160, 0.72);
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow:
+    0 0 20px rgba(0, 0, 0, 0.62),
+    inset 0 0 16px rgba(197, 163, 110, 0.05);
+  transition: border-color var(--fast), color var(--fast), background var(--fast), transform var(--fast);
+}
+
+#vgr-game-layer .party-leave-btn:hover,
+#vgr-game-layer .action-btn:hover,
+#vgr-game-layer .add-friend-panel button:hover,
+#vgr-game-layer .popup-input-area button:hover {
+  color: #f0dfbd;
+  border-color: rgba(197, 163, 110, 0.74);
+  background: linear-gradient(180deg, rgba(92, 7, 6, 0.72), rgba(24, 9, 7, 0.78));
+  transform: scale(1.012);
+}
+
+#vgr-game-layer .party-leave-btn {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+/* ========== SOCIAL PANEL ========== */
+#vgr-game-layer .friends-container {
+  display: none;
+  width: min(620px, 92vw);
+  max-width: 620px;
+  margin-left: 302px;
+}
+
+#vgr-game-layer .friends-header {
+  padding: 20px 24px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+#vgr-game-layer .title-section {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#vgr-game-layer .title-section h1 {
+  color: #ead7b7;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(197, 163, 110, 0.22), 0 2px 8px rgba(0, 0, 0, 0.96);
+}
+
+#vgr-game-layer .action-bar {
+  display: flex;
+  gap: 10px;
+  padding: 15px 20px;
+  background: rgba(0, 0, 0, 0.24);
+  border-bottom: 1px solid rgba(197, 163, 110, 0.24);
+  flex-wrap: wrap;
+}
+
+#vgr-game-layer .action-btn {
+  padding: 9px 12px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+#vgr-game-layer .add-friend-panel {
+  padding: 16px 20px 18px;
+  background: rgba(0, 0, 0, 0.20);
+  border-bottom: 1px solid rgba(197, 163, 110, 0.20);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#vgr-game-layer .add-friend-panel input,
+#vgr-game-layer .popup-input-area input {
+  background: rgba(2, 2, 2, 0.48);
+  border: 1px solid rgba(110, 77, 42, 0.46);
+  color: #ead7b7;
+  outline: none;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.54);
+  letter-spacing: 0.04em;
+}
+
+#vgr-game-layer .add-friend-panel input {
+  flex: 1;
+  min-width: 220px;
+  padding: 11px 12px;
+  font-size: 14px;
+}
+
+#vgr-game-layer .add-friend-panel input::placeholder,
+#vgr-game-layer .popup-input-area input::placeholder {
+  color: rgba(214, 194, 160, 0.38);
+}
+
+#vgr-game-layer .add-friend-panel input:focus,
+#vgr-game-layer .popup-input-area input:focus {
+  border-color: rgba(197, 163, 110, 0.76);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.54), 0 0 9px rgba(197, 163, 110, 0.10);
+}
+
+#vgr-game-layer .add-friend-panel button {
+  min-width: 140px;
+  padding: 0 15px;
+  font-size: 12px;
+}
+/* ========== FRIEND REQUESTS ========== */
+#vgr-game-layer .friend-requests-panel {
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid rgba(197, 163, 110, 0.24);
+}
+
+#vgr-game-layer .requests-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 10px;
+}
+
+#vgr-game-layer .requests-title {
+  color: #ead7b7;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+#vgr-game-layer .requests-count-badge {
+  min-width: 28px;
+  padding: 4px 8px;
+  color: rgba(214, 194, 160, 0.82) !important;
+  background: rgba(76, 16, 12, 0.48) !important;
+  border: 1px solid rgba(197, 163, 110, 0.42) !important;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+#vgr-game-layer .friend-requests-list {
+  padding: 4px 16px 14px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+#vgr-game-layer .request-card {
+  border-left-color: rgba(197, 163, 110, 0.72);
+}
+
+#vgr-game-layer .request-card-incoming {
+  border-left-color: rgba(202, 221, 171, 0.62);
+}
+
+#vgr-game-layer .request-card-outgoing {
+  border-left-color: rgba(218, 196, 157, 0.52);
+}
+
+#vgr-game-layer .request-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#vgr-game-layer .request-pending-label {
+  color: rgba(218, 196, 157, 0.72);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0 4px;
+}
+
+#vgr-game-layer .request-btn {
+  border: 1px solid var(--gold-line);
+  background: linear-gradient(180deg, rgba(20, 14, 12, 0.72), rgba(3, 3, 3, 0.74));
+  color: rgba(214, 194, 160, 0.78);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 8px 12px;
+  min-height: 34px;
+  transition: border-color var(--fast), color var(--fast), background var(--fast), transform var(--fast);
+}
+
+#vgr-game-layer .request-btn:hover {
+  color: #f0dfbd;
+  border-color: rgba(197, 163, 110, 0.74);
+  transform: scale(1.012);
+}
+
+#vgr-game-layer .request-btn-accept:hover {
+  background: linear-gradient(180deg, rgba(42, 58, 28, 0.78), rgba(16, 24, 10, 0.82));
+  border-color: rgba(202, 221, 171, 0.62);
+}
+
+#vgr-game-layer .request-btn-decline:hover,
+#vgr-game-layer .request-btn-cancel:hover {
+  background: linear-gradient(180deg, rgba(92, 7, 6, 0.72), rgba(24, 9, 7, 0.78));
+  border-color: rgba(197, 163, 110, 0.62);
+}
+
+#vgr-game-layer .friend-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px 16px 18px;
+  scrollbar-width: thin;
+}
+
+#vgr-game-layer .friend-card {
+  margin: 10px 0;
+  padding: 12px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#vgr-game-layer .friend-info {
+  flex-wrap: wrap;
+}
+
+#vgr-game-layer .friend-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#vgr-game-layer .friend-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#vgr-game-layer .icon-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+/* ========== POPUP CHAT WINDOW ========== */
+#vgr-game-layer .popup-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+#vgr-game-layer .popup-chat-window {
+  width: 330px;
+  pointer-events: auto;
+  animation: popupSlideIn var(--medium) ease-out;
+}
+
+@keyframes popupSlideIn {
+  from {
+  opacity: 0;
+  transform: translateX(36px);
+}
+to {
+  opacity: 1;
+  transform: translateX(0);
+}
+}
+
+#vgr-game-layer .popup-header {
+  padding: 16px 14px 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: move;
+}
+
+#vgr-game-layer .popup-header-info {
+  gap: 8px;
+}
+
+#vgr-game-layer .popup-status-badge {
+  padding: 3px 6px;
+  background: rgba(3, 3, 3, 0.34);
+  border: 1px solid rgba(197, 163, 110, 0.28);
+}
+
+#vgr-game-layer .popup-close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+
+#vgr-game-layer .popup-messages {
+  height: 280px;
+  overflow-y: auto;
+  padding: 13px;
+  background: rgba(0, 0, 0, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#vgr-game-layer .popup-message {
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn var(--fast) ease;
+}
+
+@keyframes fadeIn {
+  from {
+  opacity: 0;
+  transform: translateY(5px);
+}
+to {
+  opacity: 1;
+  transform: translateY(0);
+}
+}
+
+#vgr-game-layer .message-bubble {
+  max-width: 85%;
+  padding: 8px 11px;
+  border: 1px solid rgba(81, 59, 37, 0.56);
+  background: rgba(22, 20, 18, 0.60);
+  color: #ead7b7;
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: break-word;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.34);
+}
+
+#vgr-game-layer .message-sent {
+  align-items: flex-end;
+}
+
+#vgr-game-layer .message-received {
+  align-items: flex-start;
+}
+
+#vgr-game-layer .message-sent .message-bubble {
+  margin-left: auto;
+  border-color: rgba(197, 163, 110, 0.48);
+  background: rgba(76, 16, 12, 0.52);
+}
+
+#vgr-game-layer .message-received .message-bubble {
+  border-color: rgba(110, 77, 42, 0.46);
+  background: rgba(28, 27, 25, 0.56);
+}
+
+#vgr-game-layer .message-time {
+  margin-top: 4px;
+  margin-left: 8px;
+  margin-right: 8px;
+  font-size: 10px;
+}
+
+#vgr-game-layer .popup-input-area {
+  display: flex;
+  padding: 12px;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.30);
+  border-top: 1px solid rgba(197, 163, 110, 0.22);
+}
+
+#vgr-game-layer .popup-input-area input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+#vgr-game-layer .popup-input-area button {
+  padding: 0 12px;
+  font-size: 11px;
+}
+/* Scrollbars */
+#vgr-game-layer .friend-list::-webkit-scrollbar,
+#vgr-game-layer .popup-messages::-webkit-scrollbar,
+#vgr-game-layer .party-list::-webkit-scrollbar,
+#vgr-game-layer .friend-requests-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+#vgr-game-layer .friend-list::-webkit-scrollbar-track,
+#vgr-game-layer .popup-messages::-webkit-scrollbar-track,
+#vgr-game-layer .party-list::-webkit-scrollbar-track,
+#vgr-game-layer .friend-requests-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.34);
+}
+
+#vgr-game-layer .friend-list::-webkit-scrollbar-thumb,
+#vgr-game-layer .popup-messages::-webkit-scrollbar-thumb,
+#vgr-game-layer .party-list::-webkit-scrollbar-thumb,
+#vgr-game-layer .friend-requests-list::-webkit-scrollbar-thumb {
+  background: rgba(197, 163, 110, 0.54);
+}
+
+@media (max-width: 940px) {
+  #vgr-game-layer body {
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+#vgr-game-layer .party-panel {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  width: min(620px, 92vw);
+  margin-bottom: 14px;
+}
+
+#vgr-game-layer .friends-container {
+  width: min(620px, 92vw);
+  margin-left: 0;
+}
+}
+
+@media (max-width: 520px) {
+  #vgr-game-layer .friends-header,
+#vgr-game-layer .action-bar,
+#vgr-game-layer .add-friend-panel {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+#vgr-game-layer .friend-card {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+#vgr-game-layer .friend-actions {
+  align-self: flex-end;
+}
+
+#vgr-game-layer .popup-chat-window {
+  width: 290px;
+}
+}
+
+/* Merged shell placement: the standalone social UI used body flex centering. */
+#vgr-game-layer .friends-container {
+  position: fixed;
+  left: calc(50% + 151px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin-left: 0;
+}
+
+@media (max-width: 940px) {
+  #vgr-game-layer .friends-container {
+    left: 50%;
+  }
+}
+/* ===== In-game transparency and realistic icon overrides =====
+   JS files are untouched. These rules remove external shadows/filters and
+   visually replace emoji button glyphs with CSS-drawn Skyrim-style controls. */
+#vgr-game-layer,
+#vgr-game-layer .vgr-game-root {
+  background: transparent !important;
+}
+
+#vgr-game-layer .friends-container,
+#vgr-game-layer .party-panel,
+#vgr-game-layer .popup-chat-window,
+#vgr-game-layer .friend-card,
+#vgr-game-layer .party-member,
+#vgr-game-layer .request-btn,
+#vgr-game-layer .avatar,
+#vgr-game-layer .party-member-avatar,
+#vgr-game-layer .popup-avatar,
+#vgr-game-layer .action-btn,
+#vgr-game-layer #addFriendBtn,
+#vgr-game-layer .party-leave-btn,
+#vgr-game-layer .popup-send-btn,
+#vgr-game-layer .popup-close,
+#vgr-game-layer .icon-btn,
+#vgr-game-layer .friend-count-badge,
+#vgr-game-layer .party-size,
+#vgr-game-layer .popup-message .message-bubble,
+#vgr-game-layer .friends-container input,
+#vgr-game-layer .friends-container textarea,
+#vgr-game-layer .friends-container button,
+#vgr-game-layer .party-panel button,
+#vgr-game-layer .popup-chat-window input,
+#vgr-game-layer .popup-chat-window textarea,
+#vgr-game-layer .popup-chat-window button,
+#vgr-game-layer .popup-container button {
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+#vgr-game-layer .friends-container,
+#vgr-game-layer .party-panel,
+#vgr-game-layer .popup-chat-window {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#vgr-game-layer .friend-status span,
+#vgr-game-layer .party-member-status span,
+#vgr-game-layer .popup-status-badge span {
+  box-shadow: none !important;
+}
+
+#vgr-game-layer .icon-btn {
+  position: relative !important;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 0 !important;
+  color: transparent !important;
+  overflow: hidden;
+}
+
+#vgr-game-layer .icon-btn::before,
+#vgr-game-layer .icon-btn::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+#vgr-game-layer .chat-popup-btn::before {
+  width: 18px;
+  height: 13px;
+  border: 1px solid rgba(214, 194, 160, 0.76);
+  background: rgba(15, 12, 9, 0.52);
+}
+
+#vgr-game-layer .chat-popup-btn::after {
+  width: 12px;
+  height: 12px;
+  border-left: 1px solid rgba(214, 194, 160, 0.66);
+  border-bottom: 1px solid rgba(214, 194, 160, 0.66);
+  transform: translate(-50%, -58%) rotate(-45deg);
+}
+
+#vgr-game-layer .party-invite-btn::before {
+  width: 3px;
+  height: 21px;
+  background: linear-gradient(180deg, rgba(214, 194, 160, 0.92), rgba(87, 71, 47, 0.96));
+  border: 1px solid rgba(20, 14, 9, 0.72);
+  transform: translate(-50%, -50%) rotate(42deg);
+}
+
+#vgr-game-layer .party-invite-btn::after {
+  width: 15px;
+  height: 3px;
+  background: rgba(126, 92, 52, 0.92);
+  border: 1px solid rgba(20, 14, 9, 0.72);
+  transform: translate(-50%, -50%) rotate(42deg);
+}
+
+#vgr-game-layer .remove-btn::before,
+#vgr-game-layer .party-member-kick::before,
+#vgr-game-layer .popup-close::before {
+  content: "Ã—";
+  width: auto;
+  height: auto;
+  color: rgba(214, 194, 160, 0.86);
+  font-size: 16px;
+  line-height: 1;
+  font-family: Georgia, "Times New Roman", serif;
+  transform: translate(-50%, -52%);
+}
+
+#vgr-game-layer .party-member-kick,
+#vgr-game-layer .popup-close {
+  position: relative !important;
+  font-size: 0 !important;
+  color: transparent !important;
+}
+
+#vgr-game-layer .popup-send-btn {
+  font-size: 0 !important;
+  color: transparent !important;
+  position: relative;
+}
+
+#vgr-game-layer .popup-send-btn::after {
+  content: "SEND";
+  color: rgba(214, 194, 160, 0.88);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+

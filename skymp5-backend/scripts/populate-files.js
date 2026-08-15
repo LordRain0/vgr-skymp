@@ -1,16 +1,20 @@
 /**
  * Copies the built client files into the backend's file bucket:
  *   build/dist/client/Data/ -> <clientFilesDir>/root/Data/
+ *   build/dist/client/*.dll  -> <clientFilesDir>/root/*.dll
  * SKSE is not included; the launcher installs it separately.
  * Run from backend/: npm run populate (override the source with SKYMP_CLIENT_DATA=<Data/ path>).
  */
 
 const fs   = require('fs')
 const path = require('path')
+const { copyVgrUi } = require('./copy-vgr-ui')
 
-// Source: the skymp build output Data/ directory
+// Source: the skymp build output directory
 const SKYMP_DATA = process.env.SKYMP_CLIENT_DATA
   || path.join(__dirname, '..', '..', 'build', 'dist', 'client', 'Data')
+const SKYMP_ROOT = process.env.SKYMP_CLIENT_ROOT
+  || path.dirname(SKYMP_DATA)
 
 // Destination
 const config    = require('../config')
@@ -39,15 +43,46 @@ console.log(`\nCopying client Data from\n  ${SKYMP_DATA}\nto\n  ${DATA_DEST}`)
 fs.rmSync(DATA_DEST, { recursive: true, force: true })
 copyTree(SKYMP_DATA, DATA_DEST)
 
+// The Vengeful Realms UI is maintained in-repo and should override the
+// generic SkyMP UI in both the built client tree and the downloadable bucket.
+copied += copyVgrUi([
+  path.join(SKYMP_DATA, 'Platform', 'UI'),
+  path.join(DATA_DEST, 'Platform', 'UI'),
+])
+
+// Root-level runtime dependencies. These are loaded by MpClientPlugin.dll from
+// the game root, not from Data/, so they must sit next to SkyrimSE.exe.
+const ROOT_FILES = [
+  'livekit.dll',
+  'livekit_ffi.dll',
+]
+for (const rel of ROOT_FILES) {
+  const src = path.join(SKYMP_ROOT, rel)
+  const dest = path.join(ROOT_DEST, rel)
+  if (fs.existsSync(src)) {
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.copyFileSync(src, dest)
+    copied++
+  }
+}
+
 // Completeness check
 const REQUIRED = [
-  'Platform/UI/index.html',                                   // CEF connect-window page
-  'Platform/UI/build.js',                                     // connect-menu front-end bundle
+  'Platform/UI/index.html',                                   // CEF UI entry point
+  'Platform/UI/js/login.js',                                  // VGR login/character flow
+  'Platform/UI/js/shell.js',                                  // VGR shared UI shell
+  'Platform/UI/js/ingame/ui_manager.js',                      // VGR in-game UI manager
+  'Platform/UI/css/master.css',                               // VGR shared styles
+  'Platform/UI/css/login.css',                                // VGR login styles
+  'Platform/UI/assets/logo.png',                              // VGR watermark
   'Platform/Plugins/skymp5-client.js',                        // client logic
   'SKSE/Plugins/SkyrimPlatform.dll',                          // JS/CEF host plugin
   'SKSE/Plugins/MpClientPlugin.dll',                          // multiplayer plugin
+  '../livekit.dll',                                            // voice chat runtime dependency, game root
+  '../livekit_ffi.dll',                                        // voice chat runtime dependency, game root
   'Platform/Distribution/RuntimeDependencies/libcef.dll',     // CEF runtime
   'Platform/Distribution/RuntimeDependencies/SkyrimPlatformCEF.exe.hidden',
+  'Platform/Distribution/RuntimeDependencies/cacert.pem',      // CA bundle for SkyrimPlatform HTTPS
 ]
 const missing = REQUIRED.filter(rel => !fs.existsSync(path.join(DATA_DEST, rel.replace(/\//g, path.sep))))
 

@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vengeful Realms UI</title>
+  <link rel="stylesheet" href="css/master.css">
+  <link rel="stylesheet" href="css/login.css">
+  <link rel="stylesheet" href="css/ingame/woodcutting.css">
+  <link rel="stylesheet" href="css/ingame/mining.css">
+  <link rel="stylesheet" href="css/ingame/social.css">
+  <link rel="stylesheet" href="css/ingame/emote.css">
+  <link rel="stylesheet" href="css/ingame/trading.css">
+  <link rel="stylesheet" href="css/ingame/locks.css">
+  <link rel="stylesheet" href="css/ingame/access_control.css">
+  <link rel="stylesheet" href="css/ingame/player_interactions.css">
+  <link rel="stylesheet" href="css/ingame/player_search.css">
+  <link rel="stylesheet" href="css/ingame/admin_menu.css">
+  <link rel="stylesheet" href="css/ingame/npc_spawner.css">
+  <link rel="stylesheet" href="css/ingame/enchanting.css">
+  <link rel="stylesheet" href="css/ingame/debugview.css">
+  <link rel="stylesheet" href="css/ingame/notifications.css">
+  <link rel="stylesheet" href="css/ingame/skills.css">
+  
+</head>
+<body data-vgr-mode="login">
+  <img class="brand-watermark" src="assets/logo.png" alt="" aria-hidden="true">
+  <section id="vgr-login-layer" class="vgr-layer" aria-live="polite">
+    <div class="background-gif-layer" aria-hidden="true"></div>
+      <audio id="background-music" src="assets/Soulforge.ogg#t=20" preload="auto" autoplay loop></audio>
+      <main class="vr-shell" id="app" aria-live="polite">
+        <section class="login-panel">
+          <header class="panel-header">
+            <div class="header-identity">
+              <div class="avatar-placeholder" id="discord-avatar">
+                <span id="discord-avatar-initial">?</span>
+                <img id="discord-avatar-image" alt="">
+              </div>
+              <span class="discord-username-label" id="discord-username-label">[Discord Username]</span>
+              <h2 id="view-title">Select Character</h2>
+            </div>
+          </header>
+
+          <div class="view view-active" id="character-view">
+            <div class="character-stage">
+              <div class="character-count-line">
+                <span id="character-count">0 characters</span>
+              </div>
+              <div class="character-showcase">
+                <div class="character-list" id="character-list"></div>
+                <button class="create-character-card" id="create-character" type="button">
+                  <span class="create-icon">+</span>
+                  <span>Create New<br>Character</span>
+                </button>
+              </div>
+              <button class="primary-button load-button character-load" id="load-character" type="button" disabled>Load Character</button>
+              <button class="secondary-button delete-button character-delete" id="delete-character" type="button" disabled>Delete Character</button>
+            </div>
+          </div>
+
+          <div class="view" id="creating-view">
+            <div class="center-state">
+              <div class="ring ring-waiting"></div>
+              <p class="small-label">CREATING PROFILE</p>
+              <h3 id="creating-name">Character request sent</h3>
+              <p class="muted">Waiting for backend confirmation.</p>
+            </div>
+          </div>
+
+          <div class="view" id="queue-view">
+            <div class="queue-layout">
+              <section class="queue-card">
+                <p class="small-label">QUEUE POSITION</p>
+                <div class="queue-number" id="queue-position">-</div>
+                <div class="queue-total" id="queue-total">of - players</div>
+                <div class="queue-bar" aria-hidden="true"><span id="queue-progress"></span></div>
+                <button class="secondary-button queue-return" id="back-to-characters" type="button">Return</button>
+              </section>
+            </div>
+          </div>
+
+          <div class="view" id="auth-view">
+            <div class="center-state">
+              <div class="ring"></div>
+              <p class="small-label">ENTERING REALM</p>
+              <h3>Authorizing session</h3>
+              <p class="muted">The game server is validating your selected profile.</p>
+            </div>
+          </div>
+
+          <footer class="footer-status" id="footer-status">Initializing interface...</footer>
+          <button class="footer-button audio-toggle" id="audio-toggle" type="button" aria-pressed="true" title="Toggle background music">
+            Music On
+          </button>
+          <button class="footer-button quit-game" id="quit-game" type="button" title="Quit game">
+            Quit Game
+          </button>
+        </section>
+      </main>
+
+      <div class="confirm-modal" id="delete-modal" hidden>
+        <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+          <p class="small-label">Permanent Delete</p>
+          <h3 id="delete-title">Delete Character</h3>
+          <p class="confirm-copy" id="delete-message"></p>
+          <div class="confirm-actions">
+            <button class="secondary-button" id="cancel-delete" type="button">Cancel</button>
+            <button class="secondary-button danger-button" id="confirm-delete" type="button">Delete</button>
+          </div>
+        </div>
+      </div>
+  </section>
+
+  <section id="vgr-game-layer" class="vgr-layer" aria-hidden="true" hidden>
+    <div class="vgr-game-root">
+      <div id="vgr-notifications" aria-live="polite" aria-atomic="false">
+        <div id="vgr-notification-center"></div>
+        <div id="vgr-notification-corner"></div>
+      </div>
+
+      <!-- ===== Woodcutting overlay ===== -->
+        <div id="vgr-woodcutting" aria-hidden="true">
+          <div class="vgr-ring">
+            <div class="vgr-inner">
+              <svg class="vgr-tool-icon vgr-axe-svg" viewBox="0 0 128 128" aria-hidden="true" focusable="false">
+                <defs>
+                  <linearGradient id="vgrAxeSteel" x1="19" y1="15" x2="88" y2="75" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stop-color="#2f2b25"/>
+                    <stop offset="0.26" stop-color="#cbb88c"/>
+                    <stop offset="0.55" stop-color="#796844"/>
+                    <stop offset="1" stop-color="#14120f"/>
+                  </linearGradient>
+                  <linearGradient id="vgrAxeWood" x1="48" y1="33" x2="94" y2="119" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stop-color="#26170c"/>
+                    <stop offset="0.33" stop-color="#8b6737"/>
+                    <stop offset="0.7" stop-color="#563719"/>
+                    <stop offset="1" stop-color="#150e06"/>
+                  </linearGradient>
+                </defs>
+                <path class="vgr-svg-edge" d="M24 36 C36 19 61 18 82 31 C71 43 67 57 75 73 C48 75 29 62 24 36 Z" fill="url(#vgrAxeSteel)"/>
+                <path class="vgr-svg-line" d="M33 39 C45 30 61 30 73 37"/>
+                <path class="vgr-svg-edge" d="M55 42 L69 34 L113 108 L99 116 Z" fill="url(#vgrAxeWood)"/>
+                <path class="vgr-svg-line" d="M66 44 L105 111"/>
+                <path d="M49 38 L69 27 L78 42 L58 52 Z" fill="#2c2115" opacity="0.74"/>
+              </svg>
+              <div id="vgr-woodcutting-count">0/5 collected</div>
+            </div>
+          </div>
+          <button id="vgr-woodcutting-button" type="button">Working...</button>
+        </div>
+
+        <!-- ===== Social Chamber (mockup) ===== -->
+        <div class="friends-container" id="friendsContainer">
+          <div class="friends-header">
+            <div class="title-section">
+              <h1>SOCIAL CHAMBER</h1>
+              <div class="friend-count-badge" id="friendCounter">0 / 12</div>
+            </div>
+          </div>
+
+          <div class="action-bar">
+            <button class="action-btn" id="showOnlineBtn">SHOW ONLINE</button>
+            <button class="action-btn" id="showAllBtn">ALL FRIENDS</button>
+            <button class="action-btn" id="sortByNameBtn">SORT A-Z</button>
+            <button class="action-btn" id="sortByStatusBtn">STATUS SORT</button>
+          </div>
+
+          <div class="add-friend-panel">
+            <input type="text" id="friendNameInput" placeholder="Enter hero name..." maxlength="22">
+            <button id="addFriendBtn">ADD FRIEND</button>
+          </div>
+
+          <div class="friend-list" id="friendListContainer">
+            <div class="empty-message">No bonds forged yet.<br>Add your first companion.</div>
+          </div>
+        </div>
+
+        <div class="party-panel" id="partyPanel">
+          <div class="party-header">
+            <span class="party-icon">PARTY</span>
+            <span class="party-title">PARTY MEMBERS</span>
+            <span class="party-size" id="partySize">0/4</span>
+          </div>
+          <div class="party-list" id="partyListContainer">
+            <div class="party-empty">No party members<br>Invite friends from the list</div>
+          </div>
+          <div class="party-actions">
+            <button class="party-leave-btn" id="leavePartyBtn">LEAVE PARTY</button>
+          </div>
+        </div>
+        
+        <!-- ===== Emote Wheel (Test) ===== -->
+          <main id="emoteWheelOverlay" class="emote-overlay hidden" aria-hidden="true">
+              <div class="screen-fade"></div>
+
+              <section class="emote-stage" aria-label="Skyrim RP Emote Wheel">
+                  <section class="wheel-section" aria-label="Emote selector">
+                      <div class="wheel-wrap">
+                          <svg
+                              id="emoteWheelSvg"
+                              class="emote-wheel-svg"
+                              viewBox="0 0 820 820"
+                              role="img"
+                              aria-label="Radial emote selector"
+                          ></svg>
+
+                          <div id="centerPanel" class="center-panel">
+                              <p id="centerCategory" class="center-category">GREETINGS</p>
+                              <h2 id="centerEmote">Wave</h2>
+                              <p class="center-select">SELECT</p>
+                          </div>
+                      </div>
+
+                      <p class="hint-line">Hover to preview &nbsp;•&nbsp; Click to select &nbsp;•&nbsp; ESC/B to close</p>
+                  </section>
+
+                  <aside id="previewPanel" class="preview-panel" aria-label="Selected emote preview">
+                      <h2 id="previewName">Wave</h2>
+
+                      <div class="preview-image-frame">
+                          <div class="preview-glow"></div>
+                          <img id="previewImage" src="assets/portrait-template.png" alt="Selected emote preview" />
+                      </div>
+                  </aside>
+              </section>
+          </main>
+      	
+      	  <!-- ===== Mining GUI (Test) ===== -->
+      	  <div id="vgr-mining" aria-hidden="true">
+      		<div class="vgr-mining-ring">
+      		  <div class="vgr-mining-inner">
+      			<svg class="vgr-tool-icon vgr-pickaxe-svg" viewBox="0 0 128 128" aria-hidden="true" focusable="false">
+      			  <defs>
+      				<linearGradient id="vgrMineSteel" x1="18" y1="12" x2="108" y2="68" gradientUnits="userSpaceOnUse">
+      				  <stop offset="0" stop-color="#342f28"/>
+      				  <stop offset="0.28" stop-color="#d0bf94"/>
+      				  <stop offset="0.55" stop-color="#7b6949"/>
+      				  <stop offset="1" stop-color="#171511"/>
+      				</linearGradient>
+      				<linearGradient id="vgrMineWood" x1="46" y1="37" x2="93" y2="118" gradientUnits="userSpaceOnUse">
+      				  <stop offset="0" stop-color="#26170c"/>
+      				  <stop offset="0.36" stop-color="#8a6535"/>
+      				  <stop offset="0.68" stop-color="#5a3b1d"/>
+      				  <stop offset="1" stop-color="#171006"/>
+      				</linearGradient>
+      			  </defs>
+      			  <path class="vgr-svg-edge" d="M15 45 C38 19 75 12 112 25 C99 28 84 34 72 43 C57 54 45 68 36 84 C33 66 26 53 15 45 Z" fill="url(#vgrMineSteel)"/>
+      			  <path class="vgr-svg-line" d="M38 45 C55 34 76 27 99 27"/>
+      			  <path class="vgr-svg-edge" d="M54 48 L67 39 L111 104 L98 113 Z" fill="url(#vgrMineWood)"/>
+      			  <path class="vgr-svg-line" d="M64 48 L104 108"/>
+      			  <path d="M47 42 L68 30 L78 43 L57 56 Z" fill="#3a2d1b" opacity="0.72"/>
+      			</svg>
+      			<div id="vgr-mining-count">0/5 collected</div>
+      		  </div>
+      		</div>
+
+      		<button id="vgr-mining-button" type="button">Mining...</button>
+      	  </div>
+
+        <!-- ===== Trading Menu ===== -->
+        <main id="skyrim-trade" class="trade-shell" aria-hidden="true">
+          <section class="trade-frame" role="dialog" aria-label="Trading Menu">
+            <header class="trade-header">
+              <div class="trade-header-line"></div>
+              <div class="trade-title-wrap">
+                <span class="trade-kicker">Vengeful Realms</span>
+                <h1>Trading</h1>
+              </div>
+              <div class="trade-partner-card">
+                <span class="trade-small-label">Trading With</span>
+                <strong id="trade-partner-name">Player Name</strong>
+              </div>
+            </header>
+
+            <section class="trade-grid offer-layout">
+              <aside class="trade-panel inventory-panel" data-side="player">
+                <div class="panel-top">
+                  <div>
+                    <span class="trade-small-label">Your Inventory</span>
+                    <h2 id="player-title">Adventurer</h2>
+                  </div>
+                  <span class="weight-pill" id="player-weight">0 / 0</span>
+                </div>
+
+                <div class="trade-search-row">
+                  <input id="player-search" class="trade-search" type="text" placeholder="Search items" autocomplete="off" />
+                  <select id="player-filter" class="trade-filter" aria-label="Player item filter">
+                    <option value="all">All</option>
+                    <option value="weapon">Weapons</option>
+                    <option value="armor">Armor</option>
+                    <option value="food">Food</option>
+                    <option value="potion">Potions</option>
+                    <option value="material">Materials</option>
+                    <option value="misc">Misc</option>
+                  </select>
+                </div>
+
+                <div id="player-inventory" class="item-list" aria-label="Player inventory"></div>
+              </aside>
+
+              <section class="trade-center">
+                <div class="trade-offer-block player-offer">
+                  <div class="offer-heading">
+                    <span class="trade-small-label">You Offer</span>
+                    <strong id="player-offer-total">0 Septims</strong>
+                  </div>
+                  <div id="player-offer-list" class="offer-list"></div>
+                  <div class="gold-row">
+                    <label for="player-gold">Gold</label>
+                    <input id="player-gold" class="gold-input" type="number" min="0" value="0" />
+                    <small class="gold-available">Available: <span id="player-gold-max">0</span></small>
+                  </div>
+                </div>
+
+                <div class="selected-item-panel" id="selected-item-panel">
+                  <span class="trade-small-label">Selected Item</span>
+                  <div id="selected-item-icon" class="selected-icon" aria-hidden="true"></div>
+                  <h3 id="selected-item-name">No Item Selected</h3>
+                  <p id="selected-item-desc">Select an item from your inventory or an offered item to view details.</p>
+                  <div class="selected-meta">
+                    <span id="selected-item-type">Type: -</span>
+                    <span id="selected-item-value">Value: -</span>
+                    <span id="selected-item-weight">Weight: -</span>
+                  </div>
+                </div>
+
+                <div class="offer-selected-dock">
+                  <span class="trade-small-label">Selected Action</span>
+                  <button id="offer-selected" class="skyrim-button red wide" type="button" disabled>Offer Selected</button>
+                  <p>Add the selected item to your offer.</p>
+                </div>
+              </section>
+
+              <aside class="trade-offer-block partner-offer right-offer-panel">
+                <div class="offer-heading">
+                  <div>
+                    <span class="trade-small-label">They Offer</span>
+                    <h2 id="partner-title">Merchant Offer</h2>
+                  </div>
+                  <strong id="partner-offer-total">0 Septims</strong>
+                </div>
+                <div id="partner-offer-list" class="offer-list large"></div>
+                <div class="gold-row read-only">
+                  <label>Gold</label>
+                  <span id="partner-gold">0</span>
+                </div>
+              </aside>
+            </section>
+
+            <footer class="trade-footer">
+              <div class="accept-status">
+                <div class="status-seal" id="player-status">
+                  <span>You</span>
+                  <strong>Pending</strong>
+                </div>
+                <div class="trade-divider"></div>
+                <div class="status-seal" id="partner-status">
+                  <span>Them</span>
+                  <strong>Pending</strong>
+                </div>
+              </div>
+
+              <div class="footer-actions">
+                <button id="clear-offer" class="skyrim-button muted" type="button">Clear Offer</button>
+                <button id="accept-trade" class="skyrim-button red" type="button">Accept Trade</button>
+                <button id="cancel-trade" class="skyrim-button" type="button">Close</button>
+              </div>
+
+              <p class="hint-text">Double-click an item to offer it • Right-click an offered item to remove it • ESC to close</p>
+            </footer>
+          </section>
+
+          <div class="runtime-hidden" aria-hidden="true">
+            <span id="partner-weight">0 / 0</span>
+            <input id="partner-search" type="text" value="" />
+            <select id="partner-filter">
+              <option value="all">All</option>
+              <option value="weapon">Weapons</option>
+              <option value="armor">Armor</option>
+              <option value="food">Food</option>
+              <option value="potion">Potions</option>
+              <option value="material">Materials</option>
+              <option value="misc">Misc</option>
+            </select>
+            <div id="partner-inventory"></div>
+          </div>
+        </main>
+
+        <!-- ===== Professions ===== -->
+        <main id="vgr-skills" class="skills-shell" aria-hidden="true">
+          <section class="skills-frame">
+            <header class="skills-header">
+              <div class="skills-kicker">Character</div>
+              <h1>PROFESSIONS</h1>
+              <button type="button" class="skills-close" id="vgr-skills-close" aria-label="Close">&times;</button>
+            </header>
+            <div class="skills-levelbar">
+              <div class="skills-leveltitle">Character Level <span id="vgr-skills-level">0</span></div>
+              <div class="skills-xpbar" title="General experience">
+                <div class="skills-xpbar-fill" id="vgr-skills-xpbar"></div>
+                <span class="skills-xpbar-text" id="vgr-skills-xptext"></span>
+              </div>
+              <div class="skills-applybox">
+                <div class="skills-staged">
+                  <span class="skills-staged-value" id="vgr-skills-staged">0 / 0</span>
+                  <span class="skills-staged-label">Skills Selected</span>
+                </div>
+                <button type="button" class="skills-apply" id="vgr-skills-apply" disabled>Apply</button>
+              </div>
+            </div>
+            <div class="skills-body">
+              <aside class="skills-sidebar" id="vgr-skills-sidebar"></aside>
+              <section class="skills-treepane" id="vgr-skills-treepane"></section>
+            </div>
+            <footer class="skills-footer">Select a profession on the left, click the next perk in its tree to select it, then press Apply to spend your points. Specialisations are granted by Gamemasters.</footer>
+          </section>
+        </main>
+        <!-- toast lives outside the shell so notices show while the panel is closed -->
+        <div class="skills-toast" id="vgr-skills-toast" hidden></div>
+
+        <!-- ===== Locked Objects (containers / doors) ===== -->
+        <div id="vgr-locks" aria-hidden="true" style="display:none">
+          <div class="locks-context-overlay" id="locksContextOverlay">
+            <div class="locks-context-panel">
+              <header class="locks-context-header">
+                <h2 id="locksContextTitle">Container</h2>
+                <button type="button" class="locks-close-btn" id="locksContextClose" aria-label="Close">&times;</button>
+              </header>
+              <div class="locks-context-body">
+                <div class="locks-context-buttons" id="locksContextButtons"></div>
+              </div>
+            </div>
+          </div>
+
+          <section class="locks-manage-panel" id="locksManagePanel" role="dialog" aria-label="Object management">
+            <header class="locks-manage-header">
+              <h2 id="locksManageTitle">Container: Object</h2>
+              <button type="button" class="locks-close-btn" id="locksManageClose" aria-label="Close">&times;</button>
+            </header>
+
+            <nav class="locks-tabs">
+              <button type="button" class="locks-tab active" data-tab="people">Owners &amp; Users</button>
+              <button type="button" class="locks-tab" data-tab="keyinfo">Key Info</button>
+            </nav>
+
+            <div class="locks-tab-content active" data-tab-panel="people">
+              <div class="locks-desc-box">Manage the owners and users who have access to this object.</div>
+
+              <div id="locksOwnersSection">
+                <div class="locks-section-title">Owners</div>
+                <ul class="locks-user-list" id="locksOwnersList"></ul>
+              </div>
+
+              <div id="locksUsersSection">
+                <div class="locks-section-title">Users</div>
+                <ul class="locks-user-list" id="locksUsersList"></ul>
+              </div>
+            </div>
+
+            <div class="locks-tab-content" data-tab-panel="keyinfo">
+              <div class="locks-key-info-grid" id="locksKeyInfoGrid"></div>
+            </div>
+
+            <footer class="locks-manage-footer">
+              <button type="button" class="locks-add-btn" id="locksAddBtn">+ Add User</button>
+              <div class="locks-info-note" id="locksFooterNote">
+                <span aria-hidden="true">&#9432;</span>
+                <span>Only owners can add or remove users from this container.</span>
+              </div>
+            </footer>
+
+            <div class="locks-submodal-overlay" id="locksSubmodalOverlay">
+              <div class="locks-submodal">
+                <h3 id="locksSubmodalTitle">Add User</h3>
+                <p id="locksSubmodalDesc">Enter the full player name.</p>
+                <label class="locks-field-label" for="locksSubmodalInput">Player Name</label>
+                <input type="text" class="locks-text-input" id="locksSubmodalInput" maxlength="32" autocomplete="off" />
+                <div class="locks-submodal-actions">
+                  <button type="button" class="locks-btn locks-btn-secondary" id="locksSubmodalCancel">Cancel</button>
+                  <button type="button" class="locks-btn locks-btn-primary" id="locksSubmodalConfirm">Add User</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ===== Access Control ===== -->
+        <section id="vgr-access-control" class="access-control-shell" aria-hidden="true" hidden>
+          <div class="access-context" id="accessContextPanel" role="dialog" aria-label="Access control actions">
+            <header class="access-panel-header">
+              <div>
+                <span class="access-kicker" id="accessContextType">Object</span>
+                <h2 id="accessContextTitle">Access Control</h2>
+              </div>
+              <button type="button" class="access-icon-button" id="accessContextClose" aria-label="Close">&times;</button>
+            </header>
+            <div class="access-context-actions" id="accessContextActions"></div>
+          </div>
+
+          <section class="access-manage" id="accessManagePanel" role="dialog" aria-label="Manage object access">
+            <header class="access-panel-header">
+              <div>
+                <span class="access-kicker" id="accessManageType">Object</span>
+                <h2 id="accessManageTitle">Access Control</h2>
+              </div>
+              <button type="button" class="access-icon-button" id="accessManageClose" aria-label="Close">&times;</button>
+            </header>
+
+            <div class="access-status-row">
+              <button type="button" class="access-toggle" id="accessLockedToggle" aria-pressed="true">
+                <span class="access-toggle-dot"></span>
+                <span id="accessLockedLabel">Locked</span>
+              </button>
+              <span class="access-role-badge" id="accessRoleBadge">Visitor</span>
+            </div>
+
+            <nav class="access-tabs" aria-label="Access sections">
+              <button type="button" class="access-tab active" data-access-tab="people">People</button>
+              <button type="button" class="access-tab" data-access-tab="identity">Identity</button>
+            </nav>
+
+            <div class="access-tab-panel active" data-access-panel="people">
+              <div class="access-section-head">
+                <span>Owner</span>
+                <button type="button" class="access-small-button" id="accessAssignOwner">Assign</button>
+              </div>
+              <div class="access-person-list" id="accessOwnerList"></div>
+
+              <div class="access-section-head">
+                <span>Users</span>
+                <button type="button" class="access-small-button" id="accessAddUser">Add</button>
+              </div>
+              <div class="access-person-list" id="accessUsersList"></div>
+            </div>
+
+            <div class="access-tab-panel" data-access-panel="identity">
+              <div class="access-info-grid" id="accessInfoGrid"></div>
+            </div>
+          </section>
+
+          <div class="access-search-modal" id="accessSearchModal" hidden>
+            <div class="access-search-dialog" role="dialog" aria-label="Character search">
+              <header class="access-panel-header">
+                <div>
+                  <span class="access-kicker" id="accessSearchMode">Search</span>
+                  <h2 id="accessSearchTitle">Select Character</h2>
+                </div>
+                <button type="button" class="access-icon-button" id="accessSearchClose" aria-label="Close">&times;</button>
+              </header>
+              <input type="text" id="accessSearchInput" class="access-search-input" maxlength="50" autocomplete="off" placeholder="Character name">
+              <div class="access-search-results" id="accessSearchResults"></div>
+            </div>
+          </div>
+
+          <div class="access-confirm" id="accessConfirm" hidden>
+            <div class="access-confirm-card" role="dialog" aria-label="Confirm action">
+              <h3 id="accessConfirmTitle">Confirm</h3>
+              <p id="accessConfirmMessage"></p>
+              <div class="access-confirm-actions">
+                <button type="button" class="access-button secondary" id="accessConfirmCancel">Cancel</button>
+                <button type="button" class="access-button danger" id="accessConfirmOk">Confirm</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="access-hint" id="accessHint" aria-hidden="true">
+            <div class="access-hint-status" id="accessHintStatus"></div>
+            <div class="access-hint-owner" id="accessHintOwner"></div>
+          </div>
+        </section>
+
+        <!-- ===== Player Interactions ===== -->
+        <div id="vgr-player-prompt" hidden aria-hidden="true">
+          <div class="player-prompt-key" id="playerPromptKey">(X) MENU</div>
+          <div class="player-prompt-name" id="playerPromptName">STRANGER</div>
+        </div>
+
+        <section id="vgr-player-interaction" aria-hidden="true" hidden>
+          <div class="player-interaction-panel" role="dialog" aria-label="Player interaction">
+            <header class="player-interaction-header">
+              <div>
+                <span class="player-interaction-kicker" id="playerInteractionTitle">PLAYER INTERACTION</span>
+                <h2 id="playerInteractionName">STRANGER</h2>
+              </div>
+              <button type="button" class="player-interaction-close" id="playerInteractionClose" aria-label="Close">&times;</button>
+            </header>
+            <div class="player-interaction-actions" id="playerInteractionActions"></div>
+            <div class="player-interaction-pending" id="playerInteractionPending"></div>
+          </div>
+        </section>
+
+        <section id="vgr-trade-request" aria-hidden="true" hidden>
+          <div class="trade-request-panel" role="dialog" aria-label="Trade request">
+            <header class="trade-request-header">
+              <div>
+                <span class="trade-request-kicker" id="tradeRequestTitle">TRADE REQUEST</span>
+                <h2 id="tradeRequestName">STRANGER</h2>
+              </div>
+              <button type="button" class="trade-request-close" id="tradeRequestClose" aria-label="Close">&times;</button>
+            </header>
+            <div class="trade-request-body">
+              <p id="tradeRequestMessage">STRANGER WANTS TO TRADE</p>
+              <div class="trade-request-countdown" id="tradeRequestCountdown"></div>
+            </div>
+            <div class="trade-request-actions" id="tradeRequestActions"></div>
+          </div>
+        </section>
+
+      	<!-- ===== Admin Menu ===== -->
+      	<main id="adminMenu" class="admin-menu hidden" aria-hidden="true">
+      		<div class="screen-fade"></div>
+      		<div class="vgr-adminpanel">
+      			<header class="vgr-header">
+      				<div class="vgr-brand">
+      					<div class="vgr-mark">⚔️</div>
+      					<div>
+      						<p class="overline">Vengeful Realms</p>
+      						<h1>Admin Toolkit</h1>
+      					</div>
+      				</div>
+      				<nav class="vgr-tabs">
+      					<button class="tab active" data-tab="gifter">Item Gifter</button>
+      					<button class="tab" data-tab="teleport">Teleport</button>
+      					<button class="tab" data-tab="npc">NPC Spawner</button>
+      					<button class="tab" data-tab="perks">Perks & Skills</button>
+      					<button class="tab" data-tab="weather">Weather</button>
+      				</nav>
+      				<button class="icon-button" id="closeMenuBtn">×</button>
+      			</header>
+
+      			<!-- Item Gifter -->
+      			<section class="tab-panel active" id="tab-gifter">
+      				<div class="panel full-panel">
+      					<div class="panel-title-row">
+      						<div><p class="overline">Item Administration</p><h2>Give / Gift Items</h2></div>
+      					</div>
+      					<div class="form-card">
+      						<label>🎯 Target Player FormID</label>
+      						<input type="text" id="targetFormId" placeholder="e.g., 14AD4, 0x14AD4" />
+
+      						<div class="grid-2col">
+      							<div>
+      								<label>📦 Item FormID</label>
+      								<input type="text" id="itemFormId" placeholder="e.g., 000139C0 (Gold)" />
+      							</div>
+      							<div>
+      								<label>🔢 Amount</label>
+      								<input type="number" id="itemAmount" value="1" min="1" />
+      							</div>
+      						</div>
+
+      						<div class="action-group">
+      							<button id="giveItemBtn" class="small-button">✨ Give Item</button>
+      							<button id="removeItemBtn" class="small-button danger">🗑️ Remove Item</button>
+      							<button id="clearFormBtn" class="small-button">Clear</button>
+      						</div>
+      					</div>
+      				</div>
+      			</section>
+
+      			<!-- Teleport -->
+      			<section class="tab-panel" id="tab-teleport">
+      				<div class="panel full-panel">
+      					<div class="panel-title-row">
+      						<div><p class="overline">Transport</p><h2>Teleport Player</h2></div>
+      					</div>
+      					
+      					<div class="form-card">
+      						<label>👤 Target Player FormID</label>
+      						<input type="text" id="teleportTargetId" placeholder="e.g., 0x1A2B3C or 1A2B3C" />
+      						<div class="action-group">
+      							<button id="teleportToMeBtn" class="action-button">🚀 Teleport to Me</button>
+      						</div>
+      					</div>
+
+      					<div class="form-card">
+      						<label>📍 Teleport to Location</label>
+      						<div class="location-section">
+      							<h3>Major Holds</h3>
+      							<div class="location-grid" id="majorHoldsGrid"></div>
+      							
+      							<h3 style="margin-top: 16px;">Minor Places</h3>
+      							<div class="location-grid" id="minorPlacesGrid"></div>
+      							
+      							<h3 style="margin-top: 16px;">Temples</h3>
+      							<div class="location-grid" id="templesGrid"></div>
+      						</div>
+      					</div>
+      				</div>
+      			</section>
+
+      			<!-- NPC Spawner (spawns at current player location) -->
+      			<section class="tab-panel" id="tab-npc">
+      				<div class="panel full-panel">
+      					<div class="panel-title-row">
+      						<div><p class="overline">Creature Control</p><h2>NPC Spawner</h2></div>
+      					</div>
+
+      					<nav class="npc-subtabs">
+      						<button class="npc-subtab active" data-npcsub="spawn">Spawner</button>
+      						<button class="npc-subtab" data-npcsub="existing">Existing NPCs</button>
+      					</nav>
+
+      					<!-- ===== Spawner subtab ===== -->
+      					<div class="npc-subpanel active" data-npcsub-panel="spawn">
+      						<div class="form-card">
+      							<div class="grid-2col">
+      								<div>
+      									<label>🏷️ Custom Name <span class="muted">(optional)</span></label>
+      									<input type="text" id="npcName" placeholder="e.g., Captain Aldric" />
+      								</div>
+      								<div>
+      									<label>🔢 Count</label>
+      									<input type="number" id="npcCount" value="1" min="1" max="10" />
+      								</div>
+      							</div>
+
+      							<label>🧬 Base (Race / Creature)</label>
+      							<div class="npc-picker-row">
+      								<input type="text" id="npcBaseLabel" readonly placeholder="Choose a base — mudcrab to Imperial…" />
+      								<button class="small-button" id="npcBasePickBtn">Browse…</button>
+      							</div>
+      							<div class="npc-preset-grid" id="npcPresets"></div>
+
+      							<div class="grid-2col">
+      								<div>
+      									<label>📏 Size (scale)</label>
+      									<input type="number" id="npcScale" value="1.0" min="0.1" max="10" step="0.1" />
+      								</div>
+      								<div>
+      									<label>⚔️ Faction FormID <span class="muted">(optional)</span></label>
+      									<input type="text" id="npcFaction" placeholder="hex formId" />
+      								</div>
+      							</div>
+      							<p class="muted" style="font-size:11px;">Level comes from the chosen base record. Faction is bookkeeping — visible hostility is driven by the base creature.</p>
+      						</div>
+
+      						<div class="form-card">
+      							<div class="panel-title-row"><div><h3>🎒 Inventory</h3></div>
+      								<button class="small-button" id="npcAddItemBtn">＋ Add Item</button></div>
+      							<div class="npc-chip-list" id="npcInventoryList"><span class="muted">No items.</span></div>
+      						</div>
+
+      						<div class="form-card">
+      							<div class="panel-title-row"><div><h3>✨ Abilities (spells / shouts)</h3></div>
+      								<button class="small-button" id="npcAddAbilityBtn">＋ Add Ability</button></div>
+      							<div class="npc-chip-list" id="npcAbilityList"><span class="muted">No abilities.</span></div>
+      						</div>
+
+      						<div class="form-card">
+      							<h3>⏱️ Timers</h3>
+      							<label>Respawn behaviour</label>
+      							<select id="npcRespawnMode">
+      								<option value="timed">Timed — respawn after delay</option>
+      								<option value="never">Never — stays dead (cleaned up)</option>
+      								<option value="trigger">Trigger — respawn when a player approaches</option>
+      							</select>
+      							<div class="grid-2col">
+      								<div>
+      									<label>Respawn delay (sec)</label>
+      									<input type="number" id="npcRespawnDelay" value="60" min="0" />
+      								</div>
+      								<div>
+      									<label>Respawn trigger distance</label>
+      									<input type="number" id="npcTriggerDistance" value="4096" min="0" />
+      								</div>
+      							</div>
+      							<label>Despawn after (sec, 0 = never)</label>
+      							<input type="number" id="npcDespawnSec" value="0" min="0" />
+      						</div>
+
+      						<div class="action-group">
+      							<button id="spawnNpcBtn" class="action-button" style="background: rgba(80, 40, 30, 0.7);">🐉 Spawn NPC</button>
+      							<button id="npcClearBtn" class="small-button">Clear</button>
+      						</div>
+      					</div>
+
+      					<!-- ===== Existing NPCs subtab ===== -->
+      					<div class="npc-subpanel" data-npcsub-panel="existing">
+      						<div class="form-card">
+      							<div class="panel-title-row">
+      								<div><p class="overline">Registry</p><h3>Spawned NPCs</h3></div>
+      								<button class="small-button" id="npcRefreshBtn">⟳ Refresh</button>
+      							</div>
+      							<div class="npc-existing-list" id="npcExistingList"><span class="muted">Click Refresh to load.</span></div>
+      						</div>
+      					</div>
+      				</div>
+      			</section>
+
+      			<!-- Perks & Skills -->
+      			<section class="tab-panel" id="tab-perks">
+      				<div class="panel full-panel">
+      					<div class="panel-title-row">
+      						<div><p class="overline">Character Development</p><h2>Perks & Skills</h2></div>
+      					</div>
+
+      					<!-- Target Player -->
+      					<div class="form-card">
+      						<label>🎯 Target Player FormID</label>
+      						<input type="text" id="perkTargetPlayerId" placeholder="e.g., 14AD4, 0x14AD4" />
+      					</div>
+
+      					<!-- Skills Section -->
+      					<div class="form-card">
+      						<h3>⚡ Skills</h3>
+      						<div class="skill-increment-row">
+      							<label>Increment Amount</label>
+      							<input type="number" id="skillIncrementAmount" value="10" min="1" max="100" class="skill-increment-input" />
+      						</div>
+      						<div class="skills-grid compact" id="skillsGrid"></div>
+      					</div>
+
+      					<!-- Perks Section -->
+      					<div class="form-card">
+      						<h3>🏆 Perks</h3>
+      						<div class="perk-manual-row">
+      							<div class="grid-2col" style="margin-top: 0;">
+      								<div>
+      									<label>Perk FormID</label>
+      									<input type="text" id="perkFormId" placeholder="e.g., 0x000BABE1" />
+      								</div>
+      							</div>
+      							<div class="action-group" style="margin-top: 8px;">
+      								<button id="addPerkBtn" class="small-button">➕ Add Perk</button>
+      								<button id="removePerkBtn" class="small-button danger">➖ Remove Perk</button>
+      							</div>
+      						</div>
+      					</div>
+
+      					<!-- Granted Perks List -->
+      					<div class="form-card">
+      						<h3>📋 Granted Perks</h3>
+      						<div class="granted-perks-info">
+      							<div class="granted-perks-actions">
+      								<button id="updatePerksListBtn" class="small-button">🔄 Update from Player</button>
+      								<button id="deleteAllPerksBtn" class="small-button danger">🗑️ Delete All Perks</button>
+      							</div>
+      							<div id="grantedPerksList" class="granted-perks-list">
+      								<p class="muted" style="text-align: center;">No perks loaded</p>
+      							</div>
+      						</div>
+      					</div>
+      				</div>
+      			</section>
+
+      			<!-- Weather -->
+      			<section class="tab-panel" id="tab-weather">
+      				<div class="panel full-panel">
+      					<div class="panel-title-row">
+      						<div><p class="overline">Atmospheric Control</p><h2>Global Weather Override</h2></div>
+      					</div>
+      					
+      					<!-- Custom Weather Input -->
+      					<div class="form-card">
+      						<h3>🎲 Custom Weather</h3>
+      						<div>
+      							<label>Weather FormID</label>
+      							<input type="text" id="customWeatherFormId" placeholder="e.g., 0x0010E1F0" />
+      						</div>
+      						<div class="action-group">
+      							<button id="setCustomWeatherBtn" class="small-button">🌤️ Apply Custom Weather</button>
+      						</div>
+      					</div>
+
+      					<!-- Preset Weather -->
+      					<div class="form-card">
+      						<h3>📋 Preset Weather</h3>
+      						<label>🌦️ Select Weather Preset</label>
+      						<div id="weatherList" class="weather-list"></div>
+      						<div class="action-group" style="margin-top: 16px;">
+      							<button id="resetWeatherBtn" class="small-button">⟳ Reset to Region Default</button>
+      						</div>
+      					</div>
+      					
+      					<div class="form-card">
+      						<h3>Current Weather</h3>
+      						<p id="currentWeatherStatus" style="color: var(--gold);">— Not set —</p>
+      					</div>
+      				</div>
+      			</section>
+      		</div>
+      	</main>
+        <div id="popupContainer" class="popup-container"></div>
+        
+      	<div class="debug-container">
+      		<div class="debug-header">
+      			<h1>Debug</h1>
+      			<button class="toggle-all-btn" id="toggleAllBtn">▼ Expand All</button>
+      		</div>
+      		<div class="debug-panel-grid" id="debug-panelGrid"></div>
+      	</div>
+
+        <!-- ===== Scripts ===== -->
+
+      <!-- ===== Player Search ===== -->
+      <div id="playerSearchOverlay" class="search-overlay hidden" aria-hidden="true">
+              <div class="search-popup">
+                  <div class="search-header">
+                      <h2>🔍 Player Search</h2>
+                  </div>
+
+                  <div class="search-body">
+                      <div class="search-input-wrapper">
+                          <input type="text" id="playerSearchInput" class="search-input" placeholder="Filter players..." autocomplete="off" />
+                      </div>
+
+                      <div class="results-container">
+                          <div class="results-header">
+                              <span>Players</span>
+                              <span id="resultCount">0</span>
+                          </div>
+                          <div id="resultsList" class="results-list">
+                              <div class="empty-state">
+                                  <span>👤</span>
+                                  <p>Loading players...</p>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div class="search-info">
+                          <p class="hint-text">↓ Click a player to copy their FormID</p>
+                      </div>
+                  </div>
+
+                  <div class="search-footer">
+                      <button id="closeFooterBtn" class="footer-btn primary">Close</button>
+                  </div>
+              </div>
+          </div>
+
+      <!-- ===== Enchanting station ===== -->
+      <div id="enchantingMenu" class="hidden" aria-hidden="true">
+          <div class="ench-panel">
+              <div class="ench-header">
+                  <div><h2>✨ Arcane Enchanter</h2><div class="ench-rank" id="enchRank"></div></div>
+                  <button class="icon-button" id="enchCloseBtn">×</button>
+              </div>
+              <div class="ench-tools">
+                  <input type="text" id="enchSearch" placeholder="Search recipes… (item, enchantment)" autocomplete="off" />
+                  <label><input type="checkbox" id="enchCraftableOnly" /> Craftable only</label>
+                  <span id="enchCount" class="muted"></span>
+              </div>
+              <div class="ench-list" id="enchRecipeList"></div>
+              <div class="ench-footer">
+                  <div id="enchGems"></div>
+                  <span class="muted" style="font-size:11px;">Enchanting consumes the base item + a filled soul gem.</span>
+              </div>
+          </div>
+      </div>
+
+      <!-- ===== Ingredient traits (Professions > Alchemy) ===== -->
+      <div id="traitsOverlay" class="hidden" aria-hidden="true">
+          <div class="ench-panel">
+              <div class="ench-header">
+                  <div><h2>🌿 Ingredient Traits</h2><div class="ench-rank" id="traitsRank"></div></div>
+                  <button class="icon-button" id="traitsCloseBtn">×</button>
+              </div>
+              <div class="ench-tools">
+                  <input type="text" id="traitsSearch" placeholder="Search ingredients…" autocomplete="off" />
+              </div>
+              <div class="ench-list" id="traitsList"></div>
+          </div>
+      </div>
+
+      <!-- ===== NPC catalog picker (items / abilities / base) ===== -->
+      <div id="npcPickerOverlay" class="search-overlay hidden" aria-hidden="true">
+          <div class="search-popup">
+              <div class="search-header"><h2 id="npcPickerTitle">🔍 Pick</h2></div>
+              <div class="search-body">
+                  <div class="search-input-wrapper">
+                      <input type="text" id="npcPickerInput" class="search-input" placeholder="Search…" autocomplete="off" />
+                  </div>
+                  <div class="results-container">
+                      <div class="results-header"><span id="npcPickerLabel">Results</span><span id="npcPickerCount">0</span></div>
+                      <div id="npcPickerResults" class="results-list"></div>
+                  </div>
+                  <div class="search-info"><p class="hint-text" id="npcPickerHint">Type to filter — showing first 200 matches.</p></div>
+              </div>
+              <div class="search-footer"><button id="npcPickerClose" class="footer-btn primary">Close</button></div>
+          </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/shell.js"></script>
+  <script src="js/login.js"></script>
+  <script src="js/ingame/notifications.js"></script>
+  <script src="js/ingame/woodcutting.js"></script>
+  <script src="js/ingame/mining.js"></script>
+  <script src="js/ingame/emote.js"></script>
+  <script src="js/ingame/social.js"></script>
+  <script src="js/ingame/trading.js"></script>
+  <script src="js/ingame/locks.js"></script>
+  <script src="js/ingame/access_control.js"></script>
+  <script src="js/ingame/player_interactions.js"></script>
+  <script src="js/ingame/player_search.js"></script>
+  <script src="js/ingame/admin_menu.js"></script>
+  <script src="js/ingame/npc_spawner.js"></script>
+  <script src="js/ingame/enchanting.js"></script>
+  <script src="js/ingame/debugview.js"></script>
+  <script src="js/ingame/skills.js"></script>
+  <script src="js/ingame/ui_manager.js"></script>
+</body>
+</html>

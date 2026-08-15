@@ -2,15 +2,42 @@
 // Must run before any process.env read below: this module snapshots the env at load time
 require('dotenv').config()
 
+const fs = require('fs')
 const path = require('path')
 
 const SKYMP_PORT = parseInt(process.env.SKYMP_PORT || '7777', 10)
+
+function readJsonIfExists(file) {
+  if (!file) return null
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')) }
+  catch { return null }
+}
+
+function findServerSettings() {
+  const candidates = [
+    process.env.SERVER_SETTINGS_PATH,
+    process.env.SKYMP_SERVER_SETTINGS_PATH,
+    path.join(process.cwd(), 'server-settings.json'),
+    path.join(__dirname, 'server-settings.json'),
+    path.join(__dirname, '..', 'build', 'dist', 'server', 'server-settings.json'),
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    const settings = readJsonIfExists(candidate)
+    if (settings) return { path: candidate, settings }
+  }
+
+  return { path: null, settings: {} }
+}
+
+const serverSettings = findServerSettings()
 
 module.exports = {
   // Client files bucket
   clientFilesDir: process.env.CLIENT_FILES_DIR
     || path.join(__dirname, '..', 'build', 'client-files'),
   clientZipName: 'skymp-client.zip',
+  clientZipUrl: process.env.CLIENT_ZIP_URL || '',
 
   // Game server connection (used for status checks and metrics)
   skyrimServerHost: process.env.SKYMP_HOST || '127.0.0.1',
@@ -26,9 +53,10 @@ module.exports = {
   serverOfflineMode: process.env.SERVER_OFFLINE_MODE === 'true',
   serverNpcEnabled:  process.env.SERVER_NPC_ENABLED  === 'true',
   serverGamemode:    process.env.SERVER_GAMEMODE     || null,
+  serverLoadOrder:   Array.isArray(serverSettings.settings.loadOrder) ? serverSettings.settings.loadOrder : null,
   // Master API: used by the SkyMP client for online-mode auth; ignored by the launcher in offline mode
   serverMasterKey:    process.env.SERVER_MASTER_KEY    || '',
-  masterUrl:          process.env.MASTER_URL           || 'https://api.skyrimroleplay.co.uk/',
+  masterUrl:          process.env.MASTER_URL           || 'https://api.vengefulrealms.com/',
   masterApiAuthToken: process.env.MASTER_API_AUTH_TOKEN || '',
 
   // Discord OAuth (launcher login)
@@ -79,4 +107,21 @@ module.exports = {
 
   // Discord role used as the gameplay ban list. Users with this role cannot join.
   bannedRoleId: process.env.BANNED_ROLE_ID || process.env.BAN_ROLE_ID || '',
+
+  // Optional salt for backend-side HWID fingerprints. If unset, the server
+  // master key is used so raw hardware identifiers are never stored.
+  hwidHashSecret: process.env.HWID_HASH_SECRET || '',
+
+  // Backend runtime database. Uses explicit backend env vars first, then the
+  // game server's server-settings.json databaseUri as a convenience.
+  serverSettingsPath: serverSettings.path,
+  backendDatabaseUri: process.env.BACKEND_DATABASE_URI
+    || process.env.DATABASE_URI
+    || serverSettings.settings.databaseUri
+    || '',
+  backendDatabaseName: process.env.BACKEND_DATABASE_NAME || 'skymp-backend',
+  gameDatabaseName: process.env.GAME_DATABASE_NAME
+    || process.env.SERVER_DATABASE_NAME
+    || serverSettings.settings.databaseName
+    || 'skymp',
 }

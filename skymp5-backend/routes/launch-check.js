@@ -30,7 +30,7 @@ router.post('/', async (req, res) => {
   const token = req.headers['x-session']
   if (!token) return res.status(401).json({ error: 'Missing x-session header.' })
 
-  const entry = lookupSession(token)
+  const entry = await lookupSession(token)
   if (!entry) return res.status(401).json({ error: 'Invalid or expired session.' })
 
   const { filesVersion, plugins } = req.body || {}
@@ -43,7 +43,7 @@ router.post('/', async (req, res) => {
   const reported = normalizePlugins(plugins)
   const pluginsOk = expected.length === 0 || expected.join('|') === reported.join('|')
 
-  recordLaunchCheck(token, { filesVersion: filesVersion || '', filesOk, pluginsOk })
+  await recordLaunchCheck(token, { filesVersion: filesVersion || '', filesOk, pluginsOk })
 
   res.json({ ok: filesOk && pluginsOk, filesOk, pluginsOk, requiredVersion })
 })

@@ -1,0 +1,174 @@
+:root {
+  --vgr-font-serif: Georgia, "Times New Roman", serif;
+  --vgr-font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --vgr-gold: #c5a36e;
+  --vgr-gold-light: #e6d0a3;
+  --vgr-red: #681111;
+  --vgr-line: rgba(165, 129, 80, 0.28);
+  --vgr-shadow-heavy: rgba(0, 0, 0, 0.72);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+body {
+  color: var(--vgr-gold-light);
+  font-family: var(--vgr-font-serif);
+  font-size: 14px;
+  letter-spacing: 0;
+  user-select: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  color: inherit;
+  cursor: pointer;
+}
+
+#vgr-login-layer,
+#vgr-game-layer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+
+#vgr-login-layer,
+#vgr-login-layer * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+#vgr-login-layer button,
+#vgr-login-layer input,
+#vgr-login-layer select {
+  font: inherit;
+}
+
+#vgr-login-layer button {
+  color: inherit;
+  cursor: pointer;
+}
+#vgr-login-layer[hidden],
+#vgr-game-layer[hidden] {
+  display: none !important;
+}
+
+#vgr-login-layer {
+  --bg: #030303;
+  --panel: rgba(7, 7, 7, 0.84);
+  --panel-soft: rgba(16, 15, 13, 0.76);
+  --panel-light: rgba(28, 27, 24, 0.68);
+  --line: rgba(165, 129, 80, 0.28);
+  --line-strong: rgba(196, 160, 107, 0.62);
+  --gold: #c4a06b;
+  --gold-light: #e6d0a3;
+  --gold-muted: #8c744b;
+  --text: #e3d4b7;
+  --muted: #92846f;
+  --dim: #5f584c;
+  --red: #3b0505;
+  --red-light: #681111;
+  --red-border: rgba(153, 48, 34, 0.55);
+  --green: #8fa878;
+  --amber: #c6a65d;
+  --danger: #c46f5c;
+  --shadow: rgba(0, 0, 0, 0.68);
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: #000;
+  color: var(--text);
+  font-family: var(--vgr-font-serif);
+}
+
+#vgr-game-layer {
+  --black-82: rgba(2, 2, 2, 0.82);
+  --black-68: rgba(3, 3, 3, 0.68);
+  --wine-active: rgba(92, 7, 6, 0.80);
+  --wine-deep: rgba(38, 5, 5, 0.78);
+  --gold: #c7b38a;
+  --gold-soft: rgba(199, 179, 138, 0.72);
+  --gold-line: rgba(148, 109, 62, 0.52);
+  --parchment: #d6c2a0;
+  --parchment-soft: #a99675;
+  --black-44: rgba(5, 5, 5, 0.44);
+  --charcoal-60: rgba(27, 25, 22, 0.60);
+  --charcoal-48: rgba(36, 33, 29, 0.48);
+  --gold-faint: rgba(197, 163, 110, 0.18);
+  --parchment-dim: rgba(214, 194, 160, 0.54);
+  --shadow: 0 0 30px rgba(0, 0, 0, 0.55);
+  --fast: 140ms ease;
+  --medium: 260ms ease;
+  --black-90: rgba(2, 2, 2, 0.90);
+  --black-48: rgba(3, 3, 3, 0.48);
+  --wine-soft: rgba(80, 10, 10, 0.44);
+  --gold-bright: #e2c28a;
+  --gold-line-soft: rgba(148, 109, 62, 0.25);
+  --parchment-bright: #ead7b7;
+  --muted: #9b8d74;
+  --locks-blue: #4a0b0d;
+  --locks-blue-hover: #5a1113;
+  --locks-green: #e3c89c;
+  --locks-green-bg: rgba(74, 11, 13, 0.58);
+  --locks-red: #d46a5e;
+  --locks-panel: #090909;
+  --locks-panel-elevated: #12100f;
+  --locks-border: rgba(197, 163, 110, 0.34);
+  --locks-text: #ead7b7;
+  --locks-muted: #b3986e;
+  --locks-backdrop: rgba(0, 0, 0, 0.72);
+  --bg-popup: rgba(10, 9, 8, 0.95);
+  --bg-card: rgba(20, 18, 16, 0.8);
+  --bg-input: rgba(4, 4, 4, 0.64);
+  --gold-muted: rgba(154, 128, 82, 0.42);
+  --text: #e6dcc6;
+  --text-muted: #9b8d74;
+  --border: rgba(190, 155, 97, 0.25);
+  --font: Georgia, "Times New Roman", serif;
+  --bg-black: rgba(5, 5, 5, 0.82);
+  --bg-panel: rgba(13, 12, 11, 0.78);
+  --danger: #a6382f;
+  --line: rgba(190, 155, 97, 0.22);
+  z-index: 20;
+  pointer-events: none;
+  background: transparent;
+  color: var(--parchment, var(--vgr-gold-light));
+  font-family: var(--vgr-font-serif);
+}
+
+#vgr-game-layer .vgr-game-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent;
+}
+body[data-vgr-mode="gameplay"] #vgr-game-layer {
+  pointer-events: none;
+}
+body[data-vgr-mode="login"] #vgr-game-layer,
+body[data-vgr-mode="queue"] #vgr-game-layer,
+body[data-vgr-mode="auth"] #vgr-game-layer,
+body[data-vgr-mode="loading"] #vgr-game-layer {
+  display: none !important;
+}
+body[data-vgr-login-disposed="true"] #vgr-login-layer {
+  display: none !important;
+}

@@ -3,26 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#030303">
   <title>SkyRP Management</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">F</div>
+        <div class="brand-mark" aria-hidden="true">
+          <img src="assets/logo.png" alt="">
+        </div>
         <div>
-          <strong>SkyRP</strong>
-          <span>Management</span>
+          <span>Vengeful</span>
+          <strong>Realms</strong>
+          <em>Management</em>
         </div>
       </div>
       <nav class="nav" aria-label="Dashboard sections">
-        <button class="nav-button active" data-view="access" type="button">Access</button>
-        <button class="nav-button" data-view="players" type="button">Players</button>
-        <button class="nav-button" data-view="factions" type="button">Factions</button>
-        <button class="nav-button" data-view="permissions" type="button">Permissions</button>
+        <button class="nav-button active" data-view="access" type="button">
+          <img src="assets/icons/shield.svg" alt="">
+          <span>Access</span>
+        </button>
+        <button class="nav-button" data-view="players" type="button">
+          <img src="assets/icons/user.svg" alt="">
+          <span>Players</span>
+        </button>
+        <button class="nav-button" data-view="factions" type="button">
+          <img src="assets/icons/world-rune.svg" alt="">
+          <span>Factions</span>
+        </button>
+        <button class="nav-button" data-view="permissions" type="button">
+          <img src="assets/icons/scroll.svg" alt="">
+          <span>Permissions</span>
+        </button>
       </nav>
       <div class="session-panel">
+        <div class="small-label">Account</div>
         <div id="userName" class="muted">Signed out</div>
         <button id="loginButton" class="primary" type="button">Discord Login</button>
         <button id="logoutButton" class="ghost hidden" type="button">Logout</button>
@@ -46,10 +63,10 @@
       <section id="accessView" class="view hidden">
         <div class="split">
           <section class="panel">
-            <div class="panel-head">
-              <h2>Server Access</h2>
-              <span class="muted">Role-backed join policy</span>
-            </div>
+              <div class="panel-head">
+                <h2>Server Access</h2>
+                <span class="muted">Roles for whitelist/lock, backend records for bans</span>
+              </div>
             <form id="accessForm" class="form">
               <label class="check-row">
                 <input id="serverLockedInput" type="checkbox">
@@ -66,11 +83,11 @@
               <label>
                 Whitelist Role ID
                 <input id="whitelistRoleIdInput" autocomplete="off">
-              </label>
-              <label>
-                Banned Role ID
-                <input id="bannedRoleIdInput" autocomplete="off">
-              </label>
+                </label>
+                <label>
+                  Legacy Banned Role ID (not enforced)
+                  <input id="bannedRoleIdInput" autocomplete="off">
+                </label>
               <button class="primary" type="submit">Save Access Policy</button>
             </form>
           </section>
@@ -130,6 +147,10 @@
               <label>
                 Notes
                 <textarea id="playerNotesInput" rows="4"></textarea>
+              </label>
+              <label class="checkbox-row">
+                <input id="playerAdminInput" type="checkbox">
+                Admin console access
               </label>
               <button class="primary" type="submit">Save Player</button>
             </form>
@@ -275,7 +296,7 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/dashboard-config.js"></script>
-  <script src="/app.js"></script>
+  <script src="dashboard-config.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

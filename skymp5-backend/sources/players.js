@@ -1,137 +1,255 @@
 'use strict'
 
-const fs               = require('fs')
-const path             = require('path')
-const profiles         = require('./profiles')
+const characters       = require('./characters')
+const db               = require('./backendDb')
 const factionWhitelist = require('./factionWhitelist')
 
-const FILE = path.join(__dirname, '..', 'data', 'players.json')
+const DEFAULT_MAX_CHARACTER_SLOTS = 3
+const DEFAULT_HAS_PRIORITY_QUE = false
+const DEFAULT_ADMIN = false
 
-function load() {
-  try {
-    const data = JSON.parse(fs.readFileSync(FILE, 'utf8'))
-    return data && typeof data === 'object' && !Array.isArray(data) ? data : {}
-  } catch {
-    return {}
-  }
+function nowIso() {
+  return new Date().toISOString()
 }
 
-function save(data) {
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2) + '\n')
-}
-
-function upsertFromDiscordUser(discordUser) {
-  if (!discordUser || !discordUser.id) throw new Error('discordUser.id is required')
-  const discordId = String(discordUser.id)
-  const profileId = profiles.getOrCreateProfileId(discordId)
-  const data = load()
-  const existing = data[discordId] || {}
-  const now = new Date().toISOString()
-
-  data[discordId] = {
-    profileId,
-    discordId,
-    username: discordUser.username || existing.username || '',
-    displayName: discordUser.global_name || discordUser.displayName || discordUser.username || existing.displayName || '',
-    avatar: discordUser.avatar || existing.avatar || null,
-    notes: existing.notes || '',
-    createdAt: existing.createdAt || now,
-    updatedAt: now,
-    lastSeenAt: now,
-  }
-
-  save(data)
-  return data[discordId]
-}
-
-function createManual(input) {
-  const discordId = String(input.discordId || '').trim()
+function normalizeDiscordId(value) {
+  const discordId = String(value || '').trim()
   if (!discordId) {
     const err = new Error('discordId is required')
     err.status = 400
     throw err
   }
-  const profileId = profiles.getOrCreateProfileId(discordId)
-  const data = load()
-  const existing = data[discordId] || {}
-  const now = new Date().toISOString()
-
-  data[discordId] = {
-    profileId,
-    discordId,
-    username: String(input.username || existing.username || '').trim(),
-    displayName: String(input.displayName || existing.displayName || input.username || '').trim(),
-    avatar: existing.avatar || null,
-    notes: String(input.notes || existing.notes || '').trim(),
-    createdAt: existing.createdAt || now,
-    updatedAt: now,
-    lastSeenAt: existing.lastSeenAt || null,
-  }
-
-  save(data)
-  return decorate(data[discordId])
+  return discordId
 }
 
-function updateByProfileId(profileId, patch) {
-  const discordId = profiles.getDiscordIdByProfileId(profileId)
-  if (!discordId) {
+async function collection() {
+  return db.collection('players')
+}
+
+function normalizeMaxCharacterSlots(value) {
+  const slots = Number(value)
+  return Number.isInteger(slots) && slots >= 0 ? slots : DEFAULT_MAX_CHARACTER_SLOTS
+}
+
+function normalizeHasPriorityQue(value) {
+  return value === true
+}
+
+function normalizeAdmin(value) {
+  if (value === true) return true
+  if (value === 1) return true
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === 'true' || normalized === '1' || normalized === 'yes'
+  }
+  return false
+}
+
+function withDefaults(player) {
+  if (!player) return null
+  return {
+    ...player,
+    maxCharacterSlots: normalizeMaxCharacterSlots(player.maxCharacterSlots),
+    hasPriorityQue: normalizeHasPriorityQue(player.hasPriorityQue),
+    admin: normalizeAdmin(player.admin),
+  }
+}
+
+async function upsertAccount(discordUser) {
+  const discordId = normalizeDiscordId(discordUser.id)
+  const current = await (await collection()).findOne({ discordId })
+  const timestamp = nowIso()
+  const username = String(discordUser.username || current?.username || '').trim()
+  const displayName = String(discordUser.global_name || discordUser.displayName || discordUser.username || current?.displayName || '').trim()
+  const avatar = discordUser.avatar !== undefined ? discordUser.avatar : current?.avatar || null
+
+  const player = {
+    discordId,
+    username,
+    displayName,
+    avatar,
+    notes: current?.notes || '',
+    maxCharacterSlots: discordUser.maxCharacterSlots !== undefined
+      ? normalizeMaxCharacterSlots(discordUser.maxCharacterSlots)
+      : normalizeMaxCharacterSlots(current?.maxCharacterSlots),
+    hasPriorityQue: discordUser.hasPriorityQue !== undefined
+      ? normalizeHasPriorityQue(discordUser.hasPriorityQue)
+      : normalizeHasPriorityQue(current?.hasPriorityQue),
+    admin: discordUser.admin !== undefined
+      ? normalizeAdmin(discordUser.admin)
+      : normalizeAdmin(current?.admin),
+    createdAt: current?.createdAt || timestamp,
+    updatedAt: timestamp,
+    lastSeenAt: timestamp,
+  }
+
+  await (await collection()).updateOne(
+    { discordId },
+    { $set: player },
+    { upsert: true },
+  )
+
+  return player
+}
+
+async function getAccountByDiscordId(discordId) {
+  const col = await collection()
+  const player = await col.findOne({ discordId: normalizeDiscordId(discordId) })
+  const normalized = withDefaults(player)
+  if (!normalized) return null
+
+  const patch = {}
+  if (player.maxCharacterSlots !== normalized.maxCharacterSlots) {
+    patch.maxCharacterSlots = normalized.maxCharacterSlots
+  }
+  if (player.hasPriorityQue !== normalized.hasPriorityQue) {
+    patch.hasPriorityQue = normalized.hasPriorityQue
+  }
+  if (player.admin !== normalized.admin) {
+    patch.admin = normalized.admin
+  }
+  if (Object.keys(patch).length > 0) {
+    await col.updateOne({ discordId: normalized.discordId }, { $set: patch })
+  }
+
+  return normalized
+}
+
+async function upsertFromDiscordUser(discordUser) {
+  if (!discordUser || !discordUser.id) throw new Error('discordUser.id is required')
+
+  const player = await upsertAccount(discordUser)
+  return decorate({ ...player, profileId: null }, null)
+}
+
+async function createManual(input) {
+  const discordId = normalizeDiscordId(input.discordId)
+  const player = await upsertAccount({
+    id: discordId,
+    username: input.username,
+    displayName: input.displayName || input.username,
+    maxCharacterSlots: input.maxCharacterSlots,
+    hasPriorityQue: input.hasPriorityQue,
+    admin: input.admin,
+  })
+  const character = await characters.getOrCreateDefault(discordId, player)
+  return decorate({ ...player, profileId: character.profileId }, character)
+}
+
+async function updateByProfileId(profileId, patch) {
+  const character = await characters.getByProfileId(profileId)
+  if (!character) {
     const err = new Error('player not found')
     err.status = 404
     throw err
   }
 
-  const data = load()
-  const current = data[discordId] || { profileId: Number(profileId), discordId }
-  if (patch.username !== undefined) current.username = String(patch.username || '').trim()
-  if (patch.displayName !== undefined) current.displayName = String(patch.displayName || '').trim()
-  if (patch.notes !== undefined) current.notes = String(patch.notes || '').trim()
-  current.updatedAt = new Date().toISOString()
-  data[discordId] = current
-  save(data)
-  return decorate(current)
+  const current = await (await collection()).findOne({ discordId: character.discordId })
+  const next = {
+    discordId: character.discordId,
+    username: patch.username !== undefined ? String(patch.username || '').trim() : current?.username || '',
+    displayName: patch.displayName !== undefined ? String(patch.displayName || '').trim() : current?.displayName || '',
+    avatar: current?.avatar || null,
+    notes: patch.notes !== undefined ? String(patch.notes || '').trim() : current?.notes || '',
+    maxCharacterSlots: patch.maxCharacterSlots !== undefined
+      ? normalizeMaxCharacterSlots(patch.maxCharacterSlots)
+      : normalizeMaxCharacterSlots(current?.maxCharacterSlots),
+    hasPriorityQue: patch.hasPriorityQue !== undefined
+      ? normalizeHasPriorityQue(patch.hasPriorityQue)
+      : normalizeHasPriorityQue(current?.hasPriorityQue),
+    admin: patch.admin !== undefined
+      ? normalizeAdmin(patch.admin)
+      : normalizeAdmin(current?.admin),
+    createdAt: current?.createdAt || nowIso(),
+    updatedAt: nowIso(),
+    lastSeenAt: current?.lastSeenAt || null,
+  }
+
+  await (await collection()).updateOne(
+    { discordId: character.discordId },
+    { $set: next },
+    { upsert: true },
+  )
+
+  return decorate({ ...next, profileId: character.profileId }, character)
 }
 
-function list() {
-  const data = load()
-  return profiles.list().map(profile => {
-    const row = data[profile.discordId] || {
-      profileId: profile.profileId,
-      discordId: profile.discordId,
+async function list() {
+  const col = await collection()
+  const activeCharacters = await characters.listActive()
+  const result = []
+
+  for (const character of activeCharacters) {
+    const player = await col.findOne({ discordId: character.discordId }) || {
+      discordId: character.discordId,
       username: '',
       displayName: '',
       avatar: null,
       notes: '',
+      maxCharacterSlots: DEFAULT_MAX_CHARACTER_SLOTS,
+      hasPriorityQue: DEFAULT_HAS_PRIORITY_QUE,
+      admin: DEFAULT_ADMIN,
       createdAt: null,
       updatedAt: null,
       lastSeenAt: null,
     }
-    return decorate(row)
-  })
+    result.push(decorate({ ...player, profileId: character.profileId }, character))
+  }
+
+  return result.sort((a, b) => a.profileId - b.profileId)
 }
 
-function getByProfileId(profileId) {
-  const discordId = profiles.getDiscordIdByProfileId(profileId)
-  if (!discordId) return null
-  const data = load()
-  return decorate(data[discordId] || { profileId: Number(profileId), discordId })
+async function getByProfileId(profileId) {
+  const character = await characters.getByProfileId(profileId)
+  if (!character) return null
+
+  const player = await (await collection()).findOne({ discordId: character.discordId }) || {
+    discordId: character.discordId,
+    username: '',
+    displayName: '',
+    avatar: null,
+    notes: '',
+    maxCharacterSlots: DEFAULT_MAX_CHARACTER_SLOTS,
+    hasPriorityQue: DEFAULT_HAS_PRIORITY_QUE,
+    admin: DEFAULT_ADMIN,
+    createdAt: null,
+    updatedAt: null,
+    lastSeenAt: null,
+  }
+
+  return decorate({ ...player, profileId: character.profileId }, character)
 }
 
-function decorate(player) {
+function decorate(player, character = null) {
+  const normalizedPlayer = withDefaults(player)
+  const profileId = Number(normalizedPlayer.profileId)
   return {
-    ...player,
-    profileId: Number(player.profileId),
-    assignments: factionWhitelist.getPlayerAssignments(player.discordId),
-    factionPermissions: factionWhitelist.getPlayerFactionPermissions(player.discordId),
-    gameFactions: factionWhitelist.getPlayerGameFactions(player.discordId),
+    ...normalizedPlayer,
+    profileId: Number.isInteger(profileId) && profileId > 0 ? profileId : null,
+    character: character ? {
+      profileId: character.profileId,
+      name: character.name,
+      portrait: character.portrait || null,
+      balance: typeof character.balance === 'number' ? character.balance : 0,
+      createdAt: character.createdAt,
+      updatedAt: character.updatedAt,
+      lastPlayedAt: character.lastPlayedAt || null,
+      deletedAt: character.deletedAt || null,
+    } : null,
+    assignments: factionWhitelist.getPlayerAssignments(normalizedPlayer.discordId),
+    factionPermissions: factionWhitelist.getPlayerFactionPermissions(normalizedPlayer.discordId),
+    gameFactions: factionWhitelist.getPlayerGameFactions(normalizedPlayer.discordId),
   }
 }
 
 module.exports = {
-  load,
-  save,
-  list,
-  getByProfileId,
-  upsertFromDiscordUser,
+  DEFAULT_ADMIN,
+  DEFAULT_HAS_PRIORITY_QUE,
+  DEFAULT_MAX_CHARACTER_SLOTS,
   createManual,
+  getAccountByDiscordId,
+  getByProfileId,
+  list,
   updateByProfileId,
+  upsertFromDiscordUser,
 }

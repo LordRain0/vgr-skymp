@@ -1,0 +1,281 @@
+#vgr-game-layer .debug-container,
+#vgr-game-layer .debug-container * {
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+}
+
+#vgr-game-layer .debug-container {
+  max-width: 400px;
+  width: 100%;
+  background: rgba(11, 13, 17, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+  max-height: 95vh;
+  overflow-y: auto;
+  display: none;
+  position: fixed;
+  top: 0.5rem;
+  right: 1rem;
+  z-index: 12000;
+  pointer-events: auto;
+}
+
+#vgr-game-layer .debug-container.visible {
+  display: block;
+  /* Shown when visible class is added */
+}
+/* scrollbar styling */
+#vgr-game-layer .debug-container::-webkit-scrollbar {
+  width: 3px;
+}
+
+#vgr-game-layer .debug-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+
+#vgr-game-layer .debug-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+#vgr-game-layer .debug-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+/* header */
+#vgr-game-layer .debug-header {
+  margin-bottom: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 0.4rem;
+}
+
+#vgr-game-layer .debug-header h1 {
+  font-weight: 400;
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #8a9fc7;
+  opacity: 0.7;
+}
+
+#vgr-game-layer .toggle-all-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #8a9fc7;
+  padding: 0.15rem 0.7rem;
+  border-radius: 4px;
+  font-size: 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+#vgr-game-layer .toggle-all-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 1;
+}
+/* grid of debug-panels */
+#vgr-game-layer .debug-panel-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+/* each debug-panel = contextmenu style */
+#vgr-game-layer .debug-panel {
+  background: rgba(19, 26, 36, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+#vgr-game-layer .debug-panel:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(19, 26, 36, 0.75);
+}
+
+#vgr-game-layer .debug-panel-head {
+  background: rgba(26, 35, 47, 0.4);
+  padding: 0.3rem 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+#vgr-game-layer .debug-panel-head:hover {
+  background: rgba(26, 35, 47, 0.6);
+}
+
+#vgr-game-layer .debug-panel-head .icon {
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
+#vgr-game-layer .debug-panel-head .title {
+  font-weight: 500;
+  font-size: 0.7rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8aa3c7;
+  opacity: 0.8;
+  flex: 1;
+}
+
+#vgr-game-layer .debug-panel-head .count-badge {
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.05rem 0.4rem;
+  border-radius: 30px;
+  font-size: 0.55rem;
+  color: #7e93b0;
+}
+
+#vgr-game-layer .debug-panel-head .collapse-icon {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  transition: transform 0.2s;
+  margin-left: 0.2rem;
+}
+
+#vgr-game-layer .debug-panel-head .collapse-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+#vgr-game-layer .debug-panel-body {
+  padding: 0.4rem 0.7rem 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  overflow: hidden;
+  transition: all 0.25s ease;
+  max-height: 2000px;
+  opacity: 1;
+}
+
+#vgr-game-layer .debug-panel-body.collapsed {
+  max-height: 0;
+  padding: 0 0.7rem;
+  opacity: 0;
+  pointer-events: none;
+}
+/* key-value rows */
+#vgr-game-layer .kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.15rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  font-size: 0.75rem;
+}
+
+#vgr-game-layer .kv:last-child {
+  border-bottom: none;
+}
+
+#vgr-game-layer .kv .key {
+  color: #7e93b0;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  word-break: break-word;
+  padding-right: 0.6rem;
+  font-size: 0.7rem;
+}
+
+#vgr-game-layer .kv .value {
+  color: #d6e0ed;
+  font-weight: 400;
+  text-align: right;
+  word-break: break-word;
+  max-width: 55%;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1px;
+}
+
+#vgr-game-layer .kv .value.nullish {
+  color: #5a6c84;
+  font-style: italic;
+}
+
+#vgr-game-layer .kv .value.boolean-true {
+  color: #5fdb7a;
+  background: rgba(95, 219, 122, 0.08);
+}
+
+#vgr-game-layer .kv .value.boolean-false {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+}
+/* special for sub-items (effectiveSources) */
+#vgr-game-layer .nested-group {
+  margin-top: 0.15rem;
+  padding-left: 0.3rem;
+  border-left: 2px solid rgba(255, 255, 255, 0.04);
+}
+
+#vgr-game-layer .nested-group .kv {
+  padding-left: 0.2rem;
+  border-bottom-color: rgba(255, 255, 255, 0.015);
+}
+
+#vgr-game-layer .nested-group .kv .key {
+  font-size: 0.65rem;
+  color: #6a7f9a;
+}
+
+#vgr-game-layer .nested-group .kv .value {
+  font-size: 0.65rem;
+}
+
+#vgr-game-layer .nested-group-header {
+  font-size: 0.65rem;
+  color: #6a7f9a;
+  padding: 0.1rem 0 0.05rem 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.03);
+  margin-bottom: 0.05rem;
+  opacity: 0.7;
+}
+
+#vgr-game-layer .footer-timestamp {
+  margin-top: 0.5rem;
+  text-align: right;
+  font-size: 0.55rem;
+  color: rgba(255, 255, 255, 0.15);
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  padding-top: 0.3rem;
+}
+/* responsive */
+@media (max-width: 600px) {
+  #vgr-game-layer .debug-container {
+  max-width: 100%;
+  max-height: 98vh;
+  padding: 0.5rem 0.7rem;
+}
+
+#vgr-game-layer .kv {
+  flex-wrap: wrap;
+}
+
+#vgr-game-layer .kv .value {
+  max-width: 100%;
+  text-align: left;
+  margin-top: 0.05rem;
+}
+}

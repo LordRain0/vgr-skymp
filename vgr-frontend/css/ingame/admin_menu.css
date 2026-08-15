@@ -1,0 +1,484 @@
+#vgr-game-layer #adminMenu .screen-fade {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.65) 100%);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 1;
+  transition: opacity 80ms ease;
+}
+
+#vgr-game-layer #adminMenu.admin-menu {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 3.2vh 3vw;
+  pointer-events: auto;
+}
+
+#vgr-game-layer #adminMenu.admin-menu.hidden {
+  display: none;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#vgr-game-layer #adminMenu .vgr-adminpanel {
+  width: min(1520px, 94vw);
+  height: min(880px, 92vh);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: linear-gradient(180deg, rgba(15, 13, 12, 0.86), rgba(5, 5, 5, 0.82));
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+#vgr-game-layer #adminMenu .vgr-header {
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: 1fr auto 48px;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 24px 14px;
+  flex-shrink: 0;
+}
+
+#vgr-game-layer #adminMenu .vgr-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+#vgr-game-layer #adminMenu .vgr-mark {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(70, 12, 12, 0.7), rgba(7, 7, 7, 0.9));
+  border: 1px solid var(--gold-muted);
+  color: var(--gold);
+  font-size: 24px;
+}
+
+#vgr-game-layer #adminMenu .overline {
+  margin: 0 0 3px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 3.5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#vgr-game-layer #adminMenu h1,
+#vgr-game-layer #adminMenu h2,
+#vgr-game-layer #adminMenu h3,
+#vgr-game-layer #adminMenu p {
+  margin: 0;
+}
+
+#vgr-game-layer #adminMenu h1 {
+  color: var(--text);
+  font-size: 30px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+#vgr-game-layer #adminMenu h2 {
+  font-size: 22px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+#vgr-game-layer #adminMenu h3 {
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+#vgr-game-layer #adminMenu .vgr-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+#vgr-game-layer #adminMenu .tab,
+#vgr-game-layer #adminMenu .small-button,
+#vgr-game-layer #adminMenu .icon-button,
+#vgr-game-layer #adminMenu .action-button,
+#vgr-game-layer #adminMenu .location-btn,
+#vgr-game-layer #adminMenu .npc-preset-btn,
+#vgr-game-layer #adminMenu .skill-card {
+  border: 1px solid var(--line);
+  background: rgba(17, 16, 15, 0.72);
+  color: var(--gold-soft);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: background-color 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+
+#vgr-game-layer #adminMenu .tab {
+  min-width: 124px;
+  padding: 12px 18px;
+  font-size: 12px;
+}
+
+#vgr-game-layer #adminMenu .tab:hover,
+#vgr-game-layer #adminMenu .small-button:hover,
+#vgr-game-layer #adminMenu .action-button:hover,
+#vgr-game-layer #adminMenu .icon-button:hover,
+#vgr-game-layer #adminMenu .location-btn:hover,
+#vgr-game-layer #adminMenu .npc-preset-btn:hover,
+#vgr-game-layer #adminMenu .skill-card:hover {
+  background: rgba(55, 45, 34, 0.76);
+  color: var(--text);
+}
+
+#vgr-game-layer #adminMenu .tab.active {
+  background: linear-gradient(180deg, rgba(92, 12, 12, 0.82), rgba(38, 4, 4, 0.82));
+  color: var(--text);
+}
+
+#vgr-game-layer #adminMenu .icon-button {
+  width: 42px;
+  height: 42px;
+  font-size: 30px;
+  line-height: 1;
+}
+
+#vgr-game-layer #adminMenu .tab-panel {
+  display: none;
+  min-height: 0;
+  padding: 0 24px 24px;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+#vgr-game-layer #adminMenu .tab-panel.active {
+  display: grid;
+}
+
+#vgr-game-layer #adminMenu #tab-gifter,
+#vgr-game-layer #adminMenu #tab-teleport,
+#vgr-game-layer #adminMenu #tab-npc,
+#vgr-game-layer #adminMenu #tab-perks,
+#vgr-game-layer #adminMenu #tab-weather {
+  grid-template-columns: 1fr;
+}
+
+#vgr-game-layer #adminMenu .panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.34);
+}
+
+#vgr-game-layer #adminMenu .full-panel {
+  padding: 18px;
+}
+
+#vgr-game-layer #adminMenu .panel-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+#vgr-game-layer #adminMenu .small-button,
+#vgr-game-layer #adminMenu .action-button {
+  padding: 8px 12px;
+  font-size: 10px;
+}
+
+#vgr-game-layer #adminMenu .small-button.danger {
+  border-color: rgba(166, 56, 47, 0.5);
+  color: #e0a196;
+}
+
+#vgr-game-layer #adminMenu .small-button.danger:hover {
+  background: rgba(92, 12, 12, 0.76);
+}
+
+#vgr-game-layer #adminMenu input {
+  width: 100%;
+  min-height: 36px;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid rgba(190, 155, 97, 0.18);
+  padding: 8px 12px;
+  outline: none;
+  font-size: 12px;
+}
+
+#vgr-game-layer #adminMenu input:focus {
+  border-color: rgba(199, 179, 138, 0.48);
+}
+
+#vgr-game-layer #adminMenu label {
+  display: block;
+  color: var(--gold-soft);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 9px;
+  margin-bottom: 6px;
+}
+
+#vgr-game-layer #adminMenu .form-card {
+  border: 1px solid rgba(190, 155, 97, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+#vgr-game-layer #adminMenu .grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+#vgr-game-layer #adminMenu .action-group {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+}
+
+#vgr-game-layer #adminMenu .location-grid,
+#vgr-game-layer #adminMenu .npc-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#vgr-game-layer #adminMenu .location-btn,
+#vgr-game-layer #adminMenu .npc-preset-btn {
+  padding: 8px 10px;
+  font-size: 10px;
+  text-align: center;
+  background: rgba(25, 20, 15, 0.6);
+}
+
+#vgr-game-layer #adminMenu .location-btn:hover,
+#vgr-game-layer #adminMenu .npc-preset-btn:hover {
+  background: rgba(80, 50, 30, 0.7);
+}
+/* Skills Section - Compact & Responsive */
+#vgr-game-layer #adminMenu .skill-increment-row {
+  margin-bottom: 12px;
+}
+
+#vgr-game-layer #adminMenu .skill-increment-input {
+  max-width: 100px;
+  min-height: 32px;
+}
+
+#vgr-game-layer #adminMenu .skills-grid.compact {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+#vgr-game-layer #adminMenu .skill-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(25, 20, 15, 0.5);
+  border-radius: 2px;
+}
+
+#vgr-game-layer #adminMenu .skill-name {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+
+#vgr-game-layer #adminMenu .skill-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#vgr-game-layer #adminMenu .skill-value {
+  min-width: 28px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+#vgr-game-layer #adminMenu .skill-increment-btn {
+  background: rgba(80, 60, 40, 0.85);
+  border: 1px solid var(--gold-muted);
+  color: var(--gold);
+  min-width: 28px;
+  height: 26px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: background-color 80ms ease, color 80ms ease, border-color 80ms ease;
+  padding: 0 6px;
+}
+
+#vgr-game-layer #adminMenu .skill-increment-btn:hover {
+  background: rgba(120, 90, 60, 1);
+  color: var(--text);
+  border-color: var(--gold-soft);
+}
+/* Perks Section */
+#vgr-game-layer #adminMenu .perk-manual-row {
+  margin-bottom: 6px;
+}
+
+#vgr-game-layer #adminMenu .perk-manual-row .grid-2col {
+  margin-top: 0;
+}
+/* Granted Perks List */
+#vgr-game-layer #adminMenu .granted-perks-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+#vgr-game-layer #adminMenu .granted-perks-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px;
+}
+
+#vgr-game-layer #adminMenu .granted-perk-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  margin-bottom: 5px;
+  background: rgba(25, 20, 15, 0.5);
+  border-left: 2px solid var(--gold);
+  font-size: 11px;
+}
+
+#vgr-game-layer #adminMenu .granted-perk-item:last-child {
+  margin-bottom: 0;
+}
+
+#vgr-game-layer #adminMenu .granted-perk-name {
+  font-weight: bold;
+  color: var(--gold);
+  font-size: 11px;
+}
+
+#vgr-game-layer #adminMenu .granted-perk-id {
+  font-family: monospace;
+  color: var(--muted);
+  font-size: 9px;
+  margin-left: 6px;
+}
+
+#vgr-game-layer #adminMenu .remove-granted-perk-btn {
+  background: rgba(100, 30, 20, 0.8);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 3px 8px;
+  font-size: 9px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+#vgr-game-layer #adminMenu .remove-granted-perk-btn:hover {
+  background: rgba(166, 56, 47, 0.8);
+}
+/* Weather Section */
+#vgr-game-layer #adminMenu .weather-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#vgr-game-layer #adminMenu .weather-card {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+#vgr-game-layer #adminMenu .weather-card:hover {
+  background: rgba(70, 20, 18, 0.38);
+}
+
+#vgr-game-layer #adminMenu .weather-name {
+  font-weight: bold;
+  color: var(--gold);
+  font-size: 11px;
+}
+
+#vgr-game-layer #adminMenu .weather-formid {
+  font-family: monospace;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+#vgr-game-layer #adminMenu .muted {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 1120px) {
+  #vgr-game-layer #adminMenu .vgr-header {
+  grid-template-columns: 1fr 42px;
+}
+
+#vgr-game-layer #adminMenu .vgr-tabs {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+}
+
+#vgr-game-layer #adminMenu .grid-2col {
+  grid-template-columns: 1fr;
+}
+
+#vgr-game-layer #adminMenu .location-grid,
+#vgr-game-layer #adminMenu .npc-preset-grid {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+
+#vgr-game-layer #adminMenu .skills-grid.compact {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+#vgr-game-layer #adminMenu .skill-card {
+  padding: 5px 8px;
+}
+
+#vgr-game-layer #adminMenu .skill-name {
+  font-size: 10px;
+}
+
+#vgr-game-layer #adminMenu .skill-increment-btn {
+  min-width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+}

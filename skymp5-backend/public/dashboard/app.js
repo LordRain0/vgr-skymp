@@ -1,5 +1,8 @@
 const config = window.SKYRP_DASHBOARD_CONFIG || {}
-const apiBaseUrl = (config.apiBaseUrl || '').replace(/\/$/, '')
+const localDashboardUrl = window.location.protocol === 'file:' ? 'http://localhost:4002' : ''
+const localApiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:4000' : ''
+const apiBaseUrl = (config.apiBaseUrl || localApiBaseUrl).replace(/\/$/, '')
+const dashboardUrl = (config.dashboardUrl || localDashboardUrl || window.location.origin).replace(/\/$/, '')
 const tokenKey = 'skyrp.dashboard.token'
 
 const state = {
@@ -50,6 +53,7 @@ const nodes = {
   playerUsernameInput: el('playerUsernameInput'),
   playerDisplayNameInput: el('playerDisplayNameInput'),
   playerNotesInput: el('playerNotesInput'),
+  playerAdminInput: el('playerAdminInput'),
   whitelistPlayerButton: el('whitelistPlayerButton'),
   banPlayerButton: el('banPlayerButton'),
   playerAssignmentsTable: el('playerAssignmentsTable'),
@@ -141,7 +145,7 @@ function captureTokenFromUrl() {
 }
 
 async function login() {
-  const redirect = `${window.location.origin}/`
+  const redirect = `${dashboardUrl}/`
   const data = await fetch(`${apiBaseUrl}/auth/dashboard/url?redirect=${encodeURIComponent(redirect)}`)
     .then(res => res.json())
   if (!data.url) throw new Error(data.error || 'OAuth URL unavailable')
@@ -238,6 +242,7 @@ function renderPlayers() {
           <th>Name</th>
           <th>Discord ID</th>
           <th>Access</th>
+          <th>Admin</th>
           <th>Factions</th>
           <th></th>
         </tr>
@@ -249,6 +254,7 @@ function renderPlayers() {
             <td>${escapeHtml(player.displayName || player.username || 'Unnamed')}</td>
             <td>${escapeHtml(player.discordId)}</td>
             <td><span class="tag ${player.access?.allowed ? '' : 'locked'}">${escapeHtml(player.access?.allowed ? 'allowed' : (player.access?.error || 'blocked'))}</span></td>
+            <td><span class="tag ${player.admin ? '' : 'locked'}">${player.admin ? 'yes' : 'no'}</span></td>
             <td>${escapeHtml((player.assignments || []).map(a => a.requirement ? `${a.requirement.group} ${a.requirement.rank}` : a.requirementId).join(', '))}</td>
             <td><button class="ghost mini" data-select-player="${player.profileId}" type="button">Open</button></td>
           </tr>
@@ -267,12 +273,13 @@ function renderPlayerDetail() {
   nodes.playerUsernameInput.value = player?.username || ''
   nodes.playerDisplayNameInput.value = player?.displayName || ''
   nodes.playerNotesInput.value = player?.notes || ''
+  nodes.playerAdminInput.checked = player?.admin === true
   nodes.whitelistPlayerButton.disabled = !player
   nodes.banPlayerButton.disabled = !player
   nodes.whitelistPlayerButton.textContent = player?.access?.roles?.includes(state.access?.whitelistRoleId)
     ? 'Remove Whitelist'
     : 'Add Whitelist'
-  nodes.banPlayerButton.textContent = player?.access?.roles?.includes(state.access?.bannedRoleId)
+  nodes.banPlayerButton.textContent = player?.access?.error === 'banned'
     ? 'Remove Ban'
     : 'Add Ban'
   nodes.playerAssignmentsTable.innerHTML = player
@@ -567,6 +574,7 @@ async function savePlayer(event) {
     username: nodes.playerUsernameInput.value,
     displayName: nodes.playerDisplayNameInput.value,
     notes: nodes.playerNotesInput.value,
+    admin: nodes.playerAdminInput.checked,
   }
   const saved = player
     ? await api(`/api/players/${player.profileId}`, { method: 'PUT', body: JSON.stringify(body) })
@@ -591,7 +599,7 @@ async function toggleWhitelist() {
 async function toggleBan() {
   const player = selectedPlayer()
   if (!player) return
-  const enabled = !player.access?.roles?.includes(state.access?.bannedRoleId)
+  const enabled = player.access?.error !== 'banned'
   await api(`/api/players/${player.profileId}/ban`, {
     method: 'PUT',
     body: JSON.stringify({ enabled }),

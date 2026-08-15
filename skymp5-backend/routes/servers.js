@@ -2,9 +2,36 @@
 
 const router = require('express').Router()
 const config = require('../config')
+const { getGameLoadOrder } = require('../sources/gameLoadOrder')
+const { loadPublicKeys } = require('../sources/publicKeys')
 
 // Last heartbeat received from the game server via POST /:key
 let heartbeat = null
+const HEARTBEAT_TTL_MS = 20_000
+
+function isHeartbeatFresh() {
+  return !!heartbeat?.lastSeen && (Date.now() - new Date(heartbeat.lastSeen).getTime()) < HEARTBEAT_TTL_MS
+}
+
+function getCapacity() {
+  const maxPlayers = heartbeat?.maxPlayers ?? config.serverMaxPlayers
+  const online = isHeartbeatFresh() && typeof heartbeat?.online === 'number'
+    ? heartbeat.online
+    : null
+  const known = typeof online === 'number'
+  const isFull = known
+    && typeof maxPlayers === 'number'
+    && maxPlayers > 0
+    && online >= maxPlayers
+
+  return {
+    online,
+    maxPlayers,
+    known,
+    isFull,
+    hasCapacity: known && !isFull,
+  }
+}
 
 router.get('/', (_req, res) => {
   res.json([
@@ -32,7 +59,7 @@ router.get('/:key/serverinfo', async (req, res) => {
   let allowed      = true
 
   if (token) {
-    const entry = lookupSession(token)
+    const entry = await lookupSession(token)
     if (!entry) {
       sessionValid = false
       allowed      = false
@@ -59,17 +86,20 @@ router.get('/:key/serverinfo', async (req, res) => {
     masterKey:   config.serverMasterKey || null,
     masterUrl:   config.masterUrl       || null,
     locked:      config.serverLocked,
+    loadOrder:   await getGameLoadOrder(),
+    publicKeys:  loadPublicKeys(),
     sessionValid,
     allowed,
   })
 })
 
 // Called by the SkyMP client for the server's mod list; returns a v1 manifest so the client doesn't loop on 404s
-router.get('/:key/manifest.json', (req, res) => {
+router.get('/:key/manifest.json', async (req, res) => {
   if (req.params.key !== config.serverMasterKey) {
     return res.status(403).json({ error: 'Invalid master key.' })
   }
-  res.json({ versionMajor: 1, mods: [] })
+  const loadOrder = await getGameLoadOrder()
+  res.json({ versionMajor: 1, mods: [], loadOrder: loadOrder || [] })
 })
 
 // Called by MasterClient every 5 s: POST /api/servers/:key
@@ -92,3 +122,4 @@ router.post('/:key', (req, res) => {
 
 module.exports = router
 module.exports.getHeartbeat = () => heartbeat
+module.exports.getCapacity = getCapacity

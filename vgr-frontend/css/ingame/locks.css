@@ -1,0 +1,410 @@
+#vgr-game-layer #vgr-locks {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 100;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: var(--locks-text);
+}
+
+#vgr-game-layer #vgr-locks.visible {
+  display: flex;
+}
+
+#vgr-game-layer #vgr-locks * {
+  box-sizing: border-box;
+}
+
+#vgr-game-layer #vgr-locks ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#vgr-game-layer #vgr-locks button,
+#vgr-game-layer #vgr-locks input {
+  font-family: inherit;
+}
+/* Backdrop shared by context + manage */
+#vgr-game-layer .locks-context-overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--locks-backdrop);
+  padding: 1.5rem;
+}
+
+#vgr-game-layer .locks-context-overlay.active {
+  display: flex;
+}
+
+#vgr-game-layer .locks-context-panel {
+  width: min(360px, 92vw);
+  background: var(--locks-panel);
+  border: 1px solid var(--locks-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.72);
+}
+
+#vgr-game-layer .locks-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--locks-border);
+}
+
+#vgr-game-layer .locks-context-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--locks-text);
+}
+
+#vgr-game-layer .locks-context-body {
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+#vgr-game-layer .locks-context-title {
+  display: none;
+}
+
+#vgr-game-layer .locks-context-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+#vgr-game-layer .locks-btn {
+  font-size: 0.92rem;
+  padding: 0.72rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+#vgr-game-layer .locks-btn-primary {
+  background: linear-gradient(180deg, #5a1113 0%, var(--locks-blue) 100%);
+  color: #f2e4cc;
+  border-color: rgba(197, 163, 110, 0.18);
+}
+
+#vgr-game-layer .locks-btn-primary:hover {
+  background: linear-gradient(180deg, #6a1718 0%, var(--locks-blue-hover) 100%);
+}
+
+#vgr-game-layer .locks-btn-secondary {
+  background: var(--locks-panel-elevated);
+  color: var(--locks-text);
+  border-color: var(--locks-border);
+}
+
+#vgr-game-layer .locks-btn-secondary:hover {
+  background: #1a1412;
+}
+
+#vgr-game-layer .locks-btn-danger {
+  background: rgba(61, 10, 12, 0.46);
+  color: #e7c39b;
+  border-color: rgba(197, 163, 110, 0.30);
+}
+
+#vgr-game-layer .locks-btn-danger:hover {
+  background: rgba(75, 13, 15, 0.58);
+}
+/* Management modal */
+#vgr-game-layer .locks-manage-panel {
+  display: none;
+  position: relative;
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--locks-panel);
+  border: 1px solid var(--locks-border);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.72);
+  flex-direction: column;
+}
+
+#vgr-game-layer .locks-manage-panel.active {
+  display: flex;
+}
+
+#vgr-game-layer .locks-manage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--locks-border);
+}
+
+#vgr-game-layer .locks-manage-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--locks-text);
+}
+
+#vgr-game-layer .locks-close-btn {
+  background: none;
+  border: none;
+  color: var(--locks-muted);
+  font-size: 1.35rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+}
+
+#vgr-game-layer .locks-close-btn:hover {
+  color: var(--locks-text);
+  background: rgba(79, 14, 12, 0.24);
+}
+
+#vgr-game-layer .locks-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--locks-border);
+}
+
+#vgr-game-layer .locks-tab {
+  background: none;
+  border: none;
+  color: var(--locks-muted);
+  font-size: 0.84rem;
+  padding: 0.8rem 0.95rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+#vgr-game-layer .locks-tab.active {
+  color: #8e1818;
+  border-bottom-color: #6d1313;
+}
+
+#vgr-game-layer .locks-tab-content {
+  display: none;
+  padding: 1rem 1.15rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+#vgr-game-layer .locks-tab-content.active {
+  display: block;
+}
+
+#vgr-game-layer .locks-desc-box {
+  background: var(--locks-panel-elevated);
+  border: 1px solid var(--locks-border);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  color: var(--locks-muted);
+  font-size: 0.84rem;
+  margin-bottom: 1rem;
+  line-height: 1.45;
+}
+
+#vgr-game-layer .locks-section-title {
+  color: var(--locks-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.45rem;
+}
+
+#vgr-game-layer .locks-user-list {
+  margin-bottom: 1rem;
+}
+
+#vgr-game-layer .locks-user-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.62rem 0;
+  border-bottom: 1px solid var(--locks-border);
+}
+
+#vgr-game-layer .locks-user-name {
+  flex: 1;
+  color: var(--locks-text);
+  font-size: 0.92rem;
+}
+
+#vgr-game-layer .locks-user-name.locks-muted {
+  color: var(--locks-muted);
+}
+
+#vgr-game-layer .locks-badge {
+  font-size: 0.68rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .locks-badge-owner {
+  background: linear-gradient(180deg, rgba(90, 17, 19, 0.84) 0%, rgba(74, 11, 13, 0.84) 100%);
+  color: var(--locks-green);
+  border: 1px solid rgba(197, 163, 110, 0.16);
+}
+
+#vgr-game-layer .locks-badge-user {
+  background: rgba(197, 163, 110, 0.12);
+  color: var(--locks-muted);
+}
+
+#vgr-game-layer .locks-remove-btn {
+  background: none;
+  border: none;
+  color: var(--locks-red);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.2rem;
+  opacity: 0.9;
+}
+
+#vgr-game-layer .locks-remove-btn:hover {
+  opacity: 1;
+}
+
+#vgr-game-layer .locks-manage-footer {
+  padding: 0.95rem 1.15rem 1.1rem;
+  border-top: 1px solid var(--locks-border);
+}
+
+#vgr-game-layer .locks-add-btn {
+  width: 100%;
+  background: linear-gradient(180deg, #5a1113 0%, var(--locks-blue) 100%);
+  color: #f2e4cc;
+  border: 1px solid rgba(197, 163, 110, 0.18);
+  border-radius: 8px;
+  padding: 0.82rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+#vgr-game-layer .locks-add-btn:hover {
+  background: linear-gradient(180deg, #6a1718 0%, var(--locks-blue-hover) 100%);
+}
+
+#vgr-game-layer .locks-info-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+  color: var(--locks-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+#vgr-game-layer .locks-key-info-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+#vgr-game-layer .locks-key-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+#vgr-game-layer .locks-key-info-label {
+  color: var(--locks-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#vgr-game-layer .locks-key-info-value {
+  color: var(--locks-text);
+  font-size: 0.88rem;
+  word-break: break-all;
+}
+
+#vgr-game-layer .locks-submodal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  padding: 1rem;
+}
+
+#vgr-game-layer .locks-submodal-overlay.active {
+  display: flex;
+}
+
+#vgr-game-layer .locks-submodal {
+  width: min(380px, 92vw);
+  background: var(--locks-panel);
+  border: 1px solid var(--locks-border);
+  border-radius: 12px;
+  padding: 1.1rem 1.15rem 1.15rem;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55);
+}
+
+#vgr-game-layer .locks-submodal h3 {
+  margin: 0 0 0.55rem;
+  color: var(--locks-text);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+#vgr-game-layer .locks-submodal p {
+  margin: 0 0 0.95rem;
+  color: var(--locks-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+#vgr-game-layer .locks-field-label {
+  display: block;
+  color: var(--locks-muted);
+  font-size: 0.76rem;
+  margin-bottom: 0.35rem;
+}
+
+#vgr-game-layer .locks-text-input {
+  width: 100%;
+  padding: 0.62rem 0.72rem;
+  border-radius: 8px;
+  border: 1px solid var(--locks-blue);
+  background: #0b0a0a;
+  color: var(--locks-text);
+  font-size: 0.9rem;
+  margin-bottom: 0.95rem;
+}
+
+#vgr-game-layer .locks-text-input::placeholder {
+  color: #6f5c42;
+}
+
+#vgr-game-layer .locks-submodal-actions {
+  display: flex;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+#vgr-game-layer #vgr-locks.locks-backdrop {
+  background: var(--locks-backdrop);
+}
+
+#vgr-game-layer #vgr-locks,
+#vgr-game-layer #vgr-locks button,
+#vgr-game-layer #vgr-locks input {
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+}

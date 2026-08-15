@@ -3,22 +3,28 @@ const fs     = require('fs')
 const path   = require('path')
 
 const MANIFEST_PATH = path.join(__dirname, '..', 'data', 'install-manifest.json')
-const GAME = 'skyrimspecialedition'
+const DEFAULT_GAME = 'skyrimspecialedition'
+
+function nexusGameSlug(gameName) {
+  if (/^skyrim$/i.test(String(gameName || '').trim())) return 'skyrim'
+  if (/^skyrimse$/i.test(String(gameName || '').trim())) return 'skyrimspecialedition'
+  return DEFAULT_GAME
+}
 
 // Minimal HTML escaping for archive names embedded in the page.
 const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
 // File-pinned Nexus link so free users grab the exact version the manifest expects (the Engine Fixes preloader now ships in the client zip, not here)
-const linkFor = (modId, fileId) =>
-  `https://www.nexusmods.com/${GAME}/mods/${modId}?tab=files${fileId ? `&file_id=${fileId}` : ''}`
+const linkFor = (gameName, modId, fileId) =>
+  `https://www.nexusmods.com/${nexusGameSlug(gameName)}/mods/${modId}?tab=files${fileId ? `&file_id=${fileId}` : ''}`
 
 const page = body => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SkyRP mod downloads</title>
+<title>Vengeful-Realms mod downloads</title>
 <style>
   body { font-family: system-ui, sans-serif; background:#1b1b1f; color:#e9e9ee; margin:0; padding:2rem; line-height:1.5; }
   .wrap { max-width: 760px; margin: 0 auto; }
@@ -44,7 +50,7 @@ const page = body => `<!doctype html>
 </html>`
 
 // HTML page of every Nexus archive's download link; free accounts can't use the API, so players Ctrl+click links (about 5 at a time) to start Mod Manager Downloads
-router.get('/', (_req, res) => {
+router.get('/', (req, res) => {
   let manifest
   try {
     manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
@@ -57,34 +63,53 @@ router.get('/', (_req, res) => {
   // One link per unique Nexus file (modId+fileId) from the manifest's archives.
   const seen  = new Set()
   const items = []
-  const add = (name, modId, fileId) => {
+  const add = (name, modId, fileId, gameName) => {
     if (!modId) return
-    const key = `${modId}-${fileId || 'any'}`
+    const key = `${nexusGameSlug(gameName)}-${modId}-${fileId || 'any'}`
     if (seen.has(key)) return
     seen.add(key)
-    items.push({ name, modId, fileId: fileId || null })
+    items.push({ name, modId, fileId: fileId || null, gameName: gameName || null, key })
   }
   for (const a of manifest.archives || []) {
-    if (a.source && a.source.type === 'nexus') add(a.name, a.source.modId, a.source.fileId)
+    if (a.source && a.source.type === 'nexus') add(a.name, a.source.modId, a.source.fileId, a.source.gameName)
   }
 
-  const rows = items.map(it =>
-    `<li><a href="${linkFor(it.modId, it.fileId)}" target="_blank" rel="noopener">${esc(it.name)}</a></li>`
+  // Optional ?need=<key>,<key>,... from the launcher: the archives still
+  // missing from the player's downloads folder. When present, links the
+  // launcher already found (hash-verified) locally are hidden. Zero overlap
+  // means a launcher/manifest version mismatch - fall back to the full list.
+  const needParam = typeof req.query.need === 'string' ? req.query.need : ''
+  const needKeys  = new Set(needParam.split(',').map(s => s.trim()).filter(Boolean))
+  let shown = items
+  let hiddenCount = 0
+  if (needKeys.size > 0) {
+    const filtered = items.filter(it => needKeys.has(it.key))
+    if (filtered.length > 0) {
+      shown = filtered
+      hiddenCount = items.length - filtered.length
+    }
+  }
+
+  const rows = shown.map(it =>
+    `<li><a href="${linkFor(it.gameName, it.modId, it.fileId)}" target="_blank" rel="noopener">${esc(it.name)}</a></li>`
   ).join('\n')
 
   res.type('text/html').send(page(`
-  <h1>SkyRP mod downloads</h1>
+  <h1>Vengeful-Realms mod downloads</h1>
   <div class="note">
     <p><strong>Ctrl+click</strong> (Cmd+click on macOS) each link below to open it in a background tab, then click
     <strong>Slow Download</strong> on each Nexus page. Do about <strong>5 at a time</strong> so Nexus doesn't throttle you.</p>
-    <p>Move every zip/7z archive you download into your <code>SkyRP/downloads</code> folder, which the launcher opened for you.</p>
-    ${items.length ? `<p>
-      <button class="open-all" id="open-batch">Open the first ${Math.min(5, items.length)} links</button>
+    <p>Move every zip/7z/rar archive you download into your <code>MO2/downloads</code> folder, which the launcher opened for you.</p>
+    <p><strong>Do NOT extract, unzip, or rename the archives.</strong> Drop each one into the downloads folder exactly
+    as it downloaded - the launcher verifies and unpacks them itself.</p>
+    ${shown.length ? `<p>
+      <button class="open-all" id="open-batch">Open the first ${Math.min(5, shown.length)} links</button>
       <span class="open-all-hint">Opens 5 tabs per click, working down the list, so Nexus never gets hit all at once.
       Your browser will ask you to allow pop-ups for this site the first time.</span>
     </p>` : ''}
   </div>
-  ${items.length ? `<ol>\n${rows}\n</ol>` : `<p class="empty">No Nexus mods in the current manifest.</p>`}
+  ${hiddenCount > 0 ? `<p class="empty">${hiddenCount} archive${hiddenCount === 1 ? ' is' : 's are'} already in your downloads folder and hidden from this list - ${shown.length} left to download.</p>` : ''}
+  ${shown.length ? `<ol>\n${rows}\n</ol>` : `<p class="empty">No Nexus mods in the current manifest.</p>`}
   <script>
     var batchBtn = document.getElementById('open-batch')
     if (batchBtn) {

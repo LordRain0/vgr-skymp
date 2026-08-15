@@ -10,7 +10,7 @@ const sessions   = require('../sources/dashboardSessions')
 
 const router = Router()
 
-function validateToken(req, res) {
+async function validateToken(req, res) {
   if (!config.adminToken) {
     res.status(503).json({ error: 'admin service not configured (ADMIN_TOKEN not set)' })
     return false
@@ -23,7 +23,7 @@ function validateToken(req, res) {
   }
 
   // Accept a dashboard session only with an 'admin.*' or granular 'admin.<x>' grant; view-only roles must not control the game server, anything else falls through to ADMIN_TOKEN
-  const session = sessions.validate(provided)
+  const session = await sessions.validate(provided)
   if (session && (session.permissions || []).some(p => /^admin\./.test(p) || p === 'admin.*')) return true
 
   // Fall back to static ADMIN_TOKEN
@@ -37,8 +37,8 @@ function validateToken(req, res) {
 }
 
 // Forward any request under /api/admin/* to the admin service
-router.all('/*', (req, res) => {
-  if (!validateToken(req, res)) return
+router.all('/*', async (req, res) => {
+  if (!await validateToken(req, res)) return
 
   const base     = new URL(config.adminUrl)
   const useHttps = base.protocol === 'https:'

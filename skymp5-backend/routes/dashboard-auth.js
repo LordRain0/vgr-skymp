@@ -89,7 +89,7 @@ router.get('/callback', async (req, res) => {
       ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64`
       : null
 
-    const token = sessions.create(user.id, username, avatar, roleIds, permissions)
+    const token = await sessions.create(user.id, username, avatar, roleIds, permissions)
     // Fragment, not query string: fragments never reach the server, keeping the token out of access logs, history sync and Referer headers
     return res.redirect(`${pend.redirectUrl}#token=${token}`)
 
@@ -100,19 +100,19 @@ router.get('/callback', async (req, res) => {
 })
 
 // GET /auth/dashboard/me: validates a session token and returns the user's Discord info; the website uses it to confirm the session after page load
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const auth    = req.headers['authorization'] ?? ''
   const token   = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  const session = sessions.validate(token)
+  const session = await sessions.validate(token)
   if (!session) return res.status(401).json({ error: 'invalid or expired session' })
   res.json({ ok: true, user: session })
 })
 
 // POST /auth/dashboard/logout
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const auth  = req.headers['authorization'] ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  if (token) sessions.revoke(token)
+  if (token) await sessions.revoke(token)
   res.json({ ok: true })
 })
 

@@ -1,47 +1,9 @@
 const router      = require('express').Router()
-const http        = require('http')
 const config      = require('../config')
 const { lookupSession, isDiscordWhitelisted } = require('./master-api')
 const { getHeartbeat }  = require('./servers')
-const fs          = require('fs')
-const path        = require('path')
-
-const PUBLIC_KEYS_PATH = path.join(__dirname, '..', 'data', 'public-keys.json')
-
-// Load order. Checks data/manifest.json from server
-let loadOrderCache = { value: null, expiresAt: 0 }
-
-function fetchGameJson(pathname) {
-  return new Promise(resolve => {
-    const req = http.get(
-      { host: config.skyrimServerHost, port: config.skympUiPort, path: pathname, timeout: 3000 },
-      res => {
-        if (res.statusCode !== 200) { res.resume(); return resolve(null) }
-        let data = ''
-        res.on('data', c => { data += c })
-        res.on('end', () => {
-          try { resolve(JSON.parse(data)) } catch { resolve(null) }
-        })
-      }
-    )
-    req.on('error',   () => resolve(null))
-    req.on('timeout', () => { req.destroy(); resolve(null) })
-  })
-}
-
-async function getGameLoadOrder() {
-  if (loadOrderCache.expiresAt > Date.now()) return loadOrderCache.value
-
-  const manifest = (await fetchGameJson('/manifest.json')) || (await fetchGameJson('/data/manifest.json'))
-  const value = Array.isArray(manifest?.loadOrder) ? manifest.loadOrder : loadOrderCache.value
-  loadOrderCache = { value, expiresAt: Date.now() + 60_000 }
-  return value
-}
-
-function loadPublicKeys() {
-  try { return JSON.parse(fs.readFileSync(PUBLIC_KEYS_PATH, 'utf8')) }
-  catch { return null }
-}
+const { loadPublicKeys } = require('../sources/publicKeys')
+const { getGameLoadOrder } = require('../sources/gameLoadOrder')
 
 router.get('/', async (req, res) => {
   const token = req.headers['x-session']
@@ -50,7 +12,7 @@ router.get('/', async (req, res) => {
   let allowed      = true   // true when no session provided (offline / launcher handles it)
 
   if (token) {
-    const entry = lookupSession(token)
+    const entry = await lookupSession(token)
     if (!entry) {
       sessionValid = false
       allowed      = false

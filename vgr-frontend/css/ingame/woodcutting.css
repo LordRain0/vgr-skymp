@@ -1,0 +1,134 @@
+#vgr-game-layer #vgr-woodcutting {
+  --progress: 0%;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 288px;
+  min-height: 392px;
+  padding: 30px 24px 26px;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+  pointer-events: none;
+  z-index: 99999;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#vgr-game-layer #vgr-woodcutting::before,
+#vgr-game-layer #vgr-woodcutting::after {
+  display: none !important;
+}
+
+#vgr-game-layer #vgr-woodcutting.visible,
+#vgr-game-layer #vgr-woodcutting[style*="flex"] {
+  display: flex;
+}
+
+#vgr-game-layer #vgr-woodcutting.ready {
+  pointer-events: auto;
+}
+
+#vgr-game-layer .vgr-ring {
+  width: 206px;
+  height: 206px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    conic-gradient(rgba(92, 7, 6, 0.78) 0 var(--progress), rgba(66, 55, 40, 0.48) var(--progress) 100%),
+    radial-gradient(circle, rgba(4, 4, 4, 0.82), rgba(0, 0, 0, 0.24));
+  border: 1px solid rgba(197, 163, 110, 0.38);
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+#vgr-game-layer .vgr-inner {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(3, 3, 3, 0.82), rgba(2, 2, 2, 0.54) 62%, rgba(2, 2, 2, 0.34));
+  border: 2px solid rgba(116, 82, 45, 0.58);
+  box-shadow: none !important;
+  filter: none !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+#vgr-game-layer #vgr-woodcutting .vgr-tool-icon {
+  width: 96px;
+  height: 96px;
+  display: block;
+  overflow: visible;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+#vgr-game-layer .vgr-axe-svg {
+  transform: rotate(-10deg);
+}
+
+#vgr-game-layer .vgr-svg-edge {
+  stroke: rgba(197, 163, 110, 0.30);
+  stroke-width: 1.15;
+  stroke-linejoin: round;
+}
+
+#vgr-game-layer .vgr-svg-line {
+  fill: none;
+  stroke: rgba(239, 217, 170, 0.32);
+  stroke-width: 1.05;
+  stroke-linecap: round;
+}
+
+#vgr-game-layer #vgr-woodcutting-count {
+  color: #ead7b7;
+  font-size: 19px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: none !important;
+}
+
+#vgr-game-layer #vgr-woodcutting-button {
+  position: relative;
+  width: 210px;
+  min-height: 52px;
+  overflow: hidden;
+  border: 1px solid var(--gold-line);
+  background:
+    linear-gradient(90deg, rgba(92, 7, 6, 0.78) 0 var(--progress), rgba(20, 14, 12, 0.72) var(--progress) 100%),
+    linear-gradient(180deg, rgba(20, 14, 12, 0.72), rgba(3, 3, 3, 0.74));
+  color: rgba(214, 194, 160, 0.74);
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+#vgr-game-layer #vgr-woodcutting.ready #vgr-woodcutting-button {
+  color: #ead7b7;
+  border-color: rgba(197, 163, 110, 0.74);
+  cursor: pointer;
+}
+
+#vgr-game-layer #vgr-woodcutting.ready #vgr-woodcutting-button:hover {
+  color: #f0dfbd;
+  transform: scale(1.015);
+  box-shadow: none !important;
+}

@@ -4,6 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const config = require('../../config')
 const discordBot = require('../discord/bot')
+const bans = require('../bans')
 
 const FILE = path.join(__dirname, '..', '..', 'data', 'server-access.json')
 const WHITELIST_PATH = path.join(__dirname, '..', '..', 'data', 'whitelist.json')
@@ -82,10 +83,17 @@ function hasAnyRole(memberRoleIds, requiredRoleIds) {
 
 async function getDiscordAccess(discordId) {
   const settings = load()
+  const activeBan = await bans.findActiveForDiscordId(discordId)
   const roles = await discordBot.getMemberRoles(discordId)
 
-  if (settings.bannedRoleId && roles.includes(settings.bannedRoleId)) {
-    return { allowed: false, error: 'banned', roles, settings }
+  if (activeBan) {
+    return {
+      allowed: false,
+      error: 'banned',
+      roles,
+      settings,
+      ban: bans.publicBan(activeBan, 'discordId'),
+    }
   }
 
   if (settings.serverLocked) {
@@ -114,6 +122,7 @@ function publicState() {
   const settings = load()
   return {
     ...settings,
+    banSource: 'backend-ban',
     legacyFileWhitelistCount: loadFileWhitelist().length,
   }
 }
@@ -134,15 +143,13 @@ async function setWhitelisted(discordId, enabled) {
 }
 
 async function setBanned(discordId, enabled) {
-  const settings = load()
-  if (!settings.bannedRoleId) {
-    const err = new Error('bannedRoleId is not configured')
-    err.status = 400
-    throw err
+  if (enabled) {
+    const ban = await bans.banDiscordId(discordId, { source: 'dashboard' })
+    return { source: 'backend-ban', banned: true, ban }
   }
-  if (enabled) await discordBot.addMemberRole(discordId, settings.bannedRoleId)
-  else await discordBot.removeMemberRole(discordId, settings.bannedRoleId)
-  return { source: 'discord-role', roleId: settings.bannedRoleId, banned: enabled }
+
+  const result = await bans.unbanDiscordId(discordId)
+  return { source: 'backend-ban', banned: false, ...result }
 }
 
 module.exports = {

@@ -1,0 +1,707 @@
+#vgr-game-layer .trade-shell {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  pointer-events: none;
+  z-index: 99999;
+}
+
+#vgr-game-layer .trade-shell.visible {
+  display: flex;
+  pointer-events: auto;
+}
+
+#vgr-game-layer .trade-frame {
+  width: min(1320px, calc(100vw - 86px));
+  min-height: 720px;
+  padding: 24px;
+  background:
+        linear-gradient(180deg, rgba(9, 9, 9, 0.78), rgba(1, 1, 1, 0.74)),
+        radial-gradient(circle at 50% 0%, rgba(140, 110, 70, 0.10), transparent 52%);
+  border: 1px solid var(--gold-line);
+  box-shadow: none !important;
+  filter: none !important;
+  position: relative;
+  isolation: isolate;
+}
+
+#vgr-game-layer .trade-frame::before,
+#vgr-game-layer .trade-frame::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 8px;
+  border: 1px solid rgba(148, 109, 62, 0.16);
+}
+
+#vgr-game-layer .trade-frame::after {
+  inset: 15px;
+  border-color: rgba(148, 109, 62, 0.08);
+}
+
+#vgr-game-layer .trade-header {
+  position: relative;
+  z-index: 2;
+  height: 82px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 22px;
+  border-bottom: 1px solid var(--gold-line-soft);
+  margin-bottom: 20px;
+}
+
+#vgr-game-layer .trade-header-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-line), transparent);
+}
+
+#vgr-game-layer .trade-title-wrap {
+  min-width: 290px;
+  padding: 9px 36px 11px;
+  text-align: center;
+  background:
+        linear-gradient(180deg, rgba(42, 8, 7, 0.68), rgba(4, 4, 4, 0.78));
+  border: 1px solid rgba(148, 109, 62, 0.40);
+}
+
+#vgr-game-layer .trade-kicker,
+#vgr-game-layer .trade-small-label {
+  display: block;
+  color: var(--parchment-soft);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .trade-title-wrap h1,
+#vgr-game-layer .trade-panel h2 {
+  margin: 5px 0 0;
+  color: var(--parchment-bright);
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .trade-title-wrap h1 {
+  font-size: 25px;
+}
+
+#vgr-game-layer .trade-partner-card {
+  justify-self: end;
+  min-width: 260px;
+  padding: 11px 18px 12px;
+  text-align: right;
+  background: rgba(2, 2, 2, 0.42);
+  border: 1px solid var(--gold-line-soft);
+}
+
+#vgr-game-layer .trade-partner-card strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--parchment-bright);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .trade-grid {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) 390px minmax(320px, 1fr);
+  gap: 18px;
+  min-height: 500px;
+}
+
+#vgr-game-layer .trade-panel,
+#vgr-game-layer .trade-offer-block,
+#vgr-game-layer .selected-item-panel {
+  background:
+        linear-gradient(180deg, rgba(14, 14, 14, 0.70), rgba(3, 3, 3, 0.64));
+  border: 1px solid var(--gold-line-soft);
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+#vgr-game-layer .trade-panel {
+  padding: 18px;
+  min-width: 0;
+}
+
+#vgr-game-layer .panel-top,
+#vgr-game-layer .offer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 109, 62, 0.20);
+}
+
+#vgr-game-layer .trade-panel h2 {
+  font-size: 18px;
+}
+
+#vgr-game-layer .weight-pill {
+  min-width: 86px;
+  padding: 8px 10px;
+  text-align: center;
+  color: var(--parchment-soft);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  background: rgba(2, 2, 2, 0.42);
+  border: 1px solid rgba(148, 109, 62, 0.20);
+}
+
+#vgr-game-layer .trade-search-row {
+  display: grid;
+  grid-template-columns: 1fr 114px;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+#vgr-game-layer .trade-search,
+#vgr-game-layer .trade-filter,
+#vgr-game-layer .gold-input {
+  height: 36px;
+  outline: none;
+  color: var(--parchment);
+  background: rgba(1, 1, 1, 0.52);
+  border: 1px solid rgba(148, 109, 62, 0.27);
+  padding: 0 11px;
+  letter-spacing: 0.06em;
+}
+
+#vgr-game-layer .trade-search::placeholder {
+  color: rgba(214, 194, 160, 0.34);
+}
+
+#vgr-game-layer .trade-filter {
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+#vgr-game-layer .trade-search:focus,
+#vgr-game-layer .trade-filter:focus,
+#vgr-game-layer .gold-input:focus {
+  border-color: rgba(197, 163, 110, 0.72);
+}
+
+#vgr-game-layer .item-list {
+  height: 395px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+#vgr-game-layer .item-list::-webkit-scrollbar,
+#vgr-game-layer .offer-list::-webkit-scrollbar {
+  width: 7px;
+}
+
+#vgr-game-layer .item-list::-webkit-scrollbar-track,
+#vgr-game-layer .offer-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+#vgr-game-layer .item-list::-webkit-scrollbar-thumb,
+#vgr-game-layer .offer-list::-webkit-scrollbar-thumb {
+  background: rgba(148, 109, 62, 0.46);
+}
+
+#vgr-game-layer .trade-item,
+#vgr-game-layer .offer-item {
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 54px;
+  margin-bottom: 7px;
+  padding: 7px 9px;
+  background: rgba(2, 2, 2, 0.35);
+  border: 1px solid rgba(148, 109, 62, 0.15);
+  cursor: pointer;
+  transition: border-color 130ms ease, background 130ms ease, transform 130ms ease;
+}
+
+#vgr-game-layer .trade-item:hover,
+#vgr-game-layer .trade-item.selected,
+#vgr-game-layer .offer-item:hover {
+  background: linear-gradient(90deg, rgba(92, 7, 6, 0.36), rgba(2, 2, 2, 0.38));
+  border-color: rgba(197, 163, 110, 0.56);
+}
+
+#vgr-game-layer .trade-item.selected {
+  transform: translateX(2px);
+}
+
+#vgr-game-layer .item-icon,
+#vgr-game-layer .selected-icon {
+  display: grid;
+  place-items: center;
+  background:
+        radial-gradient(circle, rgba(30, 26, 20, 0.92), rgba(3, 3, 3, 0.50));
+  border: 1px solid rgba(148, 109, 62, 0.32);
+  overflow: hidden;
+}
+
+#vgr-game-layer .item-icon {
+  width: 42px;
+  height: 42px;
+}
+
+#vgr-game-layer .item-icon svg,
+#vgr-game-layer .selected-icon svg {
+  width: 82%;
+  height: 82%;
+  opacity: 0.88;
+}
+
+#vgr-game-layer .svg-gold {
+  fill: rgba(205, 178, 126, 0.86);
+}
+
+#vgr-game-layer .svg-dark {
+  fill: rgba(76, 54, 35, 0.92);
+}
+
+#vgr-game-layer .svg-line {
+  stroke: rgba(238, 213, 165, 0.62);
+  stroke-width: 1.4;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#vgr-game-layer .svg-red {
+  fill: rgba(92, 7, 6, 0.82);
+}
+
+#vgr-game-layer .svg-steel {
+  fill: rgba(160, 158, 146, 0.82);
+}
+
+#vgr-game-layer .svg-wood {
+  fill: rgba(113, 78, 43, 0.88);
+}
+
+#vgr-game-layer .item-main,
+#vgr-game-layer .offer-main {
+  min-width: 0;
+}
+
+#vgr-game-layer .item-name,
+#vgr-game-layer .offer-name {
+  overflow: hidden;
+  color: var(--parchment-bright);
+  font-size: 14px;
+  letter-spacing: 0.09em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#vgr-game-layer .item-sub,
+#vgr-game-layer .offer-sub {
+  margin-top: 3px;
+  color: var(--parchment-soft);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .item-qty,
+#vgr-game-layer .offer-qty {
+  min-width: 38px;
+  color: var(--parchment-soft);
+  text-align: right;
+  font-size: 12px;
+  letter-spacing: 0.09em;
+}
+
+#vgr-game-layer .trade-center {
+  display: grid;
+  grid-template-rows: 1fr 230px 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+#vgr-game-layer .trade-offer-block {
+  padding: 14px;
+  min-height: 0;
+}
+
+#vgr-game-layer .offer-heading strong {
+  color: var(--parchment-bright);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .offer-list {
+  height: 92px;
+  margin-top: 10px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+#vgr-game-layer .offer-list.empty::before {
+  content: "No items offered";
+  display: block;
+  padding: 28px 0;
+  color: rgba(214, 194, 160, 0.30);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .offer-item {
+  grid-template-columns: 34px 1fr auto;
+  min-height: 43px;
+  margin-bottom: 6px;
+  padding: 5px 7px;
+}
+
+#vgr-game-layer .offer-item .item-icon {
+  width: 34px;
+  height: 34px;
+}
+
+#vgr-game-layer .gold-row {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#vgr-game-layer .gold-row label,
+#vgr-game-layer .gold-row span {
+  color: var(--parchment-soft);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .gold-available {
+  grid-column: 2;
+  margin-top: -3px;
+  color: rgba(214, 194, 160, 0.42);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .gold-available span {
+  color: rgba(234, 215, 183, 0.72);
+}
+
+#vgr-game-layer .gold-row.read-only {
+  grid-template-columns: 60px 1fr;
+  min-height: 36px;
+  padding: 0 11px;
+  background: rgba(1, 1, 1, 0.34);
+  border: 1px solid rgba(148, 109, 62, 0.16);
+}
+
+#vgr-game-layer .gold-row.read-only span {
+  text-align: right;
+  color: var(--parchment-bright);
+}
+
+#vgr-game-layer .selected-item-panel {
+  padding: 14px;
+  text-align: center;
+}
+
+#vgr-game-layer .selected-icon {
+  width: 78px;
+  height: 78px;
+  margin: 10px auto 9px;
+}
+
+#vgr-game-layer .selected-item-panel h3 {
+  margin: 0;
+  color: var(--parchment-bright);
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .selected-item-panel p {
+  height: 32px;
+  margin: 7px 0 8px;
+  color: rgba(214, 194, 160, 0.62);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#vgr-game-layer .selected-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5px;
+  margin-bottom: 11px;
+}
+
+#vgr-game-layer .selected-meta span {
+  padding: 5px;
+  color: rgba(214, 194, 160, 0.46);
+  background: rgba(1, 1, 1, 0.24);
+  border: 1px solid rgba(148, 109, 62, 0.10);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .skyrim-button {
+  position: relative;
+  height: 40px;
+  min-width: 128px;
+  padding: 0 18px;
+  color: var(--parchment);
+  background:
+        linear-gradient(180deg, rgba(22, 18, 15, 0.70), rgba(3, 3, 3, 0.72));
+  border: 1px solid var(--gold-line);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  transition: border-color 130ms ease, background 130ms ease, color 130ms ease, transform 130ms ease;
+}
+
+#vgr-game-layer .skyrim-button:hover:not(:disabled) {
+  color: var(--parchment-bright);
+  border-color: rgba(197, 163, 110, 0.74);
+  background:
+        linear-gradient(180deg, rgba(92, 7, 6, 0.70), rgba(20, 4, 4, 0.72));
+  transform: translateY(-1px);
+}
+
+#vgr-game-layer .skyrim-button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+#vgr-game-layer .skyrim-button.red {
+  background:
+        linear-gradient(180deg, rgba(92, 7, 6, 0.78), rgba(23, 4, 4, 0.76));
+}
+
+#vgr-game-layer .skyrim-button.muted {
+  color: rgba(214, 194, 160, 0.58);
+}
+
+#vgr-game-layer .trade-footer {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding-top: 17px;
+  margin-top: 20px;
+  border-top: 1px solid var(--gold-line-soft);
+}
+
+#vgr-game-layer .accept-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#vgr-game-layer .status-seal {
+  min-width: 92px;
+  padding: 8px 12px;
+  text-align: center;
+  background: rgba(1, 1, 1, 0.38);
+  border: 1px solid rgba(148, 109, 62, 0.18);
+}
+
+#vgr-game-layer .status-seal span,
+#vgr-game-layer .status-seal strong {
+  display: block;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .status-seal span {
+  color: var(--parchment-soft);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+#vgr-game-layer .status-seal strong {
+  margin-top: 3px;
+  color: rgba(214, 194, 160, 0.52);
+  font-size: 11px;
+  letter-spacing: 0.11em;
+}
+
+#vgr-game-layer .status-seal.accepted {
+  border-color: rgba(197, 163, 110, 0.68);
+  background: linear-gradient(180deg, rgba(92, 7, 6, 0.60), rgba(2, 2, 2, 0.36));
+}
+
+#vgr-game-layer .status-seal.accepted strong {
+  color: var(--parchment-bright);
+}
+
+#vgr-game-layer .trade-divider {
+  width: 42px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-line), transparent);
+}
+
+#vgr-game-layer .footer-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+#vgr-game-layer #skyrim-trade .hint-text {
+  justify-self: end;
+  margin: 0;
+  color: rgba(214, 194, 160, 0.38);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .trade-empty {
+  padding: 120px 10px;
+  color: rgba(214, 194, 160, 0.26);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1180px) {
+  #vgr-game-layer .trade-frame {
+  width: calc(100vw - 30px);
+  min-height: 650px;
+  padding: 18px;
+}
+
+#vgr-game-layer .trade-grid {
+  grid-template-columns: 1fr 330px 1fr;
+  gap: 12px;
+}
+
+#vgr-game-layer .trade-center {
+  grid-template-rows: 1fr 210px 1fr;
+}
+
+#vgr-game-layer .trade-header {
+  grid-template-columns: 1fr auto;
+}
+
+#vgr-game-layer .trade-header-line {
+  display: none;
+}
+
+#vgr-game-layer #skyrim-trade .hint-text {
+  display: none;
+}
+}
+
+/* Updated offer-focused layout */
+#vgr-game-layer .trade-grid.offer-layout {
+  grid-template-columns: minmax(340px, 1fr) 390px minmax(340px, 1fr);
+}
+
+#vgr-game-layer .right-offer-panel {
+  padding: 18px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#vgr-game-layer .right-offer-panel .offer-heading {
+  min-height: 63px;
+}
+
+#vgr-game-layer .right-offer-panel h2 {
+  margin: 5px 0 0;
+  color: var(--parchment-bright);
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .right-offer-panel .offer-list.large {
+  flex: 1;
+  height: auto;
+  min-height: 395px;
+  margin-top: 14px;
+}
+
+#vgr-game-layer .offer-selected-dock {
+  padding: 18px 14px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  background:
+        linear-gradient(180deg, rgba(14, 14, 14, 0.70), rgba(3, 3, 3, 0.64));
+  border: 1px solid var(--gold-line-soft);
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+#vgr-game-layer .offer-selected-dock p {
+  margin: 0;
+  color: rgba(214, 194, 160, 0.42);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .skyrim-button.wide {
+  width: 100%;
+  max-width: 260px;
+}
+
+#vgr-game-layer .runtime-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  left: -99999px !important;
+  top: -99999px !important;
+}
+
+@media (max-width: 1180px) {
+  #vgr-game-layer .trade-grid.offer-layout {
+  grid-template-columns: 1fr 330px 1fr;
+}
+
+#vgr-game-layer .right-offer-panel .offer-list.large {
+  min-height: 360px;
+}
+}
+
+#vgr-game-layer .right-offer-panel .offer-item {
+  cursor: default;
+}
+
+#vgr-game-layer .right-offer-panel .offer-item:hover {
+  transform: none;
+}

@@ -1,53 +1,36 @@
 'use strict'
 
-const fs   = require('fs')
-const path = require('path')
+// Compatibility facade for old one-profile-per-Discord call sites. The real
+// runtime model is now characters: each character owns one physical profileId.
 
-const FILE = path.join(__dirname, '..', 'data', 'profiles.json')
+const characters = require('./characters')
 
-function load() {
-  try {
-    const data = JSON.parse(fs.readFileSync(FILE, 'utf8'))
-    return {
-      nextId: Number.isInteger(data.nextId) ? data.nextId : 1,
-      map: data.map && typeof data.map === 'object' ? data.map : {},
-    }
-  } catch {
-    return { nextId: 1, map: {} }
+async function getOrCreateProfileId(discordId) {
+  return (await characters.getOrCreateDefault(discordId)).profileId
+}
+
+async function getDiscordIdByProfileId(profileId) {
+  const character = await characters.getByProfileId(profileId)
+  return character ? character.discordId : null
+}
+
+async function list() {
+  return (await characters.listActive()).map(character => ({
+    discordId: character.discordId,
+    profileId: character.profileId,
+  }))
+}
+
+async function load() {
+  const map = {}
+  for (const character of await characters.listActive()) {
+    if (!map[character.discordId]) map[character.discordId] = character.profileId
   }
-}
-
-function save(data) {
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2) + '\n')
-}
-
-function getOrCreateProfileId(discordId) {
-  const id = String(discordId || '').trim()
-  if (!id) throw new Error('discordId is required')
-
-  const data = load()
-  if (!data.map[id]) {
-    data.map[id] = data.nextId++
-    save(data)
-  }
-  return data.map[id]
-}
-
-function getDiscordIdByProfileId(profileId) {
-  const id = Number(profileId)
-  const entry = Object.entries(load().map).find(([, value]) => value === id)
-  return entry ? entry[0] : null
-}
-
-function list() {
-  return Object.entries(load().map)
-    .map(([discordId, profileId]) => ({ discordId, profileId }))
-    .sort((a, b) => a.profileId - b.profileId)
+  return { nextId: null, map }
 }
 
 module.exports = {
   load,
-  save,
   list,
   getOrCreateProfileId,
   getDiscordIdByProfileId,

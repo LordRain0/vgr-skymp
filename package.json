@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "follow-redirects": "^1.16.0"
+  }
+}

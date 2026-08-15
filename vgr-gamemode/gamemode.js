@@ -1,0 +1,296 @@
+// ==========================================
+// VENGEFUL REALMS (VGR) EXTENSIONS
+// ==========================================
+const fs = require('fs');
+
+const path = require('path');
+const extensionsDir = path.join(process.cwd(), 'gamemode_extensions');
+const vgrHelpers = require(path.join(extensionsDir, 'vgr_helpers.js'));
+const vgrActors = vgrHelpers.playerInteractions.createActorHelpers(mp, {});
+
+function vgrSendUiManagerPacket(pcFormId, action, uiName) {
+  if (pcFormId == null || pcFormId === 0) return;
+  const name = String(uiName || "").trim();
+  if (!name) return;
+
+  let userId = null;
+  try {
+    userId = vgrActors.userFromActor(pcFormId);
+  } catch (e) {
+    console.warn("[VGR UI manager] failed to resolve actor user:", e && e.message ? e.message : e);
+    return;
+  }
+  if (userId == null) return;
+
+  try {
+    mp.sendCustomPacket(userId, JSON.stringify({
+      customPacketType: "vgrUiManager",
+      action: action === "close" ? "close" : "open",
+      ui: name,
+    }));
+  } catch (e) {
+    console.warn("[VGR UI manager] failed to send UI packet:", name, e && e.message ? e.message : e);
+  }
+}
+
+mp.vgrOpenUI = (pcFormId, uiName) => {
+  vgrSendUiManagerPacket(pcFormId, "open", uiName);
+};
+
+mp.vgrCloseUI = (pcFormId, uiName) => {
+  vgrSendUiManagerPacket(pcFormId, "close", uiName);
+};
+
+mp.vgrSendNotification = (pcFormId, type, message, options) => {
+  if (pcFormId == null || pcFormId === 0) return;
+  let userId = null;
+  try {
+    userId = vgrActors.userFromActor(pcFormId);
+  } catch (e) {
+    console.warn("[VGR notification] failed to resolve actor user:", e && e.message ? e.message : e);
+    return;
+  }
+  if (userId == null) return;
+
+  try {
+    mp.sendCustomPacket(userId, JSON.stringify({
+      customPacketType: "vgrNotification",
+      type: Number(type) === 1 ? 1 : 2,
+      message: String(message || ""),
+      options: options && typeof options === "object" ? options : {},
+    }));
+  } catch (e) {
+    console.warn("[VGR notification] failed to send notification packet:", e && e.message ? e.message : e);
+  }
+};
+
+//require(path.join(extensionsDir, 'vgr_ui_manager.js'))(mp);
+//require(path.join(extensionsDir, 'vgr_voip.js'))(mp);
+//require(path.join(extensionsDir, 'vgr_voice.js'))(mp);
+
+
+
+require(path.join(extensionsDir, 'vgr_activation_service.js'))(mp);
+require(path.join(extensionsDir, 'vgr_npcs.js'))(mp);
+require(path.join(extensionsDir, 'vgr_skills.js'))(mp);
+require(path.join(extensionsDir, 'vgr_alchemy.js'))(mp);
+require(path.join(extensionsDir, 'vgr_enchanting.js'))(mp);
+require(path.join(extensionsDir, 'vgr_woodcutting.js'))(mp);
+require(path.join(extensionsDir, 'vgr_mining.js'))(mp);
+require(path.join(extensionsDir, 'vgr_emotes.js'))(mp);
+require(path.join(extensionsDir, 'vgr_transform_race.js'))(mp);
+
+
+
+
+require(path.join(extensionsDir, 'vgr_livekit_voice.js'))(mp);
+require(path.join(extensionsDir, 'vgr_trading.js'))(mp);
+require(path.join(extensionsDir, 'vgr_admin_menu.js'))(mp);
+require(path.join(extensionsDir, 'vgr_debug_view.js'))(mp);
+require(path.join(extensionsDir, 'vgr_access_control.js'))(mp);
+require(path.join(extensionsDir, 'vgr_nameplates.js'))(mp);
+require(path.join(extensionsDir, 'vgr_player_interactions.js'))(mp);
+
+
+//require(path.join(extensionsDir, 'vgr_time.js'))(mp);
+require(path.join(extensionsDir, 'vgr_weather.js'))(mp);
+
+
+// ========== VGR UI MANAGER ==========
+
+
+// Read the file content as string
+const uiManagerContent = fs.readFileSync(path.join(extensionsDir, 'vgr_ui_manager.js'), 'utf8');
+
+mp.makeEventSource("_vgrUiManager", uiManagerContent);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* // Simple independent key handler for K key || Key Handler
+mp.makeEventSource("_vgrScrewYourself", `
+  let gIsDown = false;
+
+  ctx.sp.on("buttonEvent", (e) => {
+    if (e.code !== 37) return; // K key
+
+    // Reset when key is released
+    if (!e.isPressed) {
+      gIsDown = false;
+      return;
+    }
+
+    // Ignore repeated pressed events while holding K
+    if (gIsDown) return;
+    gIsDown = true;
+
+    ctx.sp.printConsole("[VGR social] K Key pressed | requesting scamp spawn");
+
+    // Skyrim native game calls/events should be sent from update context.
+    ctx.sp.once("update", () => {
+      ctx.sendEvent();
+    });
+  });
+`);
+
+*/
+
+
+
+
+
+
+/*  // Simple independent key handler for K key || Key Handler
+mp.makeEventSource("_vgrScrewYourself", `
+  let gIsDown = false;
+
+  ctx.sp.on("buttonEvent", (e) => {
+
+    // Reset when key is released
+    if (!e.isPressed) {
+      gIsDown = false;
+      return;
+    }
+
+    // Ignore repeated pressed events while holding K
+    if (gIsDown) return;
+    gIsDown = true;
+
+    // K key = 37
+    if (e.code === 37) {
+		
+		// Skyrim native game calls must run from update context.
+		ctx.sp.once("update", () => {
+			ctx.sp.printConsole("[VGR social] K Key pressed | ");
+			
+			ctx.sendEvent();
+			
+			ctx.sp.printConsole("[VGR social] K Key was pressed | " );
+		});
+
+    }
+	
+  });
+`); */
+
+
+
+
+mp.makeProperty("vgrPerks", {
+  isVisibleByOwner: true,
+  isVisibleByNeighbors: false,
+
+  updateOwner: `
+    const player = ctx.sp.Game.getPlayer();
+    if (!player) return;
+
+    const perks = Array.isArray(ctx.value) ? ctx.value : [];
+
+    for (const perkId of perks) {
+      const perk = ctx.sp.Perk.from(ctx.sp.Game.getFormEx(perkId));
+      if (perk && !player.hasPerk(perk)) {
+        player.addPerk(perk);
+      }
+    }
+  `,
+
+  updateNeighbor: ""
+});
+
+mp.makeProperty("vgrSkillLevel", {
+  isVisibleByOwner: true,
+  isVisibleByNeighbors: false,
+
+  updateOwner: `
+    const player = ctx.sp.Game.getPlayer();
+    if (!player) return;
+
+    const skills = Array.isArray(ctx.value) ? ctx.value : [];
+
+    for (const skill of skills) {
+      if (!skill || typeof skill.skillName !== "string") continue;
+      if (typeof skill.level !== "number") continue;
+
+      player.setActorValue(skill.skillName, skill.level);
+    }
+  `,
+
+  updateNeighbor: ""
+});
+
+
+
+
+
+
+mp._vgrScrewYourself = function (pcFormId) {
+  var eagleEye = 0x58F61;
+
+  var perks = mp.get(pcFormId, "vgrPerks") || [];
+  if (!Array.isArray(perks)) {
+    perks = [];
+  }
+
+  if (perks.indexOf(eagleEye) === -1) {
+    perks.push(eagleEye);
+  }
+
+  var skills = mp.get(pcFormId, "vgrSkillLevel") || [];
+  if (!Array.isArray(skills)) {
+    skills = [];
+  }
+
+  var archery = null;
+
+  for (var i = 0; i < skills.length; i++) {
+    if (skills[i] && skills[i].skillName === "Marksman") {
+      archery = skills[i];
+      break;
+    }
+  }
+
+  if (!archery) {
+    archery = {
+      skillName: "Marksman",
+      level: 15
+    };
+    skills.push(archery);
+  }
+
+  archery.level += 10;
+
+  mp.set(pcFormId, "vgrPerks", perks);
+  mp.set(pcFormId, "vgrSkillLevel", skills);
+};
