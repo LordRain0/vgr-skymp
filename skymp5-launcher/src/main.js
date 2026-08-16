@@ -18,6 +18,9 @@ const config = require('./config')
 const mo2    = require('./mo2')
 const nexus  = require('./nexus')
 const ini    = require('./ini')
+const REQUIRED_CC = require('./required-cc')
+const REQUIRED_CC_FILE_NAMES = REQUIRED_CC.files
+const REQUIRED_CC_FILES = REQUIRED_CC.fileSet
 
 const isDev = process.argv.includes('--dev')
 
@@ -967,14 +970,91 @@ const REQUIRED_FILES = [
 
 // Engine fixes preloader
 const PRELOADER_DLLS = ['d3dx9_42.dll', 'winhttp.dll']
-const preloaderPresent = (gamePath) =>
+const rootPreloaderPresent = (gamePath) =>
   !!gamePath && PRELOADER_DLLS.some(f => fs.existsSync(path.join(gamePath, f)))
+
+function mo2VirtualRootFilePresent(fileName) {
+  const modsDir = mo2.getModsDir()
+  let modNames = []
+  try {
+    modNames = fs.readFileSync(path.join(mo2.getProfileDir(), 'modlist.txt'), 'utf8')
+      .split(/\r?\n/)
+      .filter(l => l.startsWith('+'))
+      .map(l => l.slice(1).trim())
+      .filter(Boolean)
+  } catch {
+    try {
+      modNames = fs.readdirSync(modsDir, { withFileTypes: true })
+        .filter(e => e.isDirectory())
+        .map(e => e.name)
+    } catch { return false }
+  }
+  return modNames.some(name => fs.existsSync(path.join(modsDir, name, 'Root', fileName)))
+}
+
+const preloaderPresent = (gamePath, viaMO2 = false) =>
+  rootPreloaderPresent(gamePath) ||
+  (viaMO2 && PRELOADER_DLLS.some(mo2VirtualRootFilePresent))
 
 // True when every client-package file the launcher can check is on disk.
 const clientFilesPresent = (gamePath) =>
   !!gamePath &&
   REQUIRED_FILES.every(f => fs.existsSync(path.join(gamePath, f))) &&
   preloaderPresent(gamePath)
+
+function missingRequiredCcFiles(gamePath) {
+  const dataDir = path.join(gamePath || '', 'Data')
+  let present = new Set()
+  try {
+    present = new Set(fs.readdirSync(dataDir).map(name => name.toLowerCase()))
+  } catch {
+    return REQUIRED_CC_FILE_NAMES.slice()
+  }
+  return REQUIRED_CC_FILE_NAMES.filter(name => !present.has(name.toLowerCase()))
+}
+
+// Users migrating from Keizaal: its launcher "disables" AE/CC content by
+// moving the files into Data\_disabledByKzl, which leaves required CC files
+// missing for us. Restore any REQUIRED file found there instead of telling
+// the player to fix their Data folder by hand. Only files on the required
+// list are touched - everything else Keizaal disabled stays disabled (it was
+// disabled for that server's own reasons, not ours). Returns restored names.
+function restoreKeizaalDisabledCcFiles(gamePath) {
+  const dataDir = path.join(gamePath || '', 'Data')
+  const restored = []
+  // Data\_disabledByKzl is Keizaal's exact location; also tolerate the folder
+  // sitting in the game root in case older Keizaal builds put it there.
+  const candidates = [
+    path.join(dataDir, '_disabledByKzl'),
+    path.join(gamePath || '', '_disabledByKzl'),
+  ]
+  for (const disabledDir of candidates) {
+    let entries = []
+    try { entries = fs.readdirSync(disabledDir) } catch { continue }
+    for (const name of entries) {
+      if (!REQUIRED_CC_FILES.has(name.toLowerCase())) continue
+      const src  = path.join(disabledDir, name)
+      const dest = path.join(dataDir, name)
+      if (fs.existsSync(dest)) continue // already present - leave the copy alone
+      try {
+        fs.renameSync(src, dest)
+        restored.push(name)
+      } catch (err) {
+        // rename can fail on AV locks etc. - fall back to copy, keep the original
+        try {
+          fs.copyFileSync(src, dest)
+          restored.push(name)
+        } catch (err2) {
+          log(`[keizaal-restore] could not restore ${name}: ${err2.message}`)
+        }
+      }
+    }
+  }
+  if (restored.length) {
+    log(`[keizaal-restore] restored ${restored.length} required CC file(s) from _disabledByKzl: ${restored.join(', ')}`)
+  }
+  return restored
+}
 
 ipcMain.handle('launch:skse', async () => {
   const skyrimPath = effectiveGamePath()
@@ -1088,8 +1168,20 @@ function verifyLaunchReadiness(skyrimPath, viaMO2, serverInfo) {
   }
 
   // Fallback for engine fixes failure (like with AV software)
-  if (!preloaderPresent(skyrimPath)) {
-    problems.push('The Engine Fixes preloader dll is missing from the game folder; press PLAY (it will show UPDATE) to reinstall the client files.')
+  if (!preloaderPresent(skyrimPath, viaMO2)) {
+    problems.push(viaMO2
+      ? 'The Engine Fixes preloader dll is missing from the game folder and from MO2 virtual root; press PLAY (it will show UPDATE) to reinstall the modpack.'
+      : 'The Engine Fixes preloader dll is missing from the game folder; press PLAY (it will show UPDATE) to reinstall the client files.')
+  }
+
+  let missingCcFiles = missingRequiredCcFiles(skyrimPath)
+  if (missingCcFiles.length > 0 && restoreKeizaalDisabledCcFiles(skyrimPath).length > 0) {
+    // Keizaal migration: files were sitting in Data\_disabledByKzl - re-check
+    // after restoring them so the player isn't blocked for a solved problem.
+    missingCcFiles = missingRequiredCcFiles(skyrimPath)
+  }
+  if (missingCcFiles.length > 0) {
+    problems.push(`Required Anniversary Edition / Creation Club files missing (${missingCcFiles.join(', ')}); restore them to the Skyrim Data folder before launching.`)
   }
 
   // Online servers need a launcher Discord login so auth-data-no-load.js can be seeded; without it SkyMP shows its own auth menu and never connects.

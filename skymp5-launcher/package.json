@@ -1,7 +1,7 @@
 {
-  "name": "skyrp-launcher",
-  "version": "2.0.7",
-  "description": "Launcher for the Skyrim Roleplay server",
+  "name": "vengeful-realms-launcher",
+  "version": "2.0.8",
+  "description": "Launcher for the Vengeful Realms server",
   "main": "src/main.js",
   "author": "F02K and Suraru",
   "license": "MIT",
@@ -25,6 +25,7 @@
   },
   "build": {
     "appId": "com.skyrp.launcher",
+    "afterAllArtifactBuild": "scripts/write-launcher-version.js",
     "productName": "SkyRP Launcher",
     "directories": {
       "output": "../build/launcher"

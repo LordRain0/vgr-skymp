@@ -1,0 +1,15 @@
+{
+  "name": "vgr-livekit-three-player-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless three-player subscription test for VGR proximity voice",
+  "scripts": {
+    "test:voice": "node src/three-player-test.mjs",
+    "check": "node --check src/three-player-test.mjs"
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "0.13.33",
+    "livekit-server-sdk": "2.17.0"
+  }
+}

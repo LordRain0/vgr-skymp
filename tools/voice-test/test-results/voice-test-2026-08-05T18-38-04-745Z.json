@@ -1,0 +1,47 @@
+{
+  "passed": false,
+  "startedAt": "2026-08-05T18:38:04.745Z",
+  "finishedAt": "2026-08-05T18:38:04.745Z",
+  "room": "vgr-voice",
+  "livekitUrl": "ws://127.0.0.1:7880",
+  "voiceAgentUrl": "http://127.0.0.1:8090",
+  "error": "invalid API key: APIpNoZb58JmPkE",
+  "paths": {
+    "A hears B": {
+      "subscribed": false,
+      "frames": 0,
+      "nonSilentFrames": 0,
+      "lastEvent": "waiting"
+    },
+    "A hears C": {
+      "subscribed": false,
+      "frames": 0,
+      "nonSilentFrames": 0,
+      "lastEvent": "waiting"
+    },
+    "B hears A": {
+      "subscribed": false,
+      "frames": 0,
+      "nonSilentFrames": 0,
+      "lastEvent": "waiting"
+    },
+    "B hears C": {
+      "subscribed": false,
+      "frames": 0,
+      "nonSilentFrames": 0,
+      "lastEvent": "waiting"
+    },
+    "C hears A": {
+      "subscribed": false,
+      "frames": 0,
+      "nonSilentFrames": 0,
+      "lastEvent": "waiting"
+    },
+    "C hears B": {
+      "subscribed": false,
+      "frames": 0,
+      "nonSilentFrames": 0,
+      "lastEvent": "waiting"
+    }
+  }
+}

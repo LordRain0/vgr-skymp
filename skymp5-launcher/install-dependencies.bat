@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-cd /d D:\GitHub\skymp-vgr\skymp5-launcher
+cd /d "%~dp0"
 
 echo Installing dependencies...
 call npm.cmd ci

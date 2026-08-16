@@ -1,0 +1,10 @@
+{
+  "livekitHost": "ws://127.0.0.1:7880",
+  "livekitApiKey": "REPLACE_ME",
+  "livekitSecret": "REPLACE_ME",
+  "voiceRange": 500,
+  "roomPrefix": "vgr",
+  "tickRateMs": 250,
+  "maxStreams": 20,
+  "requestTimeoutMs": 5000
+}

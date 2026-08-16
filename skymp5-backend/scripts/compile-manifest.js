@@ -51,9 +51,17 @@ const INLINE_LIMIT = parseInlineLimit(process.env.SKYRP_INLINE_LIMIT_MB)
 const INLINE_WARN = Math.min(INLINE_LIMIT, DEFAULT_INLINE_LIMIT)
 
 let sources = { urls: {}, rootInclude: [] }
+const SOURCES_FILE = path.join(DATA_DIR, 'manifest-sources.json')
 try {
-  sources = { urls: {}, rootInclude: [], ...JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'manifest-sources.json'), 'utf8')) }
-} catch { /* optional */ }
+  sources = { urls: {}, rootInclude: [], ...JSON.parse(fs.readFileSync(SOURCES_FILE, 'utf8')) }
+} catch (err) {
+  // Absent is fine (the file is optional); present-but-broken must abort, or
+  // every URL override is silently dropped and the mods get inlined as 'manual'.
+  if (err.code !== 'ENOENT') {
+    console.error(`manifest-sources.json is unreadable (${err.message}) - fix or delete it, refusing to build with overrides silently ignored`)
+    process.exit(1)
+  }
+}
 
 // Hash helpers
 

@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "startedAt": "2026-08-05T18:42:37.429Z",
+  "finishedAt": "2026-08-05T18:43:02.929Z",
+  "room": "vgr-voice",
+  "livekitUrl": "ws://127.0.0.1:7880",
+  "voiceAgentUrl": "http://127.0.0.1:8090",
+  "error": null,
+  "paths": {
+    "A hears B": {
+      "subscribed": true,
+      "frames": 2485,
+      "nonSilentFrames": 2485,
+      "lastEvent": "subscribed"
+    },
+    "A hears C": {
+      "subscribed": true,
+      "frames": 2485,
+      "nonSilentFrames": 2485,
+      "lastEvent": "subscribed"
+    },
+    "B hears A": {
+      "subscribed": true,
+      "frames": 2485,
+      "nonSilentFrames": 2485,
+      "lastEvent": "subscribed"
+    },
+    "B hears C": {
+      "subscribed": true,
+      "frames": 2485,
+      "nonSilentFrames": 2485,
+      "lastEvent": "subscribed"
+    },
+    "C hears A": {
+      "subscribed": true,
+      "frames": 2485,
+      "nonSilentFrames": 2485,
+      "lastEvent": "subscribed"
+    },
+    "C hears B": {
+      "subscribed": true,
+      "frames": 2485,
+      "nonSilentFrames": 2485,
+      "lastEvent": "subscribed"
+    }
+  }
+}
