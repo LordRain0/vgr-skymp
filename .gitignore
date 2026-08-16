@@ -1,4 +1,7 @@
 build
+# Live server runtime deployed inside the repo (plugins, world data,
+# server-settings.json with secrets) - never commit it.
+/server/
 .clang-tidy
 .linter
 node_modules
