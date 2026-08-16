@@ -701,12 +701,19 @@ img {
 .hero-copy h3,
 .panel-heading h3 {
     color: var(--gold-light);
-    font-size: clamp(24px, 3.2vw, 44px);
     line-height: 1.04;
     letter-spacing: 0.07em;
     font-weight: 500;
     text-transform: uppercase;
     text-shadow: 0 3px 0 rgba(0, 0, 0, 0.75);
+}
+
+.hero-copy h3 {
+    font-size: clamp(16px, 2.1vw, 29px);
+}
+
+.panel-heading h3 {
+    font-size: clamp(24px, 3.2vw, 44px);
 }
 
 .hero-copy p {
@@ -1009,6 +1016,12 @@ img {
 .mod-status-top span {
     display: block;
     margin-top: 6px;
+}
+
+#install-status-mo2 {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.55;
 }
 
 .mod-actions {

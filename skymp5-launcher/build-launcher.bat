@@ -15,7 +15,7 @@ if errorlevel 1 goto failed
 
 echo.
 echo Done. Installer should be at:
-echo %~dp0..\build\launcher\SkyrimRoleplayLauncher.exe
+echo %~dp0..\build\launcher\VengefulRealmsLauncher.exe
 echo Version file should be at:
 echo %~dp0..\build\launcher\launcher-version.txt
 pause

@@ -3,7 +3,7 @@
   "version": "2.0.8",
   "description": "Launcher for the Vengeful Realms server",
   "main": "src/main.js",
-  "author": "F02K and Suraru",
+  "author": "F02K, Suraru, Metadraconis",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -14,25 +14,26 @@
     "build:mac": "electron-builder --mac"
   },
   "dependencies": {
-    "7zip-bin": "^5.2.0",
-    "adm-zip": "^0.5.10",
-    "dotenv": "^16.4.5",
-    "electron-store": "^8.2.0"
+    "7zip-bin-full": "^26.2.1",
+    "adm-zip": "^0.6.0",
+    "dotenv": "^17.4.2",
+    "electron-store": "^11.0.2"
   },
   "devDependencies": {
-    "electron": "41.2.0",
-    "electron-builder": "26.8.1"
+    "electron": "43.1.1",
+    "electron-builder": "26.15.3"
   },
   "build": {
-    "appId": "com.skyrp.launcher",
-    "afterAllArtifactBuild": "scripts/write-launcher-version.js",
-    "productName": "SkyRP Launcher",
+    "appId": "com.vengefulrealms.launcher",
+    "productName": "Vengeful Realms Launcher",
     "directories": {
       "output": "../build/launcher"
     },
+    "afterAllArtifactBuild": "scripts/write-launcher-version.js",
     "files": [
       "src/**/*",
       "assets/**/*",
+      ".env",
       "package.json"
     ],
     "win": {
@@ -44,7 +45,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon_notext.ico"
     },
     "linux": {
       "target": [
@@ -62,13 +63,13 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "artifactName": "SkyrimRoleplayLauncher.exe",
+      "installerIcon": "assets/icon_notext.ico",
+      "uninstallerIcon": "assets/icon_notext.ico",
+      "artifactName": "VengefulRealmsLauncher.exe",
       "include": "installer.nsh"
     },
     "asarUnpack": [
-      "node_modules/7zip-bin/**"
+      "node_modules/7zip-bin-full/**"
     ]
   }
 }

@@ -4,7 +4,7 @@
   "urls": {
     "VengefulRealms-Additions.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/VengefulRealms-Additions.7z"
   },
-  "// rootInclude": "Game-root files (relative to --game) to capture, e.g. SKSE preloaders. skse64_*.exe/.dll are auto-detected and need not be listed.",
+  "// rootInclude": "Game-root files (relative to --game) to capture. ONLY files listed here are captured - nothing is auto-detected. SKSE itself is installed separately by the launcher.",
   "rootInclude": [
 	
   ]

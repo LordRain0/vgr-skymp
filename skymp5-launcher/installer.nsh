@@ -1,8 +1,28 @@
-; Custom NSIS hooks for the SkyRP Launcher installer.
+; Custom NSIS hooks for the Vengeful Realms Launcher installer.
 ;
 ; Refuse to install/update while the launcher is running, otherwise its files
 ; are locked and the update silently half-applies. nsProcess ships with
 ; electron-builder's bundled NSIS, so no extra plugin install is needed.
+
+!macro preInit
+  SetRegView 64
+
+  ReadRegStr $R0 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ${If} $R0 == ""
+    ReadRegStr $R0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ${EndIf}
+
+  ${If} $R0 == ""
+    WriteRegExpandStr HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation "C:\VengefulRealms\VengefulRealms-Launcher"
+    WriteRegExpandStr HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation "C:\VengefulRealms\VengefulRealms-Launcher"
+  ${EndIf}
+
+  SetRegView 32
+  ${If} $R0 == ""
+    WriteRegExpandStr HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation "C:\VengefulRealms\VengefulRealms-Launcher"
+    WriteRegExpandStr HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation "C:\VengefulRealms\VengefulRealms-Launcher"
+  ${EndIf}
+!macroend
 
 !macro customInit
   ${If} ${Silent}
@@ -28,7 +48,7 @@
       ${If} $R0 == 0
         nsProcess::_Unload
         MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION \
-          "SkyRP Launcher is still running.$\n$\nPlease fully quit it (check the system tray), then click Retry." \
+          "Vengeful Realms Launcher is still running.$\n$\nPlease fully quit it (check the system tray), then click Retry." \
           IDRETRY retry_running_check
         Abort
       ${EndIf}

@@ -83,12 +83,13 @@ if not exist "%MO2%\mods" (
     exit /b 1
 )
 
-:: Game root: second argument, or prompt (optional, for skse64 loader files)
+:: Game root: second argument, or prompt (optional; only used when
+:: manifest-sources.json lists rootInclude files to capture from it)
 set "GAME=%~2"
 if defined GAME goto :game_given
 echo.
-echo Enter the Skyrim SE game folder to capture skse64 loader files
-echo (press Enter to skip):
+echo Enter the Skyrim SE game folder to capture the rootInclude files listed
+echo in data\manifest-sources.json (press Enter to skip):
 set /p "GAME=Game folder: "
 :game_given
 if not defined GAME goto :game_done

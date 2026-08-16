@@ -3,7 +3,8 @@
 /**
  * Mod Organizer 2 integration - portable install fully managed by the launcher.
  *
- *   %LOCALAPPDATA%\VengefulRealms\MO2\
+ *   <launcher dir>\VengefulRealms\MO2\ by default, or
+ *   <chosen install folder>\MO2\ when the portable install location is set.
  *     ModOrganizer.exe          downloaded from the official MO2 release
  *     ModOrganizer.ini          portable instance config (written by us)
  *     nxmhandler.ini            nxm:// → this MO2 instance
@@ -20,14 +21,34 @@
 
 const path = require('path')
 const fs   = require('fs')
+const fsp  = fs.promises
 const os   = require('os')
 const https = require('https')
+const http  = require('http')
 const crypto = require('crypto')
 const { spawn, execFileSync, execFile } = require('child_process')
+const { Transform } = require('stream')
+const { pipeline } = require('stream/promises')
+const REQUIRED_CC = require('./required-cc')
+const REQUIRED_CC_FILES = REQUIRED_CC.fileSet
 
 const MO2_VERSION = '2.5.2'
 const MO2_URL     = `https://github.com/ModOrganizer2/modorganizer/releases/download/v${MO2_VERSION}/Mod.Organizer-${MO2_VERSION}.7z`
+const ROOTBUILDER_VERSION = '5.1.1'
+const ROOTBUILDER_URL = `https://github.com/Kezyma/ModOrganizer-Plugins/releases/download/rootbuilder/rootbuilder.${ROOTBUILDER_VERSION}.zip`
 const PROFILE     = 'VengefulRealms'
+
+const BASE_GAME_PLUGINS = [
+  'Skyrim.esm',
+  'Update.esm',
+  'Dawnguard.esm',
+  'HearthFires.esm',
+  'Dragonborn.esm',
+]
+const DLC_MODLIST = ['Dawnguard', 'Dragonborn', 'HearthFires']
+
+const FORCE_LOADED_PLUGINS = [...BASE_GAME_PLUGINS, ...REQUIRED_CC.pluginOrder]
+const FORCE_LOADED_PLUGIN_KEYS = new Set(FORCE_LOADED_PLUGINS.map(name => name.toLowerCase()))
 
 // SKSE is edition-specific: the Steam and GOG builds ship different loaders and
 // runtime DLLs, so we download the one matching the player's game.
@@ -56,57 +77,291 @@ function getRoot() {
 const getExe          = () => path.join(getRoot(), 'ModOrganizer.exe')
 const getDownloadsDir = () => path.join(getRoot(), 'downloads')
 const getModsDir      = () => path.join(getRoot(), 'mods')
+const getPluginsDir   = () => path.join(getRoot(), 'plugins')
 const getProfileDir   = () => path.join(getRoot(), 'profiles', PROFILE)
+const SKSE_MOD_NAME   = 'Skyrim Script Extender (SKSE64)'
+const CLIENT_MOD_NAME = 'Vengeful Realms - Client'
+
+function getManagedSkseLoaderPath() {
+  return path.join(getModsDir(), SKSE_MOD_NAME, 'Root', 'skse64_loader.exe')
+}
+
+function getClientModName() {
+  return CLIENT_MOD_NAME
+}
+
+function getClientModDir() {
+  return path.join(getModsDir(), CLIENT_MOD_NAME)
+}
 
 function isInstalled() {
   return fs.existsSync(getExe())
 }
 
-// 7za ships inside the 7zip-bin npm package
-function get7za() {
-  const sevenBin = require('7zip-bin')
-  return sevenBin.path7za.replace('app.asar', 'app.asar.unpacked')
+// Full bundled 7-Zip from 7zip-bin-full; unlike 7za, it supports RAR.
+function get7z() {
+  const sevenBin = require('7zip-bin-full')
+  return sevenBin.path7z.replace('app.asar', 'app.asar.unpacked')
 }
 
 // Download / install MO2
 
-/** Download url to dest, following redirects (GitHub releases redirect to a CDN). */
-function downloadFile(url, dest, onProgress, redirectsLeft = 5) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        res.resume()
-        if (redirectsLeft <= 0) return reject(new Error('Too many redirects'))
-        return resolve(downloadFile(res.headers.location, dest, onProgress, redirectsLeft - 1))
-      }
-      if (res.statusCode !== 200) {
-        res.resume()
-        return reject(new Error(`HTTP ${res.statusCode} downloading ${url}`))
-      }
+const DOWNLOAD_RETRY_ATTEMPTS = 5
+const DOWNLOAD_TIMEOUT_MS = 180_000
 
-      const total = parseInt(res.headers['content-length'] || '0', 10)
-      let received = 0
-      const file = fs.createWriteStream(dest)
-      res.on('data', chunk => {
-        received += chunk.length
+function isTransientDownloadError(err) {
+  return ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'ERANGE_RESTART'].includes(err?.code) ||
+    /socket hang up|read ECONNRESET|download timed out/i.test(err?.message || '')
+}
+
+function contentRangeTotal(value) {
+  const match = String(value || '').match(/bytes\s+\d+-\d+\/(\d+|\*)/i)
+  if (!match || match[1] === '*') return 0
+  return Number(match[1]) || 0
+}
+
+function downloadFileOnce(url, dest, onProgress, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    let target
+    try { target = new URL(url) }
+    catch (err) { return reject(err) }
+
+    const existingSize = fs.existsSync(dest) ? fs.statSync(dest).size : 0
+    const headers = existingSize > 0 ? { Range: `bytes=${existingSize}-` } : {}
+    const transport = target.protocol === 'https:' ? https : target.protocol === 'http:' ? http : null
+    if (!transport) return reject(new Error(`Unsupported download URL protocol: ${target.protocol}`))
+
+    const req = transport.get(target, { headers }, res => {
+      ;(async () => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume()
+          if (redirectsLeft <= 0) throw new Error('Too many redirects')
+          await downloadFileOnce(new URL(res.headers.location, target).href, dest, onProgress, redirectsLeft - 1)
+          return
+        }
+
+        if (existingSize > 0 && res.statusCode === 416) {
+          res.resume()
+          try { fs.unlinkSync(dest) } catch {}
+          const err = new Error('Server rejected resume range; restarting download')
+          err.code = 'ERANGE_RESTART'
+          throw err
+        }
+
+        const isResume = existingSize > 0 && res.statusCode === 206
+        if (res.statusCode !== 200 && res.statusCode !== 206) {
+          res.resume()
+          throw new Error(`HTTP ${res.statusCode} downloading ${url}`)
+        }
+
+        const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+        const total = isResume
+          ? (contentRangeTotal(res.headers['content-range']) || existingSize + contentLength)
+          : contentLength
+        let received = isResume ? existingSize : 0
+
         if (onProgress) onProgress(received, total)
-      })
-      res.pipe(file)
-      file.on('finish', () => file.close(resolve))
-      file.on('error', err => { try { fs.unlinkSync(dest) } catch {} reject(err) })
-      res.on('error',  err => { try { fs.unlinkSync(dest) } catch {} reject(err) })
+
+        const progress = new Transform({
+          transform(chunk, _encoding, callback) {
+            received += chunk.length
+            if (onProgress) onProgress(received, total)
+            callback(null, chunk)
+          }
+        })
+
+        await pipeline(res, progress, fs.createWriteStream(dest, { flags: isResume ? 'a' : 'w' }))
+      })().then(resolve, reject)
     })
     req.on('error', reject)
-    req.setTimeout(120_000, () => { req.destroy(); reject(new Error('Download timed out')) })
+    req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+      const err = new Error('Download timed out')
+      err.code = 'ETIMEDOUT'
+      req.destroy(err)
+    })
   })
 }
 
-/** Extract a .7z/.zip archive with the bundled 7za. */
-function extractArchive(archivePath, destDir) {
+/** Download url to dest, following redirects and resuming transient failures. */
+async function downloadFile(url, dest, onProgress, redirectsLeft = 5) {
+  let lastErr
+  for (let attempt = 1; attempt <= DOWNLOAD_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await downloadFileOnce(url, dest, onProgress, redirectsLeft)
+      return
+    } catch (err) {
+      lastErr = err
+      if (attempt >= DOWNLOAD_RETRY_ATTEMPTS || !isTransientDownloadError(err)) {
+        try { fs.unlinkSync(dest) } catch {}
+        throw err
+      }
+      _log(`download interrupted (${err.message}); retrying ${attempt + 1}/${DOWNLOAD_RETRY_ATTEMPTS}`)
+      await sleep(1000 * attempt)
+    }
+  }
+  throw lastErr
+}
+
+/** Extract archives with bundled full 7-Zip. */
+function cancelledError() {
+  return new Error('Cancelled')
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw cancelledError()
+}
+
+const LOCK_RETRY_CODES = new Set(['EBUSY', 'ENOTEMPTY', 'EPERM', 'EACCES'])
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function retryLockedFs(label, fn, signal, attempts = 8) {
+  let lastErr = null
+  for (let i = 0; i < attempts; i++) {
+    throwIfAborted(signal)
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (!LOCK_RETRY_CODES.has(err.code) || i === attempts - 1) break
+      await sleep(150 * (i + 1))
+    }
+  }
+  throw new Error(`${label} failed: ${lastErr?.message || lastErr}`, { cause: lastErr })
+}
+
+async function replaceDirectoryFromBuild(buildDir, destDir, signal) {
+  try {
+    await retryLockedFs(`remove existing ${destDir}`, () =>
+      fsp.rm(lp(destDir), { recursive: true, force: true }), signal)
+    await fsp.mkdir(lp(path.dirname(destDir)), { recursive: true })
+    await retryLockedFs(`rename ${buildDir} to ${destDir}`, () =>
+      fsp.rename(lp(buildDir), lp(destDir)), signal)
+  } catch (err) {
+    if (LOCK_RETRY_CODES.has(err.cause?.code || err.code)) {
+      throw new Error(`${err.message}. Close Mod Organizer, Explorer windows, or antivirus scans touching the MO2 mods folder and retry.`)
+    }
+    throw err
+  }
+}
+
+function clientZipEntryToModPath(entryName) {
+  const parts = String(entryName || '').split(/[\\/]+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts[0].toLowerCase() === 'data') return parts.slice(1).join('/')
+  return ['Root', ...parts].join('/')
+}
+
+async function installClientZipAsMod(zipPath, version, signal, onProgress) {
+  const extractDir = path.join(getRoot(), '.client')
+  const buildDir = path.join(getRoot(), '.b', `client-${_applyCounter++}`)
+  const modDir = getClientModDir()
+  try { await fsp.rm(lp(extractDir), { recursive: true, force: true }) } catch {}
+  try { await fsp.rm(lp(buildDir), { recursive: true, force: true }) } catch {}
+
+  try {
+    await extractArchive(zipPath, extractDir, signal)
+    const files = await listFilesRelative(extractDir, signal)
+    const total = files.length
+    let copied = 0
+
+    for (const { rel, full } of files) {
+      throwIfAborted(signal)
+      const destRel = clientZipEntryToModPath(rel)
+      if (!destRel) continue
+      const dest = path.join(buildDir, destRel.split('/').join(path.sep))
+      await fsp.mkdir(lp(path.dirname(dest)), { recursive: true })
+      await fsp.copyFile(lp(full), lp(dest))
+      copied++
+      if (onProgress) onProgress(destRel, copied, total)
+    }
+
+    fs.writeFileSync(lp(path.join(buildDir, 'meta.ini')), [
+      '[General]', 'gameName=SkyrimSE', 'modid=0', `name=${CLIENT_MOD_NAME}`,
+      'repository=', 'skyrpManaged=true', `skyrpHash=${version || ''}`, '',
+    ].join('\r\n'))
+
+    await replaceDirectoryFromBuild(buildDir, modDir, signal)
+    _log(`installed ${CLIENT_MOD_NAME} (${copied} file(s))`)
+    return { folder: CLIENT_MOD_NAME, files: copied }
+  } catch (err) {
+    try { await fsp.rm(lp(buildDir), { recursive: true, force: true }) } catch {}
+    if (err.message === 'Cancelled') throw err
+    throw err
+  } finally {
+    try { await fsp.rm(lp(extractDir), { recursive: true, force: true }) } catch {}
+  }
+}
+
+async function listFilesRelative(rootDir, signal) {
+  const files = []
+  const stack = [rootDir]
+  while (stack.length) {
+    throwIfAborted(signal)
+    const dir = stack.pop()
+    let entries
+    try { entries = await fsp.readdir(lp(dir), { withFileTypes: true }) } catch { continue }
+    for (const e of entries) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        stack.push(full)
+      } else {
+        files.push({ full, rel: path.relative(rootDir, full).split(path.sep).join('/') })
+      }
+    }
+  }
+  files.sort((a, b) => a.rel.localeCompare(b.rel))
+  return files
+}
+
+async function extractArchive(archivePath, destDir, signal, selectedPaths) {
   fs.mkdirSync(destDir, { recursive: true })
-  execFileSync(get7za(), ['x', '-y', `-o${destDir}`, archivePath], {
-    stdio: 'ignore',
-    timeout: 10 * 60 * 1000,
+  throwIfAborted(signal)
+
+  const includeList = await createArchiveIncludeList(archivePath, destDir, selectedPaths, signal)
+  const args = ['x', '-y', `-o${destDir}`]
+  if (includeList) args.push('-scsUTF-8', `-i@${includeList}`)
+  args.push(archivePath)
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(get7z(), args, {
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+
+    let aborting = false
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill()
+    }, 10 * 60 * 1000)
+    const onAbort = () => {
+      aborting = true
+      child.kill()
+    }
+
+    if (signal) signal.addEventListener('abort', onAbort, { once: true })
+
+    let settled = false
+    const done = err => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (signal) signal.removeEventListener('abort', onAbort)
+      if (includeList) { try { fs.unlinkSync(lp(includeList)) } catch {} }
+      if (err) reject(err)
+      else resolve()
+    }
+
+    child.on('error', done)
+    child.on('exit', (code, signalName) => {
+      if (aborting || signal?.aborted) return done(cancelledError())
+      if (timedOut) return done(new Error(`7-Zip timed out extracting ${path.basename(archivePath)}`))
+      if (code === 0) return done()
+      done(new Error(`7-Zip failed extracting ${path.basename(archivePath)} (exit ${code}${signalName ? `, signal ${signalName}` : ''})`))
+    })
   })
 }
 
@@ -114,8 +369,9 @@ function extractArchive(archivePath, destDir) {
  * Download and unpack MO2 itself. Resolves immediately if already installed.
  * onProgress(message) receives human-readable status lines.
  */
-async function ensureInstalled(onProgress) {
+async function ensureInstalled(onProgress, signal) {
   if (isInstalled()) return
+  throwIfAborted(signal)
 
   const root    = getRoot()
   const archive = path.join(os.tmpdir(), `mo2-${MO2_VERSION}.7z`)
@@ -131,13 +387,54 @@ async function ensureInstalled(onProgress) {
   })
 
   if (onProgress) onProgress('Extracting Mod Organizer 2…')
-  extractArchive(archive, root)
+  await extractArchive(archive, root, signal)
   try { fs.unlinkSync(archive) } catch {}
 
   if (!isInstalled()) {
     throw new Error('MO2 extraction finished but ModOrganizer.exe was not found.')
   }
   _log('MO2 installed')
+}
+
+async function ensureMo2Plugins(onProgress, signal) {
+  if (!isInstalled()) throw new Error('MO2 is not installed - install MO2 before installing plugins.')
+  throwIfAborted(signal)
+
+  await ensureRootBuilderInstalled(onProgress, signal)
+}
+
+async function ensureRootBuilderInstalled(onProgress, signal) {
+  const pluginsDir = getPluginsDir()
+  const marker = path.join(pluginsDir, '.vgr-rootbuilder-version')
+  try {
+    if (fs.readFileSync(marker, 'utf8').trim() === ROOTBUILDER_VERSION) return
+  } catch { /* plugin not installed by this launcher version yet */ }
+
+  fs.mkdirSync(pluginsDir, { recursive: true })
+  const archive = path.join(os.tmpdir(), `rootbuilder-${ROOTBUILDER_VERSION}.zip`)
+  const extractDir = path.join(os.tmpdir(), `rootbuilder-${ROOTBUILDER_VERSION}-${process.pid}`)
+  try {
+    try { await fsp.rm(lp(extractDir), { recursive: true, force: true }) } catch {}
+    if (onProgress) onProgress('Downloading Root Builder plugin...')
+    await downloadFile(ROOTBUILDER_URL, archive, (received, total) => {
+      if (onProgress && total > 0) {
+        const mb = n => (n / 1024 / 1024).toFixed(1)
+        onProgress(`Downloading Root Builder plugin... ${mb(received)} / ${mb(total)} MB`)
+      }
+    })
+
+    if (onProgress) onProgress('Installing Root Builder plugin...')
+    await extractArchive(archive, extractDir, signal)
+    const sourceDir = fs.existsSync(path.join(extractDir, 'plugins'))
+      ? path.join(extractDir, 'plugins')
+      : extractDir
+    await fsp.cp(lp(sourceDir), lp(pluginsDir), { recursive: true, force: true })
+    fs.writeFileSync(marker, ROOTBUILDER_VERSION + '\n')
+    _log(`Root Builder plugin installed (${ROOTBUILDER_VERSION})`)
+  } finally {
+    try { fs.unlinkSync(archive) } catch {}
+    try { await fsp.rm(lp(extractDir), { recursive: true, force: true }) } catch {}
+  }
 }
 
 // Portable instance / profile
@@ -170,12 +467,13 @@ function buildInstanceIni(skyrimPath, style) {
     '',
     '[Settings]',
     'check_for_updates=false',
+    'force_enable_core_files=true',
     ...(style ? [`style=${style}`] : []),
     '',
     '[customExecutables]',
     'size=1',
     '1\\title=SKSE',
-    `1\\binary=${fwd(path.join(skyrimPath, 'skse64_loader.exe'))}`,
+    `1\\binary=${fwd(getManagedSkseLoaderPath())}`,
     `1\\workingDirectory=${fwd(skyrimPath)}`,
     '1\\arguments=',
     '1\\hide=false',
@@ -189,12 +487,21 @@ function buildInstanceIni(skyrimPath, style) {
 // launches, without touching gameEdition or any other MO2-written state.
 function healInstancePaths(iniPath, skyrimPath) {
   const gamePath = fwd(skyrimPath)
-  const ssePath  = fwd(path.join(skyrimPath, 'skse64_loader.exe'))
+  const ssePath  = fwd(getManagedSkseLoaderPath())
   let txt = fs.readFileSync(iniPath, 'utf8')
   // Function replacers avoid '$' in paths being treated as replacement tokens.
   txt = txt.replace(/^gamePath=.*$/m,            () => `gamePath=@ByteArray(${gamePath})`)
   txt = txt.replace(/^1\\binary=.*$/m,           () => `1\\binary=${ssePath}`)
   txt = txt.replace(/^1\\workingDirectory=.*$/m, () => `1\\workingDirectory=${gamePath}`)
+  if (/^\[Settings\]/m.test(txt)) {
+    if (/^force_enable_core_files=.*$/m.test(txt)) {
+      txt = txt.replace(/^force_enable_core_files=.*$/m, 'force_enable_core_files=true')
+    } else {
+      txt = txt.replace(/^\[Settings\]\r?\n/m, match => `${match}force_enable_core_files=true\r\n`)
+    }
+  } else {
+    txt += '\r\n[Settings]\r\nforce_enable_core_files=true\r\n'
+  }
   fs.writeFileSync(iniPath, txt)
 }
 
@@ -249,13 +556,7 @@ function ensureInstance(skyrimPath, loadOrder) {
 
   const pluginsPath = path.join(getProfileDir(), 'plugins.txt')
   if (Array.isArray(loadOrder) && loadOrder.length > 0) {
-    const vanilla = new Set(['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm'])
-    const lines = loadOrder
-      .map(f => path.basename(f))
-      .filter(f => !vanilla.has(f.toLowerCase()))
-      .map(f => `*${f}`)
-    fs.writeFileSync(pluginsPath,
-      '# This file was automatically generated by Mod Organizer.\r\n' + lines.join('\r\n') + '\r\n')
+    setPlugins(loadOrder.map(f => `*${path.basename(f)}`))
   } else if (!fs.existsSync(pluginsPath)) {
     fs.writeFileSync(pluginsPath, '# This file was automatically generated by Mod Organizer.\r\n')
   }
@@ -361,15 +662,24 @@ async function downloadToDownloads(url, fileName, onProgress, { overwrite = fals
  * Extract an archive into a per-run cache dir (.x/<archiveId>) and return its
  * path. Re-extraction is skipped if the cache already exists this run.
  */
-function extractToCache(archivePath, archiveId) {
+async function extractToCache(archivePath, archiveId, signal, selectedPaths) {
   const dir = path.join(getRoot(), '.x', String(archiveId))
-  if (!fs.existsSync(lp(dir))) extractArchive(archivePath, dir)
-  return dir
+  _extractedFileIndexes.delete(dir)
+  try { fs.rmSync(lp(dir), { recursive: true, force: true }) } catch {}
+  try {
+    await extractArchive(archivePath, dir, signal, selectedPaths)
+    return dir
+  } catch (err) {
+    try { fs.rmSync(lp(dir), { recursive: true, force: true }) } catch {}
+    throw err
+  }
 }
 
 /** Remove a cached extraction (or the whole .x cache when no id is given). */
 function clearCache(archiveId) {
   const dir = archiveId == null ? path.join(getRoot(), '.x') : path.join(getRoot(), '.x', String(archiveId))
+  if (archiveId == null) _extractedFileIndexes.clear()
+  else _extractedFileIndexes.delete(dir)
   try { fs.rmSync(lp(dir), { recursive: true, force: true }) } catch {}
 }
 
@@ -383,65 +693,383 @@ function clearCache(archiveId) {
  *
  * @returns { folder } | { error }
  */
-function applyMod(modName, files, extractedDirs, modId, hash) {
+async function applyMod(modName, files, extractedDirs, modId, hash, signal, onProgress) {
   const folderName = String(modName).replace(/[<>:"/\\|?*]/g, '')
   const modDir     = path.join(getModsDir(), folderName)
   const buildDir   = path.join(getRoot(), '.b', String(_applyCounter++))
+  const totalBytes  = files.reduce((sum, f) => sum + directiveExpectedSize(f), 0)
+  let installedBytes = 0
 
   try { fs.rmSync(lp(buildDir), { recursive: true, force: true }) } catch {}
   try {
-    for (const f of files) writeDirective(f, buildDir, extractedDirs)
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i]
+      throwIfAborted(signal)
+      const report = bytesDone => {
+        if (!onProgress) return
+        onProgress({
+          modName: folderName,
+          file: f.to,
+          fileIndex: i + 1,
+          fileTotal: files.length,
+          installedBytes: installedBytes + bytesDone,
+          totalBytes,
+        })
+      }
+      const bytesWritten = await writeDirective(f, buildDir, extractedDirs, signal, report)
+      installedBytes += bytesWritten
+      report(0)
+    }
 
     fs.writeFileSync(lp(path.join(buildDir, 'meta.ini')), [
       '[General]', 'gameName=SkyrimSE', `modid=${modId || 0}`, `name=${folderName}`,
       'repository=Nexus', 'skyrpManaged=true', `skyrpHash=${hash || ''}`, '',
     ].join('\r\n'))
 
-    try { fs.rmSync(lp(modDir), { recursive: true, force: true }) } catch {}
-    fs.mkdirSync(lp(path.dirname(modDir)), { recursive: true })
-    fs.renameSync(lp(buildDir), lp(modDir))
+    await replaceDirectoryFromBuild(buildDir, modDir, signal)
     _log(`installed ${folderName} (${files.length} file(s))`)
     return { folder: folderName }
   } catch (err) {
     try { fs.rmSync(lp(buildDir), { recursive: true, force: true }) } catch {}
+    if (err.message === 'Cancelled') throw err
     return { error: err.message }   // existing modDir left intact
   }
 }
 let _applyCounter = 1
 
 /** Place game-root files (SKSE, preloaders) directly into the game folder. */
-function applyRootFiles(rootFiles, extractedDirs, gameDir) {
-  for (const f of rootFiles || []) writeDirective(f, gameDir, extractedDirs)
-  return (rootFiles || []).length
+async function applyRootFiles(rootFiles, extractedDirs, gameDir, signal, onProgress) {
+  const files = rootFiles || []
+  const totalBytes = files.reduce((sum, f) => sum + directiveExpectedSize(f), 0)
+  let installedBytes = 0
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i]
+    throwIfAborted(signal)
+    const report = bytesDone => {
+      if (!onProgress) return
+      onProgress({
+        file: f.to,
+        fileIndex: i + 1,
+        fileTotal: files.length,
+        installedBytes: installedBytes + bytesDone,
+        totalBytes,
+      })
+    }
+    const bytesWritten = await writeDirective(f, gameDir, extractedDirs, signal, report)
+    installedBytes += bytesWritten
+    report(0)
+  }
+  return files.length
 }
 
 /** Materialise a single directive (FromArchive or Inline) under destRoot, verifying sha256. */
-function writeDirective(f, destRoot, extractedDirs) {
+async function writeDirective(f, destRoot, extractedDirs, signal, onProgress) {
   const dest = path.join(destRoot, f.to.split('/').join(path.sep))
-  fs.mkdirSync(lp(path.dirname(dest)), { recursive: true })
+  await fsp.mkdir(lp(path.dirname(dest)), { recursive: true })
 
   if (f.inline != null) {
-    fs.writeFileSync(lp(dest), Buffer.from(f.inline, 'base64'))
+    const data = Buffer.from(f.inline, 'base64')
+    await fsp.writeFile(lp(dest), data)
+    if (onProgress) onProgress(data.length)
+    if (f.sha256 && sha256Buffer(data) !== String(f.sha256).toLowerCase()) {
+      throw new Error(`hash mismatch for ${f.to}`)
+    }
+    return data.length
   } else {
     const dir = extractedDirs[f.archive]
     if (!dir) throw new Error(`archive ${f.archive} was not extracted`)
-    const src = path.join(dir, f.from.split('/').join(path.sep))
-    if (!fs.existsSync(lp(src))) throw new Error(`"${f.from}" not found in archive ${f.archive}`)
-    fs.copyFileSync(lp(src), lp(dest))
+    const src = await resolveExtractedFile(dir, f.from, signal, f.sha256, f.size)
+    if (!src) throw new Error(`"${f.from}" not found in archive ${f.archive}`)
+    return await copyFileVerifying(src, dest, f.sha256 ? String(f.sha256).toLowerCase() : null, signal, onProgress)
+  }
+}
+
+function directiveExpectedSize(f) {
+  if (typeof f.size === 'number' && f.size >= 0) return f.size
+  if (f.inline != null) return Buffer.byteLength(String(f.inline), 'base64')
+  return 0
+}
+
+function sha256Buffer(data) {
+  return crypto.createHash('sha256').update(data).digest('hex')
+}
+
+async function copyFileVerifying(src, dest, expectedSha, signal, onProgress) {
+  const h = expectedSha ? crypto.createHash('sha256') : null
+  let copied = 0
+  let lastProgress = 0
+  const progressStream = new Transform({
+    transform(chunk, encoding, callback) {
+      if (h) h.update(chunk)
+      copied += chunk.length
+      if (onProgress) {
+        const now = Date.now()
+        if (now - lastProgress >= 500) {
+          lastProgress = now
+          onProgress(copied)
+        }
+      }
+      callback(null, chunk)
+    },
+  })
+
+  try {
+    await pipeline(
+      fs.createReadStream(lp(src), { highWaterMark: 1 << 20 }),
+      progressStream,
+      fs.createWriteStream(lp(dest)),
+      { signal })
+  } catch (err) {
+    try { fs.unlinkSync(lp(dest)) } catch {}
+    if (signal?.aborted) throw cancelledError()
+    throw err
   }
 
-  if (f.sha256 && sha256File(dest).toLowerCase() !== String(f.sha256).toLowerCase()) {
-    throw new Error(`hash mismatch for ${f.to}`)
+  if (onProgress) onProgress(copied)
+
+  if (h && h.digest('hex') !== expectedSha) {
+    try { fs.unlinkSync(lp(dest)) } catch {}
+    throw new Error(`hash mismatch for ${path.relative(getRoot(), dest) || dest}`)
   }
+  return copied
+}
+
+function archivePathKey(p) {
+  return String(p || '').split(/[\\/]+/).filter(Boolean).join('/').toLowerCase()
+}
+
+async function createArchiveIncludeList(archivePath, destDir, selectedPaths, signal) {
+  const selected = [...(selectedPaths || [])].map(p => String(p || '').trim()).filter(Boolean)
+  if (selected.length === 0) return null
+
+  const entries = await listArchiveEntries(archivePath, signal)
+  if (entries.length === 0) return null
+
+  const resolver = buildArchiveEntryResolver(entries)
+  const include = []
+  const missing = []
+  for (const wantedPath of selected) {
+    const key = archivePathKey(wantedPath)
+    const entry = resolver.exact.get(key) || resolver.suffix.get(key)
+    if (entry) include.push(entry)
+    else missing.push(wantedPath)
+  }
+
+  if (missing.length > 0) {
+    _log(`selective extraction disabled for ${path.basename(archivePath)}; ${missing.length} manifest path(s) did not match archive listing`)
+    return null
+  }
+
+  const unique = [...new Set(include)].sort((a, b) => a.localeCompare(b))
+  const includeList = path.join(os.tmpdir(), `vgr-7z-include-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`)
+  await fsp.writeFile(lp(includeList), unique.join('\n') + '\n', 'utf8')
+  _log(`selective extraction for ${path.basename(archivePath)}: ${unique.length}/${entries.length} archive file(s)`)
+  return includeList
+}
+
+const _archiveEntryCache = new Map()
+
+async function listArchiveEntries(archivePath, signal) {
+  throwIfAborted(signal)
+  let st
+  try { st = await fsp.stat(lp(archivePath)) } catch { return [] }
+  const cached = _archiveEntryCache.get(archivePath)
+  if (cached && cached.size === st.size && cached.mtimeMs === st.mtimeMs) return cached.entries
+
+  const stdout = await run7zListTechnical(archivePath, signal)
+  const entries = parse7zTechnicalListing(stdout)
+  _archiveEntryCache.set(archivePath, { size: st.size, mtimeMs: st.mtimeMs, entries })
+  return entries
+}
+
+function run7zListTechnical(archivePath, signal) {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const done = (err, stdout) => {
+      if (settled) return
+      settled = true
+      if (signal) signal.removeEventListener('abort', onAbort)
+      if (err) return reject(err)
+      resolve(stdout)
+    }
+
+    const child = execFile(get7z(), ['l', '-slt', '-sccUTF-8', lp(archivePath)], {
+      encoding: 'utf8',
+      timeout: 60_000,
+      maxBuffer: 64 << 20,
+      windowsHide: true,
+    }, done)
+    const onAbort = () => {
+      child.kill()
+      done(cancelledError())
+    }
+    if (signal) signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function parse7zTechnicalListing(stdout) {
+  const entries = []
+  let current = null
+  const flush = () => {
+    if (current?.path && current.folder === '-') entries.push(current.path)
+    current = null
+  }
+  for (const raw of String(stdout || '').split(/\r?\n/)) {
+    const line = raw.trimEnd()
+    if (!line) { flush(); continue }
+    const m = line.match(/^([^=]+) = (.*)$/)
+    if (!m) continue
+    const key = m[1].trim()
+    const value = m[2]
+    if (key === 'Path') {
+      if (current?.path) flush()
+      current = { path: value, folder: '' }
+    } else if (key === 'Folder' && current) {
+      current.folder = value
+    }
+  }
+  flush()
+  return entries
+}
+
+function buildArchiveEntryResolver(entries) {
+  const exact = new Map()
+  const suffix = new Map()
+  const ambiguous = new Set()
+  for (const entry of entries) {
+    const key = archivePathKey(entry)
+    if (!exact.has(key)) exact.set(key, entry)
+
+    const parts = key.split('/')
+    for (let i = 1; i < parts.length; i++) {
+      const suffixKey = parts.slice(i).join('/')
+      if (ambiguous.has(suffixKey)) continue
+      if (!suffix.has(suffixKey)) {
+        suffix.set(suffixKey, entry)
+      } else if (suffix.get(suffixKey) !== entry) {
+        suffix.delete(suffixKey)
+        ambiguous.add(suffixKey)
+      }
+    }
+  }
+  return { exact, suffix }
+}
+
+const _extractedFileIndexes = new Map()
+
+async function pathExists(p) {
+  try {
+    await fsp.access(lp(p))
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function getExtractedFileIndex(rootDir, signal) {
+  let cached = _extractedFileIndexes.get(rootDir)
+  if (cached) return cached
+
+  const indexPromise = buildExtractedFileIndex(rootDir, signal)
+  _extractedFileIndexes.set(rootDir, indexPromise)
+  try {
+    return await indexPromise
+  } catch (err) {
+    _extractedFileIndexes.delete(rootDir)
+    throw err
+  }
+}
+
+async function buildExtractedFileIndex(rootDir, signal) {
+  const exact = new Map()
+  const suffix = new Map()
+  const bySize = new Map()
+  const ambiguous = new Set()
+  const stack = [rootDir]
+
+  while (stack.length) {
+    throwIfAborted(signal)
+    const dir = stack.pop()
+    let entries
+    try { entries = await fsp.readdir(lp(dir), { withFileTypes: true }) } catch { continue }
+    for (const e of entries) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        stack.push(full)
+        continue
+      }
+
+      const rel = archivePathKey(path.relative(rootDir, full))
+      if (!exact.has(rel)) exact.set(rel, full)
+
+      let st
+      try { st = await fsp.stat(lp(full)) } catch { st = null }
+      if (st?.isFile()) {
+        const sameSize = bySize.get(st.size) || []
+        sameSize.push(full)
+        bySize.set(st.size, sameSize)
+      }
+
+      const parts = rel.split('/')
+      for (let i = 1; i < parts.length; i++) {
+        const key = parts.slice(i).join('/')
+        if (ambiguous.has(key)) continue
+        if (!suffix.has(key)) {
+          suffix.set(key, full)
+        } else if (suffix.get(key) !== full) {
+          suffix.delete(key)
+          ambiguous.add(key)
+        }
+      }
+    }
+  }
+
+  return { exact, suffix, bySize }
+}
+
+function lookupExtractedIndex(index, wanted) {
+  return index.exact.get(wanted) || index.suffix.get(wanted) || null
+}
+
+async function findExtractedFileByContent(index, expectedSha, expectedSize, signal) {
+  if (!expectedSha || typeof expectedSize !== 'number' || expectedSize < 0) return null
+  const candidates = index.bySize?.get(expectedSize) || []
+  const wantedSha = String(expectedSha).toLowerCase()
+  for (const candidate of candidates) {
+    throwIfAborted(signal)
+    try {
+      if (sha256File(candidate).toLowerCase() === wantedSha) return candidate
+    } catch { /* try next candidate */ }
+  }
+  return null
+}
+
+async function resolveExtractedFile(rootDir, archivePath, signal, expectedSha, expectedSize) {
+  const wanted = archivePathKey(archivePath)
+  const cached = _extractedFileIndexes.get(rootDir)
+  if (cached) {
+    const index = await cached
+    return lookupExtractedIndex(index, wanted) ||
+      await findExtractedFileByContent(index, expectedSha, expectedSize, signal)
+  }
+
+  const direct = path.join(rootDir, archivePath.split('/').join(path.sep))
+  if (await pathExists(direct)) return direct
+
+  const index = await getExtractedFileIndex(rootDir, signal)
+  return lookupExtractedIndex(index, wanted) ||
+    await findExtractedFileByContent(index, expectedSha, expectedSize, signal)
 }
 
 /**
  * Write the profile's modlist.txt from the manifest's order so MO2's
- * conflict-resolution priority matches the reference install. The order is
- * preserved verbatim (order[0] = top line = highest priority) and includes
- * separators (names ending in "_separator"), whose empty folders are recreated
- * here. Any user-added mods already in modlist.txt are preserved below the
- * managed set, so re-installing never wipes a player's own texture mods.
+ * conflict-resolution priority matches the reference install. MO2 renders the
+ * first managed lines with the highest left-pane priority, so launcher-owned
+ * override mods are inserted before the manifest order by the caller. The
+ * order includes separators (names ending in "_separator"), whose empty
+ * folders are recreated here. Any user-added mods already in modlist.txt are
+ * preserved below the managed set, so re-installing never wipes a player's own
+ * texture mods.
  */
 function setModlistOrder(order) {
   fs.mkdirSync(getProfileDir(), { recursive: true })
@@ -483,16 +1111,101 @@ function setModlistOrder(order) {
     '# This file was automatically generated by Mod Organizer.',
     ...order.map(n => `+${n}`),
     ...userLines,
+    ...REQUIRED_CC.modlistOrder.map(n => `*Creation Club: ${n}`),
+    ...DLC_MODLIST.map(n => `*DLC: ${n}`),
   ]
   fs.writeFileSync(modlistPath, lines.join('\r\n') + '\r\n')
 }
 
-/** Write the profile's plugins.txt from the manifest's captured esp/esm order. */
+function ensureHighPriorityMods(modNames) {
+  const requested = [...new Set((modNames || []).map(name => String(name || '').trim()).filter(Boolean))]
+  const missing = requested.filter(name => !fs.existsSync(path.join(getModsDir(), name)))
+  const present = requested.filter(name => !missing.includes(name))
+  if (present.length === 0) return { changed: false, missing }
+
+  const modlistPath = path.join(getProfileDir(), 'modlist.txt')
+  let lines
+  try {
+    lines = fs.readFileSync(modlistPath, 'utf8').split(/\r?\n/)
+  } catch {
+    lines = ['# This file was automatically generated by Mod Organizer.']
+  }
+
+  const wantedKeys = new Set(present.map(name => name.toLowerCase()))
+  const withoutWanted = lines.filter(line => {
+    if (!/^[+-]/.test(line)) return true
+    return !wantedKeys.has(line.slice(1).trim().toLowerCase())
+  })
+
+  let insertAt = withoutWanted.findIndex(line => /^[+\-*]/.test(line))
+  if (insertAt < 0) insertAt = withoutWanted.length
+
+  const next = [
+    ...withoutWanted.slice(0, insertAt),
+    ...present.map(name => `+${name}`),
+    ...withoutWanted.slice(insertAt),
+  ]
+  const changed = next.join('\n') !== lines.join('\n')
+  if (changed) {
+    fs.writeFileSync(modlistPath, next.filter((line, i) => line !== '' || i < next.length - 1).join('\r\n') + '\r\n')
+    _log(`moved high-priority mod(s) to top of modlist.txt: ${present.join(', ')}`)
+  }
+  return { changed, missing }
+}
+
+const PROFILE_FILE_HEADER = '# This file was automatically generated by Mod Organizer.'
+
+function pluginName(line) {
+  return path.basename(String(line || '').trim().replace(/^\*/, ''))
+}
+
+function enabledPluginLine(nameOrLine) {
+  const name = pluginName(nameOrLine)
+  return name ? `*${name}` : ''
+}
+
+function normalizePluginLines(pluginLines) {
+  const seen = new Set()
+  const lines = []
+  for (const raw of pluginLines || []) {
+    const name = pluginName(raw)
+    if (!name || name.startsWith('#')) continue
+    const key = name.toLowerCase()
+    if (FORCE_LOADED_PLUGIN_KEYS.has(key)) continue
+    if (seen.has(key)) continue
+    seen.add(key)
+    lines.push(`*${name}`)
+  }
+
+  const ussepIndex = lines.findIndex(line => pluginName(line).toLowerCase() === 'unofficial skyrim special edition patch.esp')
+  if (ussepIndex > 0) {
+    const [ussep] = lines.splice(ussepIndex, 1)
+    lines.unshift(ussep)
+  }
+  return lines
+}
+
+function writeProfileList(fileName, lines) {
+  fs.writeFileSync(path.join(getProfileDir(), fileName),
+    [PROFILE_FILE_HEADER, ...lines].join('\r\n') + '\r\n')
+}
+
+/** Write plugins.txt and loadorder.txt from the manifest's captured esp/esm order. */
 function setPlugins(pluginLines) {
   if (!Array.isArray(pluginLines) || pluginLines.length === 0) return
   fs.mkdirSync(getProfileDir(), { recursive: true })
-  fs.writeFileSync(path.join(getProfileDir(), 'plugins.txt'),
-    '# This file was automatically generated by Mod Organizer.\r\n' + pluginLines.join('\r\n') + '\r\n')
+  const requiredCcPlugins = REQUIRED_CC.pluginOrder
+    .map(enabledPluginLine)
+    .filter(Boolean)
+  const plugins = normalizePluginLines(pluginLines)
+  writeProfileList('plugins.txt', [
+    ...requiredCcPlugins,
+    ...plugins,
+  ])
+  writeProfileList('loadorder.txt', [
+    ...FORCE_LOADED_PLUGINS,
+    ...plugins.map(pluginName),
+  ])
 }
 
 // SKSE (edition-aware)
@@ -509,16 +1222,16 @@ function skseSourceFor(gameDir) {
 }
 
 /**
- * Install SKSE from its archive: skse64_loader.exe + skse64_*.dll go into the
- * game root; the Data payload (Scripts/*.pex, skse.ini) becomes a managed MO2
- * mod so the VFS serves it. Edition selection happens in skseSourceFor.
+ * Install SKSE from its archive into a managed MO2 mod. The loader and runtime
+ * DLLs live under Root/ so MO2 can launch the virtualized executable directly.
+ * Edition selection happens in skseSourceFor.
  *
  * @returns {{ folder: string|null }}  the scripts-mod folder, if one was made
  */
-function installSkse(archivePath, gameDir) {
+async function installSkse(archivePath, gameDir, signal) {
   const tmp = path.join(getRoot(), '.skse')
   try { fs.rmSync(lp(tmp), { recursive: true, force: true }) } catch {}
-  extractArchive(archivePath, tmp)
+  await extractArchive(archivePath, tmp, signal)
   try {
     // Descend a single wrapper folder (skse64_2_02_06/…) to the real root.
     let rootDir = tmp
@@ -530,27 +1243,28 @@ function installSkse(archivePath, gameDir) {
       break
     }
 
+    const folder = SKSE_MOD_NAME
+    const modDir = path.join(getModsDir(), folder)
+    const rootOut = path.join(modDir, 'Root')
+    try { fs.rmSync(lp(modDir), { recursive: true, force: true }) } catch {}
+    fs.mkdirSync(lp(rootOut), { recursive: true })
+
     let copied = 0
     for (const e of fs.readdirSync(rootDir, { withFileTypes: true })) {
       if (!e.isDirectory() && /\.(exe|dll)$/i.test(e.name)) {
-        fs.copyFileSync(path.join(rootDir, e.name), path.join(gameDir, e.name)); copied++
+        fs.copyFileSync(path.join(rootDir, e.name), path.join(rootOut, e.name)); copied++
       }
     }
     if (copied === 0) throw new Error('no skse64 exe/dll found in the SKSE archive')
 
-    let folder = null
     const dataDir = fs.readdirSync(rootDir, { withFileTypes: true })
       .find(e => e.isDirectory() && e.name.toLowerCase() === 'data')
     if (dataDir) {
-      folder = 'SKSE'
-      const modDir = path.join(getModsDir(), folder)
-      try { fs.rmSync(lp(modDir), { recursive: true, force: true }) } catch {}
-      fs.mkdirSync(lp(modDir), { recursive: true })
       const src = path.join(rootDir, dataDir.name)
       for (const entry of fs.readdirSync(src)) fs.renameSync(path.join(src, entry), path.join(modDir, entry))
-      fs.writeFileSync(path.join(modDir, 'meta.ini'),
-        ['[General]', 'gameName=SkyrimSE', 'modid=0', 'name=SKSE', 'repository=', 'skyrpManaged=true', ''].join('\r\n'))
     }
+    fs.writeFileSync(path.join(modDir, 'meta.ini'),
+      ['[General]', 'gameName=SkyrimSE', 'modid=0', `name=${folder}`, 'repository=', 'skyrpManaged=true', ''].join('\r\n'))
     _log(`SKSE installed (${copied} root file(s))`)
     return { folder }
   } finally {
@@ -636,21 +1350,47 @@ const _archiveHashCache = new Map()   // full -> { size, mtimeMs, hash }
 const _archiveListCache = new Map()   // full -> { size, mtimeMs, listing }
 
 /** Async streaming SHA-256 that yields to the event loop, so the UI stays responsive mid-scan. */
-function sha256FileAsync(p) {
+function sha256FileAsync(p, onProgress) {
   return new Promise((resolve, reject) => {
     const h = crypto.createHash('sha256')
     const s = fs.createReadStream(lp(p), { highWaterMark: 1 << 20 })
-    s.on('data', chunk => h.update(chunk))
-    s.on('end', () => resolve(h.digest('hex')))
+    let read = 0
+    let lastProgress = 0
+    s.on('data', chunk => {
+      h.update(chunk)
+      if (!onProgress) return
+      read += chunk.length
+      const now = Date.now()
+      if (now - lastProgress >= 500) {
+        lastProgress = now
+        onProgress(read)
+      }
+    })
+    s.on('end', () => {
+      if (onProgress) onProgress(read)
+      resolve(h.digest('hex'))
+    })
     s.on('error', reject)
   })
 }
 
+async function verifyArchiveAsync(archivePath, sha256, onProgress) {
+  try { return (await sha256FileAsync(archivePath, onProgress)).toLowerCase() === String(sha256).toLowerCase() }
+  catch { return false }
+}
+
+const mb = n => (n / 1024 / 1024).toFixed(1)
+
+function archiveVerifyMessage(name, received, total) {
+  if (total > 0) return `Verifying ${name}... ${mb(received)} / ${mb(total)} MB`
+  return `Verifying ${name}... ${mb(received)} MB`
+}
+
 // Hash a file through the cache; a changed size/mtime (e.g. a finishing copy) re-hashes.
-async function hashCached(full, st) {
+async function hashCached(full, st, onProgress) {
   const c = _archiveHashCache.get(full)
   if (c && c.size === st.size && c.mtimeMs === st.mtimeMs) return c.hash
-  const hash = (await sha256FileAsync(full)).toLowerCase()
+  const hash = (await sha256FileAsync(full, onProgress)).toLowerCase()
   _archiveHashCache.set(full, { size: st.size, mtimeMs: st.mtimeMs, hash })
   return hash
 }
@@ -679,18 +1419,21 @@ function listDownloadArchives() {
  * null. Matches by content so manually moved ("Slow Download") files are found
  * regardless of filename; the size pre-filter avoids hashing partials/unrelated files.
  */
-async function findArchiveByHash(hash, size) {
+async function findArchiveByHash(hash, size, onProgress) {
   if (!hash) return null
   const want = String(hash).toLowerCase()
   for (const a of listDownloadArchives()) {
     if (typeof size === 'number' && size > 0 && a.st.size !== size) continue
-    try { if (await hashCached(a.full, a.st) === want) return a.full } catch { /* mid-copy or locked; caller retries */ }
+    try {
+      const progress = onProgress ? received => onProgress(a.file, received, a.st.size) : null
+      if (await hashCached(a.full, a.st, progress) === want) return a.full
+    } catch { /* mid-copy or locked; caller retries */ }
   }
   return null
 }
 
 /**
- * 7za listing of an archive, or null when unreadable (locked, truncated, or
+ * 7-Zip listing of an archive, or null when unreadable (locked, truncated, or
  * not an archive). Successful listings are cached per size/mtime so an
  * unchanged file isn't re-listed on every scan.
  */
@@ -698,7 +1441,7 @@ function listArchiveContents(archivePath, st) {
   const c = _archiveListCache.get(archivePath)
   if (c && c.size === st.size && c.mtimeMs === st.mtimeMs) return Promise.resolve(c.listing)
   return new Promise(resolve => {
-    execFile(get7za(), ['l', lp(archivePath)],
+    execFile(get7z(), ['l', '-sccUTF-8', lp(archivePath)],
       { encoding: 'utf8', timeout: 60_000, maxBuffer: 64 << 20, windowsHide: true },
       (err, stdout) => {
         if (err) return resolve(null)
@@ -713,7 +1456,7 @@ function listArchiveContents(archivePath, st) {
  * `hash` items match by content, whatever the filename; their `namePattern`
  * only flags a look-alike file that fails verification in the status message.
  * `namePattern`-only items match by filename (pre-existing files included) and
- * must yield a readable 7za listing matching every `expect` regex, so mid-copy
+ * must yield a readable 7-Zip listing matching every `expect` regex, so mid-copy
  * files or the wrong archive are never claimed. Items with neither never
  * match: guessing an unidentified file risks extracting it into the game root.
  * The deadline slides while the user is actively staging files (a file appears
@@ -763,7 +1506,13 @@ function waitForDownloads(wanted, onProgress, signal, intervalMs = 1000, timeout
             continue
           }
           try {
-            if (await hashCached(a.full, a.st) !== String(w.hash).toLowerCase()) {
+            const progress = onProgress
+              ? received => onProgress(
+                  found.filter(Boolean).length,
+                  wanted.length,
+                  archiveVerifyMessage(a.file, received, a.st.size))
+              : null
+            if (await hashCached(a.full, a.st, progress) !== String(w.hash).toLowerCase()) {
               why(i, a, `sha256 mismatch${nameHit ? ' - name matches, so likely a different version' : ''}`)
               if (nameHit) suspect.push(a)
               continue
@@ -773,7 +1522,7 @@ function waitForDownloads(wanted, onProgress, signal, intervalMs = 1000, timeout
           if (consumed.has(a.full)) continue
           if (!w.namePattern.test(a.file)) { why(i, a, `filename does not match ${w.namePattern}`); continue }
           const listing = await listArchiveContents(a.full, a.st)   // null while locked or incomplete
-          if (listing == null) { why(i, a, '7za could not list the archive (locked, incomplete, or not an archive)'); continue }
+          if (listing == null) { why(i, a, '7-Zip could not list the archive (locked, incomplete, or not an archive)'); continue }
           const missing = [].concat(w.expect || []).filter(re => !re.test(listing))
           if (missing.length > 0) {   // right mod, wrong file (e.g. Part 1 vs 2)
             why(i, a, `archive lacks expected content: ${missing.map(re => re.source).join(', ')}`)
@@ -804,12 +1553,14 @@ function waitForDownloads(wanted, onProgress, signal, intervalMs = 1000, timeout
       try { await scan() } catch { /* transient fs error; retry next tick */ }
       if (progressed) deadline = Date.now() + timeoutMs        // the user is actively staging files
       const remaining = wanted.filter((_, i) => !found[i]).map(w => w.name || 'download')
+      const remainingText = remaining.map((name, i) =>
+        `${name}${i < remaining.length - 1 ? ',' : ''}`).join('\n')
       const note = mismatched.length
         ? ` (${mismatched.map(f => `${f} is not the exact file the server expects - download it through its link on the downloads page, which pins the right version; if that version is gone from Nexus the server admin must update the modlist`).join('; ')})`
         : ''
       if (onProgress) {
         onProgress(wanted.length - remaining.length, wanted.length,
-          remaining.length ? `Waiting for downloads: ${remaining.join(', ')}${note}` : 'All downloads received')
+          remaining.length ? `Waiting for downloads:\n${remainingText}${note}` : 'All downloads received')
       }
       if (remaining.length === 0) return resolve(found)
       if (Date.now() > deadline || Date.now() > hardDeadline) {
@@ -848,6 +1599,7 @@ function disableCcContent(gamePath, serverLoadOrder) {
   for (const name of names) {
     const l = name.toLowerCase()
     if (!(CC_FILE_RE.test(l) || CC_EXTRAS.has(l))) continue
+    if (REQUIRED_CC_FILES.has(l)) continue
     if (keep.has(l)) continue   // the server actually uses it - leave it alone
     try {
       fs.mkdirSync(lp(destDir), { recursive: true })
@@ -900,22 +1652,27 @@ module.exports = {
   getRoot,
   getDownloadsDir,
   getModsDir,
+  getClientModName,
   getProfileDir,
   isInstalled,
   ensureInstalled,
+  ensureMo2Plugins,
   ensureInstance,
   registerNxmHandler,
   downloadToDownloads,
   findDownloadByFileId,
   findArchiveByHash,
   verifyArchive,
+  verifyArchiveAsync,
   sha256File,
   extractToCache,
   clearCache,
+  installClientZipAsMod,
   applyMod,
   readModHash,
   applyRootFiles,
   setModlistOrder,
+  ensureHighPriorityMods,
   setPlugins,
   skseSourceFor,
   installSkse,

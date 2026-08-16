@@ -20,8 +20,16 @@ const http   = require('http')
 const fs     = require('fs')
 const path   = require('path')
 const crypto = require('crypto')
+const { Transform } = require('stream')
+const { pipeline } = require('stream/promises')
 
-const GAME = 'skyrimspecialedition'
+const DEFAULT_GAME = 'skyrimspecialedition'
+
+function nexusGameSlug(gameName) {
+  if (/^skyrim$/i.test(String(gameName || '').trim())) return 'skyrim'
+  if (/^skyrimse$/i.test(String(gameName || '').trim())) return 'skyrimspecialedition'
+  return DEFAULT_GAME
+}
 
 // Nexus API policy: every request must carry the application name and version.
 // Derived from package.json so the version stays accurate and forks inherit their own identity.
@@ -130,8 +138,8 @@ function oauthUserInfo(accessToken, oauthBase = OAUTH_BASE) {
  * PREMIUM ONLY: generate a direct download link for a specific file.
  * Returns the first CDN URI.
  */
-async function getDownloadLink(auth, nexusId, fileId) {
-  const links = await apiGet(auth, `/v1/games/${GAME}/mods/${nexusId}/files/${fileId}/download_link.json`)
+async function getDownloadLink(auth, nexusId, fileId, gameName) {
+  const links = await apiGet(auth, `/v1/games/${nexusGameSlug(gameName)}/mods/${nexusId}/files/${fileId}/download_link.json`)
   if (!Array.isArray(links) || links.length === 0 || !links[0].URI) {
     throw new Error('Nexus returned no download link (premium account required).')
   }
@@ -140,35 +148,107 @@ async function getDownloadLink(auth, nexusId, fileId) {
 
 // Download
 
-/** Stream a URL to destPath, following redirects. */
-function downloadFile(url, destPath, onProgress, redirectsLeft = 5) {
+const DOWNLOAD_RETRY_ATTEMPTS = 5
+const DOWNLOAD_TIMEOUT_MS = 180_000
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isTransientDownloadError(err) {
+  return ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'ERANGE_RESTART'].includes(err?.code) ||
+    /socket hang up|read ECONNRESET|mod download timed out/i.test(err?.message || '')
+}
+
+function contentRangeTotal(value) {
+  const match = String(value || '').match(/bytes\s+\d+-\d+\/(\d+|\*)/i)
+  if (!match || match[1] === '*') return 0
+  return Number(match[1]) || 0
+}
+
+function downloadFileOnce(url, destPath, onProgress, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: APP_HEADERS }, res => {
+    let target
+    try { target = new URL(url) }
+    catch (err) { return reject(err) }
+
+    const existingSize = fs.existsSync(destPath) ? fs.statSync(destPath).size : 0
+    const headers = {
+      ...APP_HEADERS,
+      ...(existingSize > 0 ? { Range: `bytes=${existingSize}-` } : {}),
+    }
+    const transport = target.protocol === 'https:' ? https : target.protocol === 'http:' ? http : null
+    if (!transport) return reject(new Error(`Unsupported download URL protocol: ${target.protocol}`))
+
+    const req = transport.get(target, { headers }, res => {
+      ;(async () => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume()
-        if (redirectsLeft <= 0) return reject(new Error('Too many redirects'))
-        return resolve(downloadFile(res.headers.location, destPath, onProgress, redirectsLeft - 1))
-      }
-      if (res.statusCode !== 200) {
-        res.resume()
-        return reject(new Error(`HTTP ${res.statusCode} downloading mod archive`))
+        if (redirectsLeft <= 0) throw new Error('Too many redirects')
+        await downloadFileOnce(new URL(res.headers.location, target).href, destPath, onProgress, redirectsLeft - 1)
+        return
       }
 
-      const total = parseInt(res.headers['content-length'] || '0', 10)
-      let received = 0
-      const file = fs.createWriteStream(destPath)
-      res.on('data', chunk => {
-        received += chunk.length
-        if (onProgress) onProgress(received, total)
+      if (existingSize > 0 && res.statusCode === 416) {
+        res.resume()
+        try { fs.unlinkSync(destPath) } catch {}
+        const err = new Error('Server rejected resume range; restarting download')
+        err.code = 'ERANGE_RESTART'
+        throw err
+      }
+
+      const isResume = existingSize > 0 && res.statusCode === 206
+      if (res.statusCode !== 200 && res.statusCode !== 206) {
+        res.resume()
+        throw new Error(`HTTP ${res.statusCode} downloading mod archive`)
+      }
+
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+      const total = isResume
+        ? (contentRangeTotal(res.headers['content-range']) || existingSize + contentLength)
+        : contentLength
+      let received = isResume ? existingSize : 0
+
+      if (onProgress) onProgress(received, total)
+
+      const progress = new Transform({
+        transform(chunk, _encoding, callback) {
+          received += chunk.length
+          if (onProgress) onProgress(received, total)
+          callback(null, chunk)
+        }
       })
-      res.pipe(file)
-      file.on('finish', () => file.close(resolve))
-      file.on('error', err => { try { fs.unlinkSync(destPath) } catch {} reject(err) })
-      res.on('error',  err => { try { fs.unlinkSync(destPath) } catch {} reject(err) })
+
+      await pipeline(res, progress, fs.createWriteStream(destPath, { flags: isResume ? 'a' : 'w' }))
+      })().then(resolve, reject)
     })
     req.on('error', reject)
-    req.setTimeout(120_000, () => { req.destroy(); reject(new Error('Mod download timed out')) })
+    req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+      const err = new Error('Mod download timed out')
+      err.code = 'ETIMEDOUT'
+      req.destroy(err)
+    })
   })
+}
+
+/** Stream a URL to destPath, following redirects and resuming transient failures. */
+async function downloadFile(url, destPath, onProgress, redirectsLeft = 5) {
+  let lastErr
+  for (let attempt = 1; attempt <= DOWNLOAD_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await downloadFileOnce(url, destPath, onProgress, redirectsLeft)
+      return
+    } catch (err) {
+      lastErr = err
+      if (attempt >= DOWNLOAD_RETRY_ATTEMPTS || !isTransientDownloadError(err)) {
+        try { fs.unlinkSync(destPath) } catch {}
+        throw err
+      }
+      _log(`download interrupted (${err.message}); retrying ${attempt + 1}/${DOWNLOAD_RETRY_ATTEMPTS}`)
+      await sleep(1000 * attempt)
+    }
+  }
+  throw lastErr
 }
 
 // File download
@@ -179,7 +259,7 @@ function downloadFile(url, destPath, onProgress, redirectsLeft = 5) {
  * PREMIUM ONLY (uses the download-link API).
  */
 async function downloadFileEntry(auth, nexusId, file, downloadsDir, onProgress) {
-  const url         = await getDownloadLink(auth, nexusId, file.fileId)
+  const url         = await getDownloadLink(auth, nexusId, file.fileId, file.gameName)
   const ext         = path.extname(file.fileName) || '.zip'
   const base        = path.basename(file.fileName, ext)
   const archiveName = `${base}-${nexusId}-${file.fileId}${ext}`

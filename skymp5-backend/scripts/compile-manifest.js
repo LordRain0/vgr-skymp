@@ -5,7 +5,9 @@
  * Author overrides live in data/manifest-sources.json (all optional):
  *   { "urls": { "<archiveName>": "https://direct-download/…" }, "rootInclude": ["skse64_loader.exe", …] }
  * `urls` gives a download source to non-Nexus archives; `rootInclude` lists
- * game-root files to capture (skse64_*.exe/.dll are picked up automatically).
+ * game-root files to capture. Only rootInclude entries are captured - nothing
+ * is picked up from the game root automatically (SKSE is installed separately
+ * by the launcher).
  */
 
 const fs      = require('fs')
@@ -14,9 +16,18 @@ const crypto  = require('crypto')
 const zlib    = require('zlib')
 const { execFileSync } = require('child_process')
 const BUNDLED_SEVEN = require('7zip-bin').path7za
-const SEVEN   = process.env.SKYRP_7Z && fs.existsSync(process.env.SKYRP_7Z)
-  ? process.env.SKYRP_7Z
-  : BUNDLED_SEVEN
+// Prefer SKYRP_7Z, then an installed full 7-Zip (the bundled 7za cannot read
+// .rar archives - those would be silently skipped and their files inlined),
+// then the bundled 7za as a last resort.
+const SEVEN = (() => {
+  if (process.env.SKYRP_7Z && fs.existsSync(process.env.SKYRP_7Z)) return process.env.SKYRP_7Z
+  for (const dir of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
+    if (!dir) continue
+    const full = path.join(dir, '7-Zip', '7z.exe')
+    if (fs.existsSync(full)) return full
+  }
+  return BUNDLED_SEVEN
+})()
 
 // Args
 
@@ -35,6 +46,7 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2))
 if (!args.mo2) {
   console.error('Usage: node scripts/compile-manifest.js --mo2 <MO2 root> [--game <game root>] [--profile SkyRP]')
+  console.error('       (via npm, pass args after --: npm run compile-manifest -- --mo2 <MO2 root>)')
   process.exit(1)
 }
 
@@ -61,6 +73,18 @@ try {
     console.error(`manifest-sources.json is unreadable (${err.message}) - fix or delete it, refusing to build with overrides silently ignored`)
     process.exit(1)
   }
+}
+
+// urls keys are archive filenames; match them case-insensitively like every
+// other archive-name comparison, so a casing mismatch cannot silently
+// downgrade an archive to source 'manual'.
+const URL_OVERRIDES_LC = Object.fromEntries(
+  Object.entries(sources.urls || {})
+    .filter(([k, v]) => typeof v === 'string' && !k.startsWith('//'))
+    .map(([k, v]) => [k.toLowerCase(), v])
+)
+function urlOverrideFor(name) {
+  return URL_OVERRIDES_LC[String(name || '').toLowerCase()] || null
 }
 
 // Hash helpers
@@ -308,7 +332,7 @@ async function main() {
       fileId: meta.fileId,
       ...(meta.gameName ? { gameName: meta.gameName } : {}),
     }
-    else if (sources.urls[name])   source = { type: 'url', url: sources.urls[name] }
+    else if (urlOverrideFor(name)) source = { type: 'url', url: urlOverrideFor(name) }
     else                           source = { type: 'manual', name }
 
     const id   = 'a' + (archives.length + 1)

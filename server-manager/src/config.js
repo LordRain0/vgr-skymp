@@ -61,7 +61,9 @@ module.exports = {
   // Not present on this VPS by default - point VGR_MO2_ROOT at one to use it.
   mo2Root:  process.env.VGR_MO2_ROOT  || 'X:\\MO2',
   gameRoot: process.env.VGR_GAME_ROOT || 'X:\\GOG Games\\Skyrim Anniversary Edition',
-  profile:  process.env.VGR_MO2_PROFILE || 'Default',
+  // Default must match compile-manifest.js / BuildManifest.bat ('SkyRP') so
+  // every invocation path builds against the same profile.
+  profile:  process.env.VGR_MO2_PROFILE || 'SkyRP',
 
   paths: {
     backend:      path.join(repoRoot, 'skymp5-backend'),

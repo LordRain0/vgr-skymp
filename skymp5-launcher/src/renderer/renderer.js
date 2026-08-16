@@ -1160,7 +1160,16 @@ async function loadNews() {
 
 // Modlist
 
-const NEXUS_BASE = 'https://www.nexusmods.com/skyrimspecialedition/mods'
+function nexusGameSlug(gameName) {
+  const value = String(gameName || '').trim().toLowerCase()
+  if (value === 'skyrim') return 'skyrim'
+  if (value === 'skyrimse') return 'skyrimspecialedition'
+  return 'skyrimspecialedition'
+}
+
+function nexusModUrl(mod) {
+  return `https://www.nexusmods.com/${nexusGameSlug(mod.gameName)}/mods/${mod.nexusId}`
+}
 
 function buildModItem(mod) {
   const item = document.createElement('div')
@@ -1200,7 +1209,7 @@ function buildModItem(mod) {
     link.href        = '#'
     link.addEventListener('click', e => {
       e.preventDefault()
-      window.electronAPI.openExternal(`${NEXUS_BASE}/${mod.nexusId}`)
+      window.electronAPI.openExternal(nexusModUrl(mod))
     })
     item.appendChild(link)
   }
