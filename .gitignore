@@ -54,3 +54,4 @@ skymp5-backend/data/auth-states.json
 /local-dev
 tools/voice-test/.env
 *.bak-before-*
+skymp5-backend/data/public-keys.json
