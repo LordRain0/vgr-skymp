@@ -196,7 +196,14 @@ function readDownloadMeta(name) {
       fileId:   fileId ? Number(fileId) : 0,
       gameName: normalizeGameName(gameName),
     }
-  } catch { return { modId: 0, fileId: 0, gameName: '' } }
+  } catch { /* no .meta sidecar - fall through to the filename pattern */ }
+  // The launcher's own premium downloads have no .meta sidecar but embed the
+  // ids in their deterministic name: <base>-<modId>-<fileId>.<7z|zip|rar>
+  // (nexus.downloadFileEntry). Recognizing it lets a launcher-managed MO2
+  // instance serve as the manifest reference.
+  const m = name.match(/-(\d+)-(\d+)\.(7z|zip|rar)$/i)
+  if (m) return { modId: Number(m[1]), fileId: Number(m[2]), gameName: '' }
+  return { modId: 0, fileId: 0, gameName: '' }
 }
 
 /** Read a mod folder's MO2 meta.ini for its Nexus metadata. */
@@ -412,7 +419,20 @@ async function main() {
     return fallbackGame
   }
 
+  // Mods delivered by the launcher's own flows, not by the manifest: the SkyMP
+  // client mod comes from the client zip (/api/files) and SKSE is installed by
+  // the launcher itself. They STAY in `order` (setModlistOrder deletes managed
+  // mods missing from the order it is given) but must not appear in mods[].
+  // Extendable via "excludeMods" in data/manifest-sources.json.
+  const EXCLUDED_MODS = new Set([
+    'vengeful realms - client',
+    'skyrim script extender (skse64)',
+    ...(Array.isArray(sources.excludeMods) ? sources.excludeMods : []).map(n => String(n).toLowerCase()),
+  ])
+  const excludedSeen = []
+
   for (const modName of order) {
+    if (EXCLUDED_MODS.has(modName.toLowerCase())) { excludedSeen.push(modName); continue }
     const modDir = path.join(MODS, modName)
     if (!fs.existsSync(modDir)) continue
     const rels = walk(modDir).filter(r => r.toLowerCase() !== 'meta.ini')
@@ -428,6 +448,9 @@ async function main() {
       files,
       hash: contentHash(files),
     })
+  }
+  if (excludedSeen.length) {
+    console.log(`skipped launcher-delivered mods (kept in order, not in mods[]): ${excludedSeen.join(', ')}`)
   }
 
   // 5. Optional game-root files (preloaders, etc.)
