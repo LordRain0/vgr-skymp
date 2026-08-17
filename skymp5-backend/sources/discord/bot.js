@@ -170,6 +170,13 @@ function start() {
     console.warn('[discord-bot] DISCORD_BOT_TOKEN not set - role-based access checks will be unavailable')
     return
   }
+  if (!config.discordGuildId) {
+    // getMemberRoles fails closed (empty roles) without a guild - with a
+    // whitelist role configured that silently denies EVERY player, so make
+    // the misconfiguration impossible to miss.
+    console.error('[discord-bot] DISCORD_GUILD_ID not set - role lookups will return no roles' +
+      (config.whitelistRoleId ? ' and WHITELIST_ROLE_ID is set, so ALL players will be denied' : ''))
+  }
   client.login(config.discordBotToken).catch(err => {
     console.error('[discord-bot] login failed:', err.message)
   })
