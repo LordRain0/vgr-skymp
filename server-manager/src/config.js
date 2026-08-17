@@ -32,6 +32,10 @@ const serverSettings = process.env.VGR_SERVER_SETTINGS
   || readEnv('SERVER_SETTINGS_PATH')
   || 'C:\\skymp\\server\\server-settings.json'
 
+// Voice media server (nssm). Listed on the Console tab and also started
+// best-effort alongside the game service.
+const liveKitService = 'VgrLiveKit'
+
 // Build output tree (esbuild/electron-builder targets ../build via the package
 // scripts; CMake also pins its binary dir here).
 const buildDir = process.env.VGR_BUILD_DIR || path.join(repoRoot, 'build')
@@ -51,11 +55,11 @@ module.exports = {
   services: [
     { key: 'nginx',   name: 'vengefulrealmsNginx', legacyNames: ['SkyrpNginx', 'SkyMPNginx'],       label: 'Nginx'   },
     { key: 'backend', name: 'SkyrpBackend',        legacyNames: ['VgrBackend'],                     label: 'Backend' },
+    { key: 'livekit', name: liveKitService,                                                         label: 'LiveKit' },
     { key: 'game',    name: 'VgrGameServer',       legacyNames: ['SkyrpGameServer', 'VGRGameServer'], label: 'Game'  },
   ],
 
-  // Voice media server started best-effort alongside the game service.
-  liveKitService: 'VgrLiveKit',
+  liveKitService,
 
   // Reference MO2 install used to compile the manifest (the Modlist tab).
   // Defaults match the production VPS (C:\MO2, launcher-managed layout with

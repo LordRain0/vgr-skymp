@@ -95,8 +95,8 @@ async function act(svc, verb) {
     if (svc.key === 'game' && verb === 'start') extra = await startLiveKitAlongside()
     return { ok: true, text: (verb === 'stop' ? 'stopped' : 'started') + extra }
   }
-  // The game server has no service until tools/install-game-service.bat is run.
-  if (svc.key === 'game' && !/^SERVICE_/.test(r.status || '')) {
+  // Game and LiveKit have no service until tools/install-game-service.bat is run.
+  if ((svc.key === 'game' || svc.key === 'livekit') && !/^SERVICE_/.test(r.status || '')) {
     return { ok: false, text: `${verb} failed - no ${svc.name} service installed (run server-manager\\tools\\install-game-service.bat once, as Administrator)` }
   }
   return { ok: false, text: `${verb} failed (status: ${r.status || 'unknown'})` }
