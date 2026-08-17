@@ -633,21 +633,41 @@ function whitelistSet() {
 }
 
 // The backend's players module is async (MongoDB-backed) on this box.
+// It returns one entry per ACTIVE CHARACTER (per profileId); the Players tab
+// shows accounts, so entries are grouped by discordId with everything unioned.
+function groupPlayersByDiscordId(entries) {
+  const byDiscord = new Map()
+  for (const p of entries) {
+    const key = String(p.discordId)
+    let acc = byDiscord.get(key)
+    if (!acc) {
+      acc = { ...p, profileIds: [], rpCharacters: [] }
+      byDiscord.set(key, acc)
+    }
+    if (p.profileId != null) acc.profileIds.push(p.profileId)
+    if (p.character && p.character.name) acc.rpCharacters.push(p.character.name)
+    if (!acc.displayName && p.displayName) acc.displayName = p.displayName
+    if (!acc.username && p.username) acc.username = p.username
+  }
+  return [...byDiscord.values()]
+}
+
 ipcMain.handle('players:list', async () => {
   try {
-    const players = await backendModule('players').list()
+    const accounts = groupPlayersByDiscordId(await backendModule('players').list())
     const wl = whitelistSet()
     const chars = await readCharactersByProfile()
     return {
       ok: true,
       charError: _charError || undefined,
-      players: players.map(p => ({
+      players: accounts.map(p => ({
         discordId: p.discordId,
-        profileId: p.profileId,
-        name: p.displayName || p.username || (p.character && p.character.name) || `Player ${p.profileId}`,
+        profileId: p.profileIds[0] ?? p.profileId ?? null,
+        profileIds: p.profileIds,
+        name: p.displayName || p.username || p.rpCharacters[0] || `Player ${p.profileIds[0] ?? '?'}`,
         whitelisted: wl.has(String(p.discordId)),
-        characters: (chars.get(Number(p.profileId)) || []).map(c => c.name),
-        rpCharacter: p.character ? p.character.name : null,
+        characters: p.profileIds.flatMap(id => (chars.get(Number(id)) || []).map(c => c.name)),
+        rpCharacter: p.rpCharacters.join(', ') || null,
       })),
     }
   } catch (err) { return { ok: false, error: err.message } }
@@ -655,8 +675,8 @@ ipcMain.handle('players:list', async () => {
 
 ipcMain.handle('players:detail', async (_e, discordId) => {
   try {
-    const players = await backendModule('players').list()
-    const p = players.find(x => String(x.discordId) === String(discordId))
+    const accounts = groupPlayersByDiscordId(await backendModule('players').list())
+    const p = accounts.find(x => String(x.discordId) === String(discordId))
     if (!p) return { ok: false, error: 'player not found' }
     const wl = whitelistSet()
     const chars = await readCharactersByProfile()
@@ -664,7 +684,9 @@ ipcMain.handle('players:detail', async (_e, discordId) => {
       ok: true,
       charError: _charError || undefined,
       player: {
-        discordId: p.discordId, profileId: p.profileId,
+        discordId: p.discordId,
+        profileId: p.profileIds[0] ?? p.profileId ?? null,
+        profileIds: p.profileIds,
         username: p.username || '', displayName: p.displayName || '',
         avatar: p.avatar || null, notes: p.notes || '',
         createdAt: p.createdAt || null, updatedAt: p.updatedAt || null, lastSeenAt: p.lastSeenAt || null,
@@ -673,7 +695,7 @@ ipcMain.handle('players:detail', async (_e, discordId) => {
       factions: p.assignments || [],
       permissions: p.factionPermissions || [],
       gameFactions: p.gameFactions || [],
-      characters: chars.get(Number(p.profileId)) || [],
+      characters: p.profileIds.flatMap(id => chars.get(Number(id)) || []),
     }
   } catch (err) { return { ok: false, error: err.message } }
 })

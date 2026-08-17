@@ -11,6 +11,9 @@
     "DynDOLOD_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/DynDOLOD_Output.7z",
     "CS_ShaderCache_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/CS_ShaderCache_Output.7z"
   },
+  "// gameNames": "Optional per-archive Nexus domain override, keyed by archive filename: 'Skyrim' (classic/LE) or 'SkyrimSE'. Wins over the automatic form-43 plugin detection.",
+  "gameNames": {
+  },
   "// rootInclude": "Game-root files (relative to --game) to capture. ONLY files listed here are captured - nothing is auto-detected. SKSE itself is installed separately by the launcher.",
   "rootInclude": [
 	

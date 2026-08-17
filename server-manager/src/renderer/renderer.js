@@ -450,7 +450,9 @@ function renderPlayerList() {
     String(p.discordId).toLowerCase().includes(q) ||
     (p.characters || []).some(c => String(c).toLowerCase().includes(q)) ||
     String(p.rpCharacter || '').toLowerCase().includes(q))
-  if ($('#players-online-only').checked) filtered = filtered.filter(p => onlineProfileIds.has(Number(p.profileId)))
+  const anyOnline = p => (p.profileIds && p.profileIds.length ? p.profileIds : [p.profileId])
+    .some(id => onlineProfileIds.has(Number(id)))
+  if ($('#players-online-only').checked) filtered = filtered.filter(anyOnline)
 
   ul.innerHTML = ''
   $('#players-count').textContent = `${filtered.length} / ${allPlayers.length}`
@@ -461,7 +463,7 @@ function renderPlayerList() {
     if (p.discordId === selectedDiscordId) li.classList.add('selected')
     const main = el('div', { className: 'pl-main' })
     main.appendChild(el('span', { className: 'pl-name' }, esc(p.name)))
-    if (onlineProfileIds.has(Number(p.profileId))) main.appendChild(el('span', { className: 'badge online' }, 'online'))
+    if (anyOnline(p)) main.appendChild(el('span', { className: 'badge online' }, 'online'))
     if (p.whitelisted) main.appendChild(el('span', { className: 'badge' }, 'whitelist'))
     li.appendChild(main)
     const charNames = (p.characters && p.characters.length) ? p.characters : (p.rpCharacter ? [p.rpCharacter] : [])

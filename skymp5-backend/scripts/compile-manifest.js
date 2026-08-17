@@ -431,6 +431,36 @@ async function main() {
   ])
   const excludedSeen = []
 
+  // Classic-Skyrim (Oldrim) detection. LE plugins carry form version 43 (or
+  // lower) in their TES4 header; SSE plugins are 44+. A mod downloaded from
+  // the classic-Skyrim Nexus must be fetched from the /skyrim/ domain or the
+  // download API 404s - and with launcher-named archives there is no .meta
+  // sidecar left to say which domain it came from, so the plugin form version
+  // is the only surviving evidence. Explicit per-archive overrides win:
+  // manifest-sources.json "gameNames": { "<archive filename>": "Skyrim"|"SkyrimSE" }.
+  function pluginFormVersion(file) {
+    // TES4 record header: Type[4] DataSize[4] Flags[4] FormID[4] VC[4] FormVersion[2]
+    try {
+      const fd = fs.openSync(file, 'r')
+      try {
+        const buf = Buffer.alloc(22)
+        if (fs.readSync(fd, buf, 0, 22, 0) < 22) return 0
+        if (buf.toString('ascii', 0, 4) !== 'TES4') return 0
+        return buf.readUInt16LE(20)
+      } finally { fs.closeSync(fd) }
+    } catch { return 0 }
+  }
+
+  // (archiveById is the map built in step 2 above.)
+  for (const [name, value] of Object.entries(sources.gameNames || {})) {
+    if (name.startsWith('//')) continue
+    const a = archives.find(x => x.name.toLowerCase() === String(name).toLowerCase())
+    if (!a) continue
+    const norm = normalizeGameName(String(value))
+    if (norm) a.source.gameName = norm
+  }
+  const oldrimFlagged = []
+
   for (const modName of order) {
     if (EXCLUDED_MODS.has(modName.toLowerCase())) { excludedSeen.push(modName); continue }
     const modDir = path.join(MODS, modName)
@@ -439,6 +469,21 @@ async function main() {
     if (rels.length === 0) continue
 
     const files = rels.map(rel => directiveFor(path.join(modDir, rel.split('/').join(path.sep)), rel))
+
+    // Flag this mod's source archives as classic Skyrim when an archive-backed
+    // plugin is form version < 44. Runs before gameNameFromReferencedArchives
+    // so the mod's own gameName follows the flag.
+    for (const f of files) {
+      if (!f.archive || !/\.(esp|esm|esl)$/i.test(f.to)) continue
+      const a = archiveById.get(f.archive)
+      if (!a || a.source.type !== 'nexus' || a.source.gameName) continue
+      const fv = pluginFormVersion(path.join(modDir, f.to.split('/').join(path.sep)))
+      if (fv > 0 && fv < 44) {
+        a.source.gameName = 'Skyrim'
+        oldrimFlagged.push(`${a.name} (form ${fv}: ${modName}/${f.to})`)
+      }
+    }
+
     const modMeta = readModMeta(modDir)
     const gameName = gameNameFromReferencedArchives(modName, files, modMeta.gameName)
     mods.push({
@@ -451,6 +496,10 @@ async function main() {
   }
   if (excludedSeen.length) {
     console.log(`skipped launcher-delivered mods (kept in order, not in mods[]): ${excludedSeen.join(', ')}`)
+  }
+  if (oldrimFlagged.length) {
+    console.log(`flagged ${oldrimFlagged.length} archive(s) as classic-Skyrim (LE plugins; downloads use the /skyrim/ Nexus domain):`)
+    for (const line of oldrimFlagged) console.log('  ' + line)
   }
 
   // 5. Optional game-root files (preloaders, etc.)
