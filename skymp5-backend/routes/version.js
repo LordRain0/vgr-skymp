@@ -4,7 +4,7 @@ const fs = require('fs')
 // Bump FALLBACK_LATEST_VERSION on each launcher release, or set LAUNCHER_LATEST_VERSION in env.
 // LAUNCHER_DOWNLOAD_URL is the installer link (e.g. a file-server URL or GitHub Releases URL).
 const FALLBACK_LATEST_VERSION = '2.0.8'
-const FALLBACK_DOWNLOAD_URL   = 'https://www.skyrimroleplay.co.uk/download'
+const FALLBACK_DOWNLOAD_URL   = 'https://vengefulrealms.com/VengefulRealms-Data/VGR-Launcher/VengefulRealmsLauncher.exe'
 const DOWNLOAD_URL = process.env.LAUNCHER_DOWNLOAD_URL || FALLBACK_DOWNLOAD_URL
 
 router.get('/', (_req, res) => {

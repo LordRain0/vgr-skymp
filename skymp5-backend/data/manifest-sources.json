@@ -2,7 +2,14 @@
   "//": "Optional overrides for compile-manifest.js. Copy to manifest-sources.json and edit. Both fields are optional.",
   "// urls": "Give non-Nexus archives in MO2's downloads\\ a direct download URL, keyed by exact filename. Without one they are reported as 'manual' and the launcher cannot fetch them.",
   "urls": {
-    "VengefulRealms-Additions.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/VengefulRealms-Additions.7z"
+    "VengefulRealms-Additions.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/VengefulRealms-Additions.7z",
+    "CleanedMastersSE.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/CleanedMastersSE.7z",
+    "GrassCache_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/GrassCache_Output.7z",
+    "PandoraOutput.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/PandoraOutput.7z",
+    "PG_Patcher_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/PG_Patcher_Output.7z",
+    "TexGen_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/TexGen_Output.7z",
+    "DynDOLOD_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/DynDOLOD_Output.7z",
+    "CS_ShaderCache_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/CS_ShaderCache_Output.7z"
   },
   "// rootInclude": "Game-root files (relative to --game) to capture. ONLY files listed here are captured - nothing is auto-detected. SKSE itself is installed separately by the launcher.",
   "rootInclude": [
