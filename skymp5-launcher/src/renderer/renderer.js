@@ -542,30 +542,24 @@ async function refreshIsolatedStatus() {
 const installStatusIso = document.getElementById('install-status-iso')
 
 btnCreateIsolated.addEventListener('click', async () => {
+  // Same flow as the Play button's INSTALL state: Nexus login first, then
+  // the themed install-location dialog (which runs the actual install).
   btnCreateIsolated.disabled = true
-  btnCreateIsolated.textContent = 'Copying…'
-
-  window.electronAPI.removeIsolatedListeners()
-  window.electronAPI.onIsolatedProgress(msg => {
-    installStatusIso.textContent = msg
-  })
-
-  const result = await window.electronAPI.createIsolated()
-  window.electronAPI.removeIsolatedListeners()
-
-  btnCreateIsolated.disabled = false
-  btnCreateIsolated.textContent = 'Choose Install Location'
-
-  if (!result.success) {
-    installStatusIso.textContent = `Error: ${result.error}`
+  btnCreateIsolated.textContent = 'Waiting for Nexus…'
+  let loggedIn = false
+  try { loggedIn = await ensureNexusLoginUI() }
+  finally {
+    btnCreateIsolated.disabled = false
+    btnCreateIsolated.textContent = 'Choose Install Location'
+  }
+  if (!loggedIn) {
+    // The Play-card warning strip is hidden behind the settings modal, so
+    // mirror the feedback where this button lives.
+    installStatusIso.textContent = 'Nexus login required - finish the login in your browser, then try again.'
     return
   }
-  installStatusIso.textContent = 'Game copy ready ✓ - installing the modpack (see the Mod Pack tab)'
-  fieldIsolated.checked = true
-  await window.electronAPI.saveSettings({ isolatedGame: true })
-  refreshIsolatedStatus()
-  refreshPlayState()
-  startModpackInstall()
+  installStatusIso.textContent = ''
+  openInstallLocationModal()
 })
 
 fieldIsolated.addEventListener('change', refreshIsolatedStatus)
@@ -742,6 +736,7 @@ let gameRunning     = false
 let playBusy        = false
 let isoReady        = true   // isolation disabled, or the game copy exists
 let updateAvailable = false  // server has newer client files than installed
+let filesInstalled  = true   // client files were installed at least once
 
 const PLAY_LABEL = '\u25BA PLAY'
 const updatePill = document.getElementById('update-pill')
@@ -758,19 +753,31 @@ function updatePlayButton() {
   }
   if (playBusy) return  // label managed by the play/update sequence
 
+  // The launcher must be current before anything else - client-file updates
+  // and playing both wait behind the launcher's own update.
+  if (launcherUpdateReady) {
+    btnConnect.disabled    = false
+    btnConnect.textContent = '\u2913 UPDATE LAUNCHER'
+    btnConnect.title       = 'A launcher update is required before playing.'
+    setReadyState('Launcher update', 'A new launcher version is required - press Update Launcher.')
+    return
+  }
+
   if (!isoReady) {
     btnConnect.disabled    = false
     btnConnect.textContent = '\u2699 INSTALL'
-    btnConnect.title       = 'Set up your Vengeful Realms game copy in Settings.'
-    setReadyState('Install required', 'Press Install to set up your Vengeful Realms game copy.')
+    btnConnect.title       = 'Install Vengeful Realms.'
+    setReadyState('Install required', 'Press Install to set up Vengeful Realms.')
     return
   }
 
   if (updateAvailable) {
+    const install = !filesInstalled
     btnConnect.disabled    = false
-    btnConnect.textContent = '\u2913 UPDATE'
-    btnConnect.title       = 'A client files update is available.'
-    setReadyState('Update available', 'New client files are ready - press Update.')
+    btnConnect.textContent = install ? '\u2699 INSTALL' : '\u2913 UPDATE'
+    btnConnect.title       = install ? 'Client files are not installed yet.' : 'A client files update is available.'
+    setReadyState(install ? 'Install required' : 'Update available',
+      install ? 'Client files are missing - press Install.' : 'New client files are ready - press Update.')
     return
   }
 
@@ -788,11 +795,12 @@ async function refreshPlayState() {
 
   const uc = await window.electronAPI.filesUpdateCheck()
   updateAvailable = !!uc.updateAvailable
+  if (uc.ok) filesInstalled = uc.installed !== false
   if (uc.serverVersion) clientVersionEl.textContent = `v${uc.serverVersion}`
 
   updatePlayButton()
 }
-setInterval(refreshPlayState, 10_000)
+setInterval(refreshPlayState, 5_000)
 
 async function pollGameRunning() {
   const running = await window.electronAPI.gameIsRunning()
@@ -820,7 +828,9 @@ function runInstallForPlay() {
   return new Promise(resolve => {
     window.electronAPI.removeInstallListeners()
     window.electronAPI.onInstallProgress(({ phase, file }) => {
-      btnConnect.textContent = phase === 'download' ? '\u2913 DOWNLOADING\u2026' : '\u2699 INSTALLING\u2026'
+      btnConnect.textContent = phase === 'download' ? '\u2913 DOWNLOADING\u2026'
+        : phase === 'verify' ? '\u2699 VERIFYING\u2026'
+        : '\u2699 INSTALLING\u2026'
       showWarning(file)
     })
     window.electronAPI.onInstallComplete(result => resolve(result))
@@ -831,10 +841,34 @@ function runInstallForPlay() {
 btnConnect.addEventListener('click', async () => {
   if (gameRunning || playBusy) return
 
-  // No game copy yet: the button reads INSTALL and leads to Settings,
-  // where the isolated-copy setup lives.
+  // Launcher update comes first: neither client-file updates nor playing
+  // proceed on an outdated launcher.
+  if (launcherUpdateReady) {
+    startLauncherUpdate()
+    return
+  }
+
+  // No game copy yet: Nexus login, then the install-location dialog.
   if (!isoReady) {
-    openModal()
+    playBusy            = true
+    btnConnect.disabled = true
+    btnConnect.textContent = '⏳ WAITING FOR NEXUS…'
+    let loggedIn = false
+    try { loggedIn = await ensureNexusLoginUI() }
+    finally {
+      playBusy            = false
+      btnConnect.disabled = false
+      updatePlayButton()
+    }
+    if (loggedIn) openInstallLocationModal()
+    return
+  }
+
+  // A modpack install started from the Mod Pack tab (or the install-location
+  // dialog) owns the install listeners - starting a second run would strip
+  // its completion handler and wedge that tab's button.
+  if (mo2InstallRunning) {
+    showWarning('Modpack install already in progress - see the Mod Pack section in Settings.')
     return
   }
 
@@ -859,21 +893,43 @@ btnConnect.addEventListener('click', async () => {
     return
   }
 
-  if (discordUser && !serverAllowed) {
-    showWarning(serverLocked
-      ? 'Server is currently locked - you are not on the allow list.'
-      : 'You are not on the server whitelist.')
-    return
-  }
-
   const s = await window.electronAPI.loadSettings()
   if (!s.skyrimPath) {
     showWarning('Set Skyrim path in Settings first.')
     return
   }
 
+  // Discord login is automatic on Play: open the OAuth flow and wait for it.
+  // playBusy stays held through the whole block (including the serverinfo
+  // re-fetch) so a double-click cannot start a second play pipeline.
   if (!discordUser) {
-    showWarning('Login with Discord first - use the button in the toolbar.')
+    playBusy            = true
+    btnConnect.disabled = true
+    btnConnect.textContent = '⏳ WAITING FOR DISCORD…'
+    showWarning('Finish logging in with Discord in the browser window that just opened…')
+    const result = await window.electronAPI.discordLogin()
+    if (!result.success) {
+      playBusy            = false
+      btnConnect.disabled = false
+      showWarning(`Discord login failed: ${result.error}`)
+      updatePlayButton()
+      return
+    }
+    discordUser = result.user
+    const freshInfo = await window.electronAPI.fetchServerInfo()
+    serverAllowed = freshInfo ? freshInfo.allowed !== false : true
+    renderTopbarDiscord()
+    updateLockState()
+    clearWarning()
+    playBusy            = false
+    btnConnect.disabled = false
+  }
+
+  if (!serverAllowed) {
+    showWarning(serverLocked
+      ? 'Server is currently locked - you are not on the allow list.'
+      : 'You are not on the server whitelist.')
+    updatePlayButton()
     return
   }
 
@@ -1032,16 +1088,31 @@ window.electronAPI.onUpdateProgress(d => {
   }
 })
 
-launcherVersionEl.addEventListener('click', async () => {
-  if (!launcherUpdateReady || launcherVersionEl.dataset.updating) return
+// Shared by the footer version label and the Play button's UPDATE LAUNCHER
+// state - on success the installer quits and relaunches the app.
+async function startLauncherUpdate() {
+  if (launcherVersionEl.dataset.updating) return
   launcherVersionEl.dataset.updating = '1'
+  // playBusy keeps the 5s refreshPlayState poll from re-enabling the button
+  // mid-download; on success the installer quits and relaunches the app, so
+  // the busy state is only released on failure.
+  playBusy = true
   launcherVersionEl.textContent = 'Downloading update…'
+  btnConnect.disabled    = true
+  btnConnect.textContent = '⤓ UPDATING LAUNCHER…'
   const r = await window.electronAPI.installUpdate()
   if (!r.ok) {
     launcherVersionEl.textContent = '⬆ UPDATE AVAILABLE'
     delete launcherVersionEl.dataset.updating
+    playBusy = false
+    btnConnect.disabled = false
+    updatePlayButton()
     showWarning(`Update failed: ${r.error}`)
   }
+}
+
+launcherVersionEl.addEventListener('click', () => {
+  if (launcherUpdateReady) startLauncherUpdate()
 })
 
 async function checkLauncherUpdate() {
@@ -1049,6 +1120,7 @@ async function checkLauncherUpdate() {
   if (!result) return
   if (launcherVersionEl.dataset.updating) return  // don't clobber install progress UI
 
+  const hadUpdate = launcherUpdateReady
   if (result.hasUpdate) {
     launcherUpdateReady = true
     launcherVersionEl.textContent = '⬆ UPDATE AVAILABLE'
@@ -1060,6 +1132,8 @@ async function checkLauncherUpdate() {
     launcherVersionEl.classList.remove('update-available')
     launcherVersionEl.title = ''
   }
+  // The Play button doubles as UPDATE LAUNCHER while an update is pending.
+  if (hadUpdate !== launcherUpdateReady && !playBusy && !gameRunning) updatePlayButton()
 }
 
 // News
@@ -1344,6 +1418,130 @@ async function loadMetrics() {
   metricsGrid.appendChild(metricCard('Avg Tick Duration', fmtMs(tickAvg),  null))
 }
 
+// Install location modal
+// Themed replacement for the native folder picker: path entry + Browse +
+// Confirm, with bold warnings for non-empty folders and low disk space.
+const installLocModal   = document.getElementById('modal-install-location')
+const installLocPath    = document.getElementById('install-location-path')
+const installLocBrowse  = document.getElementById('install-location-browse')
+const installLocConfirm = document.getElementById('install-location-confirm')
+const installLocWarning = document.getElementById('install-location-warning')
+const installLocStatus  = document.getElementById('install-location-status')
+const installLocClose   = document.getElementById('install-location-close')
+
+let installLocBusy = false
+
+// Renders warnings for the current path; returns false only when the
+// location must be refused outright (someone else's MO2 instance).
+async function refreshInstallLocationWarnings() {
+  const dir = installLocPath.value.trim()
+  installLocWarning.hidden = true
+  installLocWarning.textContent = ''
+  installLocStatus.textContent = ''
+  if (!dir) return true
+  const r = await window.electronAPI.checkInstallLocation(dir)
+  if (!r.ok) return true
+
+  const warnings = []
+  if (r.kind === 'nonEmpty') {
+    warnings.push(`The chosen folder is not empty - the install will go into ${dir}\\VengefulRealms instead.`)
+  }
+  if (r.kind === 'foreignMo2') {
+    warnings.push('That folder is an existing Mod Organizer 2 instance that does not belong to Vengeful Realms. Choose a different folder.')
+  }
+  if (r.lowSpace) {
+    const gb = n => (n / 1024 / 1024 / 1024).toFixed(1)
+    warnings.push(`Not enough disk space on that drive: ${gb(r.freeBytes)} GB free, about ${gb(r.requiredBytes)} GB needed.`)
+  }
+  if (r.kind === 'currentBase' || r.kind === 'legacyBase') {
+    installLocStatus.textContent = 'Existing Vengeful Realms install detected - it will be reused and updated.'
+  } else if (r.kind === 'mo2Subfolder') {
+    installLocStatus.textContent = 'This is the MO2 folder of an existing install - its parent folder will be used.'
+  }
+  if (warnings.length) {
+    installLocWarning.textContent = warnings.join('\n')
+    installLocWarning.hidden = false
+  }
+  return r.kind !== 'foreignMo2'
+}
+
+async function openInstallLocationModal() {
+  const iso = await window.electronAPI.isolatedStatus()
+  installLocPath.value = iso.base || ''
+  await refreshInstallLocationWarnings()
+  installLocModal.hidden = false
+}
+
+installLocPath.addEventListener('change', refreshInstallLocationWarnings)
+installLocBrowse.addEventListener('click', async () => {
+  const dir = await window.electronAPI.pickInstallDir(installLocPath.value.trim())
+  if (dir) {
+    installLocPath.value = dir
+    await refreshInstallLocationWarnings()
+  }
+})
+installLocClose.addEventListener('click', () => {
+  if (!installLocBusy) installLocModal.hidden = true
+})
+
+installLocConfirm.addEventListener('click', async () => {
+  if (installLocBusy) return
+  const dir = installLocPath.value.trim()
+  if (!dir) {
+    installLocWarning.textContent = 'Enter an install location.'
+    installLocWarning.hidden = false
+    return
+  }
+  if (!(await refreshInstallLocationWarnings())) return
+
+  installLocBusy = true
+  installLocConfirm.disabled = true
+  installLocBrowse.disabled  = true
+  installLocPath.disabled    = true
+  window.electronAPI.removeIsolatedListeners()
+  window.electronAPI.onIsolatedProgress(msg => { installLocStatus.textContent = msg })
+
+  const result = await window.electronAPI.createIsolated(dir)
+
+  window.electronAPI.removeIsolatedListeners()
+  installLocBusy = false
+  installLocConfirm.disabled = false
+  installLocBrowse.disabled  = false
+  installLocPath.disabled    = false
+
+  if (!result.success) {
+    if (!result.canceled) {
+      installLocWarning.textContent = result.error
+      installLocWarning.hidden = false
+    }
+    return
+  }
+
+  installLocModal.hidden = true
+  installStatusIso.textContent = 'Game copy ready ✓ - installing the modpack (see the Mod Pack tab)'
+  fieldIsolated.checked = true
+  await window.electronAPI.saveSettings({ isolatedGame: true })
+  refreshIsolatedStatus()
+  refreshPlayState()
+  startModpackInstall()
+})
+
+// Nexus login gate for the install flow: detect login, open OAuth when
+// logged out, and only continue once the login lands.
+async function ensureNexusLoginUI() {
+  if (nexusUser) return true
+  showWarning('Log in with Nexus Mods to continue - finish in the browser window that just opened…')
+  const result = await window.electronAPI.nexusSsoLogin()
+  if (!result.success) {
+    showWarning(`Nexus login failed: ${result.error}`)
+    return false
+  }
+  nexusUser = result.user
+  renderTopbarNexus()
+  clearWarning()
+  return true
+}
+
 // Init
 loadSettings()
 checkServerStatus()
@@ -1351,10 +1549,11 @@ checkLauncherUpdate()
 loadNews()
 loadServerInfo()
 loadModlist()
-// Live 10s heartbeat: game-server status + players (topbar badge), client
-// files update (Play button flips to UPDATE), launcher self-update (footer
-// label flips to UPDATE AVAILABLE) - all without restarting the launcher.
-// refreshPlayState and pollGameRunning poll on their own 10s timers above.
-setInterval(checkServerStatus, 10_000)
-setInterval(checkLauncherUpdate, 10_000)
+// Live 5s heartbeat: game-server status + players (topbar badge), client
+// files update (Play button flips to INSTALL/UPDATE), launcher self-update
+// (Play button flips to UPDATE LAUNCHER) - all without restarting the
+// launcher. refreshPlayState polls on its own 5s timer above;
+// pollGameRunning stays on a 10s timer (it spawns a tasklist probe).
+setInterval(checkServerStatus, 5_000)
+setInterval(checkLauncherUpdate, 5_000)
 refreshPlayState()

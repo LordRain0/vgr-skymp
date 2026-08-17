@@ -361,6 +361,32 @@
     </div>
   </div>
 
+  <!-- ── Install location modal ──────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-install-location" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <img src="../../assets/icons/compass.svg" alt="">
+        <span class="modal-title">Install Vengeful Realms</span>
+        <button class="modal-close" id="install-location-close" title="Close">&#10005;</button>
+      </div>
+      <div class="modal-body">
+        <div class="install-location-body">
+          <div class="install-location-row">
+            <input type="text" id="install-location-path" class="setting-input" spellcheck="false"
+                   placeholder="C:\VengefulRealms">
+            <button class="skyrim-small-button" id="install-location-browse">Browse</button>
+          </div>
+          <div class="install-location-caption">Choose an install location for Vengeful Realms.</div>
+          <div class="install-location-warning" id="install-location-warning" hidden></div>
+          <div class="install-status" id="install-location-status"></div>
+          <div class="modal-actions">
+            <button class="skyrim-button" id="install-location-confirm">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 </body>
 </html>

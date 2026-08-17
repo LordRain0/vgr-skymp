@@ -77,6 +77,13 @@ function defaultInstallBaseDir() {
 function configureMo2Root() {
   mo2.setRootProvider(() => {
     const base = store?.get('baseDirPath') || defaultInstallBaseDir()
+    // Legacy layouts stored the MO2 root itself as the base (portable.txt at
+    // <base>\portable.txt, game at <base>\skyrim). Appending MO2 to those
+    // would compose <base>\MO2\MO2 and extract a second nested MO2 install.
+    if (fs.existsSync(path.join(base, 'portable.txt')) &&
+        !fs.existsSync(path.join(base, 'MO2', 'portable.txt'))) {
+      return base
+    }
     return path.join(base, 'MO2')
   })
 }
@@ -613,7 +620,19 @@ async function getNexusAuth() {
   return key ? { apiKey: key } : null
 }
 
-ipcMain.handle('nexus:ssoLogin', async () => {
+// Single-flight: Play's INSTALL gate, the Settings button, and the topbar
+// button can all request a login - concurrent flows would fight over the
+// OAuth loopback port (EADDRINUSE) or open duplicate SSO tabs, so every
+// caller shares the one in-flight attempt.
+let nexusLoginInflight = null
+ipcMain.handle('nexus:ssoLogin', () => {
+  if (!nexusLoginInflight) {
+    nexusLoginInflight = doNexusLogin().finally(() => { nexusLoginInflight = null })
+  }
+  return nexusLoginInflight
+})
+
+async function doNexusLogin() {
   try {
     if (config.nexusOauthClientId) {
       const tokens = await nexus.oauthLogin({
@@ -645,7 +664,7 @@ ipcMain.handle('nexus:ssoLogin', async () => {
   } catch (err) {
     return { success: false, error: err.message }
   }
-})
+}
 
 // Isolated game copy
 
@@ -656,6 +675,47 @@ ipcMain.handle('game:isolatedStatus', () => ({
   base:    store.get('baseDirPath') || '',
 }))
 
+// Full install footprint: MO2 + vanilla game copy + extracted modlist.
+const INSTALL_REQUIRED_BYTES = 16 * 1024 * 1024 * 1024
+
+// Pure folder picker for the themed install-location dialog (no side effects).
+ipcMain.handle('dialog:pickInstallDir', async (_e, current) => {
+  const picked = await dialog.showOpenDialog(win, {
+    title:       'Choose an install location for Vengeful Realms',
+    buttonLabel: 'Select folder',
+    defaultPath: (typeof current === 'string' && current.trim()) || store.get('baseDirPath') || launcherInstallDir(),
+    properties:  ['openDirectory', 'createDirectory'],
+  })
+  return picked.canceled ? null : (picked.filePaths[0] || null)
+})
+
+// Location pre-flight for the themed dialog: classification + free disk space.
+ipcMain.handle('install:checkLocation', (_e, dir) => {
+  const base = normalizeChosenBase(dir)
+  if (!base) return { ok: false, error: 'Enter a full path, e.g. C:\\VengefulRealms.' }
+  const kind = classifyInstallDir(base)
+  let freeBytes = null
+  try {
+    // Walk up to the nearest existing ancestor so a not-yet-created folder
+    // still reports its drive's free space.
+    let probe = base
+    while (!fs.existsSync(probe)) {
+      const parent = path.dirname(probe)
+      if (parent === probe) break
+      probe = parent
+    }
+    const sf = fs.statfsSync(probe)
+    freeBytes = Number(sf.bavail) * Number(sf.bsize)
+  } catch { /* statfs unavailable - skip the space warning */ }
+  return {
+    ok: true,
+    kind,                                   // empty|missing|nonEmpty|currentBase|legacyBase|mo2Subfolder|foreignMo2
+    freeBytes,
+    requiredBytes: INSTALL_REQUIRED_BYTES,
+    lowSpace: freeBytes != null && freeBytes < INSTALL_REQUIRED_BYTES,
+  }
+})
+
 // True if either path is the same as, or nested inside, the other.
 function pathsOverlap(a, b) {
   const norm = p => path.resolve(p).replace(/[\\/]+$/, '').toLowerCase() + path.sep
@@ -663,7 +723,63 @@ function pathsOverlap(a, b) {
   return na.startsWith(nb) || nb.startsWith(na)
 }
 
-ipcMain.handle('game:createIsolated', async () => {
+// Classify a picked install directory so the guard, the location dialog, and
+// the root provider all agree on one layout model:
+//  - currentBase: <picked>\MO2\portable.txt exists  -> reuse as base
+//  - mo2Subfolder: <picked>\portable.txt exists and the folder is named MO2
+//    -> the user picked the MO2 subfolder of an existing install; use parent
+//  - legacyBase: <picked>\portable.txt exists and it looks like one of OUR
+//    old-layout installs (game copy or client mod inside) -> reuse as-is;
+//    configureMo2Root serves it without appending MO2
+//  - foreignMo2: <picked>\portable.txt exists but it is someone else's MO2
+//    instance -> refuse rather than install into it
+function classifyInstallDir(base) {
+  try {
+    const sameAsStoredBase = dir => {
+      const known = store?.get('baseDirPath')
+      try { return !!known && path.resolve(known).toLowerCase() === path.resolve(dir).toLowerCase() }
+      catch { return false }
+    }
+    // An MO2 dir is OURS only if it carries our markers: the managed client
+    // mod inside it, or our game copy beside it. A bare portable.txt is any
+    // MO2 instance - claiming those by folder name alone would hijack and
+    // rewrite someone's personal Mod Organizer setup.
+    const oursMo2 = mo2Dir =>
+      fs.existsSync(path.join(mo2Dir, 'mods', 'Vengeful Realms - Client')) ||
+      fs.existsSync(path.join(path.dirname(mo2Dir), 'skyrim', 'SkyrimSE.exe'))
+
+    if (fs.existsSync(path.join(base, 'MO2', 'portable.txt'))) {
+      return (oursMo2(path.join(base, 'MO2')) || sameAsStoredBase(base)) ? 'currentBase' : 'foreignMo2'
+    }
+    if (fs.existsSync(path.join(base, 'portable.txt'))) {
+      if (path.basename(base).toLowerCase() === 'mo2') {
+        return (oursMo2(base) || sameAsStoredBase(path.dirname(base))) ? 'mo2Subfolder' : 'foreignMo2'
+      }
+      const oursLegacy =
+        fs.existsSync(path.join(base, 'skyrim', 'SkyrimSE.exe')) ||
+        fs.existsSync(path.join(base, 'mods', 'Vengeful Realms - Client')) ||
+        sameAsStoredBase(base)
+      return oursLegacy ? 'legacyBase' : 'foreignMo2'
+    }
+    // A crashed earlier install (MO2 extracted but no portable.txt yet) is
+    // still ours when it is the stored base - reuse instead of nesting.
+    if (sameAsStoredBase(base)) return 'currentBase'
+    return fs.readdirSync(base).length > 0 ? 'nonEmpty' : 'empty'
+  } catch { return 'missing' }
+}
+
+// Typed paths must be absolute: resolving relative or drive-relative input
+// against the process cwd would install somewhere the dialog never showed.
+function normalizeChosenBase(input) {
+  if (typeof input !== 'string') return null
+  let s = input.trim()
+  if (!s) return null
+  if (/^[a-zA-Z]:$/.test(s)) s += '\\'                 // 'C:' means the drive root
+  if (!/^([a-zA-Z]:[\\/]|\\\\)/.test(s)) return null   // refuse relative input
+  return path.resolve(s)
+}
+
+ipcMain.handle('game:createIsolated', async (_e, chosenBase) => {
   const src = store.get('skyrimPath')
   if (!src || !fs.existsSync(path.join(src, 'SkyrimSE.exe'))) {
     return { success: false, error: 'Set a valid Skyrim path first (SkyrimSE.exe not found).' }
@@ -675,24 +791,37 @@ ipcMain.handle('game:createIsolated', async () => {
 
   // No clean-install check needed: copyGameDir copies only vanilla files, so a modded source is fine.
 
-  // Ask where to install the modlist.
-  const picked = await dialog.showOpenDialog(win, {
-    title:       'Choose where to install Vengeful Realms (~16 GB: MO2 + game copy)',
-    buttonLabel: 'Install here',
-    defaultPath: store.get('baseDirPath') || launcherInstallDir(),
-    properties:  ['openDirectory', 'createDirectory'],
-  })
-  if (picked.canceled || !picked.filePaths[0]) {
-    return { success: false, canceled: true, error: 'Installation cancelled.' }
+  // Install location: from the themed dialog when provided, else the native picker.
+  let base = null
+  if (typeof chosenBase === 'string' && chosenBase.trim()) {
+    base = normalizeChosenBase(chosenBase)
+    if (!base) return { success: false, error: 'Enter a full path, e.g. C:\\VengefulRealms.' }
+  }
+  if (!base) {
+    const picked = await dialog.showOpenDialog(win, {
+      title:       'Choose where to install Vengeful Realms (~16 GB: MO2 + game copy)',
+      buttonLabel: 'Install here',
+      defaultPath: store.get('baseDirPath') || launcherInstallDir(),
+      properties:  ['openDirectory', 'createDirectory'],
+    })
+    if (picked.canceled || !picked.filePaths[0]) {
+      return { success: false, canceled: true, error: 'Installation cancelled.' }
+    }
+    base = picked.filePaths[0]
   }
 
-  let base = picked.filePaths[0]
-  try {
-    const entries = fs.readdirSync(base)
-    if (entries.length > 0 && !fs.existsSync(path.join(base, 'portable.txt'))) {
-      base = path.join(base, 'VengefulRealms')
-    }
-  } catch { /* unreadable - let later steps surface the real error */ }
+  switch (classifyInstallDir(base)) {
+    case 'mo2Subfolder': base = path.dirname(base); break            // picked <base>\MO2
+    case 'nonEmpty':     base = path.join(base, 'VengefulRealms'); break
+    case 'foreignMo2':
+      return {
+        success: false,
+        error: 'That folder is an existing Mod Organizer 2 instance that does not belong to ' +
+               'Vengeful Realms. Choose an empty folder (or the folder above your existing ' +
+               'Vengeful Realms install) instead.',
+      }
+    // currentBase / legacyBase / empty / missing: use as-is
+  }
 
   const dst = path.join(base, 'skyrim')
 
@@ -716,6 +845,14 @@ ipcMain.handle('game:createIsolated', async () => {
     }
   }
 
+  // The root provider reads baseDirPath live, so it must be set before
+  // ensureInstalled - but a failed install must not orphan a working one:
+  // every failure path restores the previous base.
+  const prevBase = store.get('baseDirPath')
+  const restoreBase = () => {
+    if (prevBase) store.set('baseDirPath', prevBase)
+    else store.delete('baseDirPath')
+  }
   try {
     store.set('baseDirPath', base)
     send('isolated:progress', 'Installing Mod Organizer 2…')
@@ -725,7 +862,7 @@ ipcMain.handle('game:createIsolated', async () => {
     // portable copy setup
     if (!fs.existsSync(path.join(dst, 'SkyrimSE.exe'))) {
       const copy = await copyGameDir(src, dst)
-      if (!copy.success) return copy
+      if (!copy.success) { restoreBase(); return copy }
     } else {
       log('[isolated] reusing existing game copy at ' + dst)
     }
@@ -745,6 +882,7 @@ ipcMain.handle('game:createIsolated', async () => {
     log(`[isolated] Vengeful Realms install ready at ${base}`)
     return { success: true, dir: base }
   } catch (err) {
+    restoreBase()
     return { success: false, error: err.message }
   }
 })
@@ -805,6 +943,21 @@ async function copyGameDir(src, dst) {
     }
   } catch { /* no Strings folder */ }
 
+  // Keizaal installs quarantine AE/CC content into Data\_disabledByKzl (older
+  // builds put it in the game root). The launch-time restore inspects the
+  // destination copy, which never receives that folder - so required CC files
+  // must be pulled out of the source quarantine here, during the copy.
+  for (const qDir of [path.join(dataDir, '_disabledByKzl'), path.join(src, '_disabledByKzl')]) {
+    try {
+      for (const e of fs.readdirSync(qDir, { withFileTypes: true })) {
+        if (!e.isFile() || !REQUIRED_CC_FILES.has(e.name.toLowerCase())) continue
+        if (jobs.some(j => j.sub === 'Data' && j.rel.toLowerCase() === e.name.toLowerCase())) continue
+        jobs.push({ rel: e.name, sub: 'Data', srcOverride: path.join(qDir, e.name) })
+        log(`[isolated] restoring required CC file from Keizaal quarantine: ${e.name}`)
+      }
+    } catch { /* no quarantine folder */ }
+  }
+
   if (!jobs.some(j => j.rel.toLowerCase() === 'skyrim.esm')) {
     return { success: false, error: 'Skyrim.esm not found in Data - is the Skyrim path correct?' }
   }
@@ -814,7 +967,7 @@ async function copyGameDir(src, dst) {
     const to = path.join(dst, job.sub, job.rel)
     try {
       fs.mkdirSync(path.dirname(to), { recursive: true })
-      await fs.promises.copyFile(path.join(src, job.sub, job.rel), to)
+      await fs.promises.copyFile(job.srcOverride || path.join(src, job.sub, job.rel), to)
     } catch (err) {
       return { success: false, error: `Failed copying ${job.rel}: ${err.message}` }
     }
@@ -934,6 +1087,9 @@ ipcMain.handle('files:updateCheck', async () => {
     return {
       ok: true,
       updateAvailable: vd.version !== store.get('filesVersion') || !allPresent || modpackFailed,
+      // False when the client files were never installed (or are gone) - the
+      // renderer shows INSTALL instead of UPDATE in that state.
+      installed:       allPresent && !!store.get('filesVersion'),
       serverVersion:   vd.version,
     }
   } catch {
@@ -1489,14 +1645,18 @@ ipcMain.on('install:start', (_e, mode) => {
   installing = true
   installAbort = new AbortController()
 
+  // Content hashing (deep verify) runs on explicit Mod Pack installs and on
+  // self-heals after a failed install; the routine Play path gets the fast
+  // stat-walk verification (added/removed/size-changed files) instead.
+  const deepVerify = mode === 'mo2' || store.get('modpackState') === 'failed'
   let fn
   if (mode === 'client') {
     fn = runDirectInstall()
   } else if (mode === 'mo2') {
-    fn = runMO2Install()
+    fn = runMO2Install({ deepVerify })
   } else {
     // Auto mode (used by the Play button) - delegate based on mo2Enabled setting
-    fn = store.get('mo2Enabled') ? runMO2Install() : runDirectInstall()
+    fn = store.get('mo2Enabled') ? runMO2Install({ deepVerify }) : runDirectInstall()
   }
   fn.catch(err => {
     log('[install] Unhandled error:', err.message)
@@ -1832,7 +1992,7 @@ function openDownloadList(downloadsDir, needed) {
 // verify each archive, extract once, apply per-file directives) so every player
 // gets the reference install's exact, byte-identical layout.
 
-async function runMO2Install() {
+async function runMO2Install({ deepVerify = false } = {}) {
   _downloadListOpened = false
   const runAbort = installAbort
   const throwIfCancelled = () => {
@@ -1943,7 +2103,45 @@ async function runMO2Install() {
     const needsSkseInstall = !skseSetUp
     const needsRoot       = needsRootFiles || needsSkseInstall
     log(`[mo2-install] root check: skse=${skseSetUp} virtualSkse=${manifestProvidesVirtualSkse} hashChanged=${rootChanged} -> needsRoot=${needsRoot}`)
-    const modsToInstall   = manifest.mods.filter(modChanged)
+
+    // Deep verification: mods whose stored install hash matches the manifest
+    // can still have been tampered with on disk (files added, removed, or
+    // modified) - the stored hash never re-reads file contents. Walk each such
+    // mod, delete files the manifest doesn't know, and force a rebuild from
+    // the verified archives when anything is missing or altered. MO2's
+    // overwrite folder is outside mods\ and is deliberately never scanned.
+    const corrupted = new Set()
+    {
+      const candidates = manifest.mods.filter(m => !modChanged(m) && Array.isArray(m.files) && m.files.length > 0)
+      let vIndex = 0
+      let extrasTotal = 0
+      for (const m of candidates) {
+        throwIfCancelled()
+        vIndex++
+        send('install:progress', {
+          phase: 'verify',
+          file: `Verifying ${m.name}… (${vIndex}/${candidates.length})`,
+          index: vIndex, total: candidates.length, skipped: false,
+        })
+        try {
+          const r = await mo2.verifyModContents(modFolderPath(m), m.files,
+            { signal: runAbort?.signal, deep: deepVerify })
+          extrasTotal += r.extrasRemoved
+          if (r.mismatched) {
+            corrupted.add(m.name)
+            log(`[verify] ${m.name}: contents differ from the manifest - scheduling rebuild`)
+          }
+        } catch (err) {
+          if (err.message === 'Cancelled') throw err
+          corrupted.add(m.name)
+          log(`[verify] ${m.name}: verification failed (${err.message}) - scheduling rebuild`)
+        }
+      }
+      if (extrasTotal > 0) log(`[verify] removed ${extrasTotal} file(s) not in the manifest`)
+      if (corrupted.size > 0) log(`[verify] ${corrupted.size} mod(s) failed verification (deep=${deepVerify})`)
+    }
+
+    const modsToInstall   = manifest.mods.filter(m => modChanged(m) || corrupted.has(m.name))
 
     const finishOrder = () => {
       let order = (Array.isArray(manifest.order) && manifest.order.length)
@@ -1974,8 +2172,9 @@ async function runMO2Install() {
       return
     }
 
-    const archivePaths = {}      // archiveId -> verified local path
-    const needBrowser  = []      // nexus archives we couldn't auto-download
+    const archivePaths  = {}     // archiveId -> verified local path
+    const needBrowser   = []     // nexus archives we couldn't auto-download
+    const verifySkipped = []     // verify-flagged mods skipped: archive gone + manual download needed
 
     // Acquire only the archives the to-install mods (and root files) reference.
     const neededArchiveIds = new Set()
@@ -2037,6 +2236,22 @@ async function runMO2Install() {
         if (!(await mo2.verifyArchiveAsync(p, a.hash, received => reportArchiveVerify(a.name, received, a.size || 0)))) return fail(`${a.name}: downloaded file failed verification (hash mismatch - the version pin may have changed).`)
         archivePaths[a.id] = p
       } else if (a.source.type === 'nexus') {
+        // A verify-triggered rebuild must never park Play on the manual
+        // browser-download wait. When every mod needing this archive is only
+        // rebuilding because verification flagged it (and root files don't
+        // need it), skip those mods and point the user at the Mod Pack tab.
+        const dependents = modsToInstall.filter(m => m.files.some(f => f.archive === a.id))
+        const rootNeeds  = needsRootFiles && (manifest.root || []).some(f => f.archive === a.id)
+        if (!rootNeeds && dependents.length > 0 && dependents.every(m => corrupted.has(m.name))) {
+          for (const m of dependents) {
+            const idx = modsToInstall.indexOf(m)
+            if (idx >= 0) modsToInstall.splice(idx, 1)
+            corrupted.delete(m.name)
+            if (!verifySkipped.includes(m.name)) verifySkipped.push(m.name)
+          }
+          log(`[verify] skipping rebuild of ${dependents.map(m => m.name).join(', ')} - ${a.name} is not in downloads and needs a manual download`)
+          continue
+        }
         needBrowser.push(a)
       } else {
         return fail(`${a.name}: no download source. Add a URL in data/manifest-sources.json on the backend.`)
@@ -2189,7 +2404,14 @@ async function runMO2Install() {
     finishOrder()
 
     store.set('modpackState', 'ready')
-    send('install:complete', { success: true, mo2: true, upToDate: core.upToDate, modsTotal: manifest.mods.length })
+    send('install:complete', {
+      success: true, mo2: true, upToDate: core.upToDate, modsTotal: manifest.mods.length,
+      ...(verifySkipped.length > 0 ? {
+        warning: `${verifySkipped.length} mod(s) failed verification but their source archives are no longer ` +
+                 'in the downloads folder - open the Mod Pack tab and run Install Modpack to re-download them ' +
+                 `(${verifySkipped.join(', ')})`,
+      } : {}),
+    })
   } catch (err) {
     if (err.message === 'Cancelled') { fail('Install cancelled.'); return }
     fail(`Install failed: ${err.message}`)

@@ -1674,3 +1674,35 @@ select.hotkey-select { max-width: 220px; }
         grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     }
 }
+
+/* ── Install location modal ─────────────────────────────────────────────── */
+
+.install-location-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.install-location-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.install-location-row .setting-input {
+    flex: 1;
+}
+
+.install-location-caption {
+    color: var(--parchment, #d8cfc0);
+    font-size: 14px;
+}
+
+/* Spec: non-empty-directory and low-disk-space warnings render in bold. */
+.install-location-warning {
+    font-weight: 700;
+    color: var(--warn-red, #e2574c);
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}

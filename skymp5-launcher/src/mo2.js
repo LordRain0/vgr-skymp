@@ -1350,10 +1350,14 @@ const _archiveHashCache = new Map()   // full -> { size, mtimeMs, hash }
 const _archiveListCache = new Map()   // full -> { size, mtimeMs, listing }
 
 /** Async streaming SHA-256 that yields to the event loop, so the UI stays responsive mid-scan. */
-function sha256FileAsync(p, onProgress) {
+function sha256FileAsync(p, onProgress, signal) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('Cancelled'))
     const h = crypto.createHash('sha256')
     const s = fs.createReadStream(lp(p), { highWaterMark: 1 << 20 })
+    // destroy(err) emits 'error' with that error, so an abort rejects within one chunk.
+    const onAbort = () => s.destroy(new Error('Cancelled'))
+    signal?.addEventListener('abort', onAbort, { once: true })
     let read = 0
     let lastProgress = 0
     s.on('data', chunk => {
@@ -1367,16 +1371,114 @@ function sha256FileAsync(p, onProgress) {
       }
     })
     s.on('end', () => {
+      signal?.removeEventListener('abort', onAbort)
       if (onProgress) onProgress(read)
       resolve(h.digest('hex'))
     })
-    s.on('error', reject)
+    s.on('error', err => {
+      signal?.removeEventListener('abort', onAbort)
+      reject(err)
+    })
   })
 }
 
 async function verifyArchiveAsync(archivePath, sha256, onProgress) {
   try { return (await sha256FileAsync(archivePath, onProgress)).toLowerCase() === String(sha256).toLowerCase() }
   catch { return false }
+}
+
+/**
+ * Verify an installed mod folder against its manifest file list.
+ * Detects added, removed, and modified files:
+ *  - files not in the manifest are DELETED here (returned as extrasRemoved);
+ *  - missing, size-changed, or (with `deep`) content-mismatched files set
+ *    `mismatched`, and the caller rebuilds the whole mod from the verified
+ *    archives (the normal reinstall path).
+ * Default mode is a stat walk (readdir + size compare) so a healthy modpack
+ * verifies in seconds on every Play; `deep: true` additionally hashes file
+ * contents (same-size tampering) and is meant for explicit Mod Pack installs
+ * and failed-state self-heals, not the routine Play path.
+ * meta.ini (MO2's own bookkeeping, holds our skyrpHash) is exempt. MO2's
+ * overwrite folder lives outside mods\ and is never touched by this walk -
+ * it legitimately differs per user (shader caches etc).
+ */
+async function verifyModContents(modDir, files, { signal, onProgress, deep = false } = {}) {
+  const expected = new Map()
+  for (const f of files || []) {
+    if (f && f.to) expected.set(String(f.to).replace(/\\/g, '/').toLowerCase(), f)
+  }
+  // A manifest entry with no expected files is malformed (compile-manifest
+  // never emits one) - "no expectations" must never read as "all extras".
+  if (expected.size === 0) return { mismatched: false, extrasRemoved: 0 }
+
+  const extras = []
+  const seen = new Set()
+  let mismatched = false
+  let checked = 0
+
+  const walkDir = dir => {
+    let entries = []
+    try { entries = fs.readdirSync(lp(dir), { withFileTypes: true }) } catch { return [] }
+    const out = []
+    for (const e of entries) {
+      const abs = path.join(dir, e.name)
+      if (e.isDirectory()) out.push(...walkDir(abs))
+      else if (e.isFile()) out.push(abs)
+    }
+    return out
+  }
+
+  const checkFile = async (abs, exp) => {
+    const st = fs.statSync(lp(abs))
+    if (Number.isFinite(exp.size)) {
+      if (st.size !== exp.size) return false
+      if (!deep) return true                     // stat mode: matching size passes
+    }
+    if (!exp.sha256) return true
+    checked++
+    if (onProgress && checked % 20 === 0) onProgress(checked)
+    const hash = await sha256FileAsync(abs, null, signal)
+    return hash.toLowerCase() === String(exp.sha256).toLowerCase()
+  }
+
+  for (const abs of walkDir(modDir)) {
+    if (signal?.aborted) throw new Error('Cancelled')
+    const rel = path.relative(modDir, abs).split(path.sep).join('/')
+    const relLc = rel.toLowerCase()
+    if (relLc === 'meta.ini') continue
+    const exp = expected.get(relLc)
+    if (!exp) { extras.push(abs); continue }
+    seen.add(relLc)
+    if (mismatched) continue  // already rebuilding; keep walking only for extras
+    try {
+      let ok = false
+      try {
+        ok = await checkFile(abs, exp)
+      } catch (err) {
+        if (signal?.aborted || err.message === 'Cancelled') throw err
+        // Transient AV locks can fail a healthy multi-GB file - retry once.
+        await new Promise(r => setTimeout(r, 250))
+        ok = await checkFile(abs, exp)
+      }
+      if (!ok) mismatched = true
+    } catch (err) {
+      if (signal?.aborted || err.message === 'Cancelled') throw new Error('Cancelled')
+      mismatched = true
+    }
+  }
+
+  // Removed files: anything the manifest expects that the walk never saw.
+  if (!mismatched) {
+    for (const key of expected.keys()) {
+      if (!seen.has(key)) { mismatched = true; break }
+    }
+  }
+
+  for (const p of extras) {
+    try { fs.rmSync(lp(p), { force: true }) } catch { /* best effort */ }
+  }
+
+  return { mismatched, extrasRemoved: extras.length }
 }
 
 const mb = n => (n / 1024 / 1024).toFixed(1)
@@ -1664,6 +1766,7 @@ module.exports = {
   findArchiveByHash,
   verifyArchive,
   verifyArchiveAsync,
+  verifyModContents,
   sha256File,
   extractToCache,
   clearCache,

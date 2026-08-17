@@ -71,9 +71,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Isolated game copy
   isolatedStatus: () => ipcRenderer.invoke('game:isolatedStatus'),
-  createIsolated: () => ipcRenderer.invoke('game:createIsolated'),
+  createIsolated: (base) => ipcRenderer.invoke('game:createIsolated', base),
   onIsolatedProgress: (cb) => ipcRenderer.on('isolated:progress', (_e, msg) => cb(msg)),
   removeIsolatedListeners: () => ipcRenderer.removeAllListeners('isolated:progress'),
+
+  // Themed install-location dialog helpers
+  pickInstallDir:       (current) => ipcRenderer.invoke('dialog:pickInstallDir', current),
+  checkInstallLocation: (dir)     => ipcRenderer.invoke('install:checkLocation', dir),
 
   // MO2 integration
   mo2Status: () => ipcRenderer.invoke('mo2:status'),
