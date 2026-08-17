@@ -1,6 +1,9 @@
 // Backend server configuration; all values come from env vars (.env for local dev, real env in production)
-// Must run before any process.env read below: this module snapshots the env at load time
-require('dotenv').config()
+// Must run before any process.env read below: this module snapshots the env at load time.
+// The .env is anchored to THIS folder, not process.cwd(): the server-manager
+// requires backend modules in-process from its own cwd, and a cwd-relative
+// dotenv would silently load nothing there (no databaseUri -> dead Players tab).
+require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 
 const fs = require('fs')
 const path = require('path')
@@ -19,6 +22,9 @@ function findServerSettings() {
     process.env.SKYMP_SERVER_SETTINGS_PATH,
     path.join(process.cwd(), 'server-settings.json'),
     path.join(__dirname, 'server-settings.json'),
+    // In-repo live runtime (the layout since the vgr-skymp migration).
+    path.join(__dirname, '..', 'server', 'server-settings.json'),
+    // Old build-output layout, kept for dev machines.
     path.join(__dirname, '..', 'build', 'dist', 'server', 'server-settings.json'),
   ].filter(Boolean)
 
