@@ -43,6 +43,11 @@
   font-family: Georgia, "Times New Roman", serif;
 }
 
+/* Push the interaction menu below screen center so it stays clear of the other player */
+#vgr-player-interaction {
+  padding-top: 24vh;
+}
+
 #vgr-player-interaction.visible,
 #vgr-trade-request.visible {
   display: flex;
