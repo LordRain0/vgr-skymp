@@ -339,7 +339,7 @@ const consoleRelay = {
 
 // Console box: manager commands are handled locally, anything else is
 // forwarded to the game server console over the WS relay (the gamemode).
-const BUILD_KINDS = ['server', 'launcher', 'client']
+const BUILD_KINDS = ['server', 'launcher', 'client', 'native']
 const CONSOLE_HELP = [
   'Manager commands:',
   '  help                           this help',
@@ -429,15 +429,16 @@ function builder() { return new Builder(t => send('build:log', t)) }
 
 // One build at a time: console commands and Build tab buttons share this gate.
 let buildBusy = false
-async function runBuild(kind) {
+async function runBuild(kind, opts = {}) {
   if (buildBusy) return { ok: false, error: 'a build is already running' }
   buildBusy = true
   try {
     const b = builder()
     let r
-    if (kind === 'server')             r = await b.buildServer({ deploy: true })
+    if (kind === 'server')             r = await b.buildServer({ deploy: true, native: !!opts.native })
     else if (kind === 'launcher')      r = await b.buildLauncher()
-    else if (kind === 'client')        r = await b.buildClient()
+    else if (kind === 'client')        r = await b.buildClient({ native: !!opts.native })
+    else if (kind === 'native')        r = await b.buildNative()
     else if (kind === 'gamemode-sync') r = await b.syncGamemode()
     else return { ok: false, error: `unknown build ${kind}` }
     // Let queued build:log messages land before the renderer prints the outcome, else the failure line appears above its error.
@@ -448,9 +449,9 @@ async function runBuild(kind) {
   } finally { buildBusy = false }
 }
 
-ipcMain.handle('build:server',   () => runBuild('server'))
-ipcMain.handle('build:launcher', () => runBuild('launcher'))
-ipcMain.handle('build:client',   () => runBuild('client'))
+ipcMain.handle('build:server',   (_e, o) => runBuild('server', o))
+ipcMain.handle('build:launcher', ()      => runBuild('launcher'))
+ipcMain.handle('build:client',   (_e, o) => runBuild('client', o))
 ipcMain.handle('gamemode:sync',  () => runBuild('gamemode-sync'))
 ipcMain.handle('gamemode:status', () => {
   try { return builder().gamemodeStatus() }

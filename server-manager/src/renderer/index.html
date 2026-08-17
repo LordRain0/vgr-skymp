@@ -69,7 +69,8 @@
         </div>
         <div class="build-col">
           <h3>Game server</h3>
-          <small>Bundles the TypeScript (<code>skymp5-server</code>) and deploys <code>dist_back/skymp5-server.js</code> to the live server (previous bundle backed up). Restart the Game service to run it. <code>scam_native.node</code> comes from the CI <em>PR Windows Flatrim</em> artifacts.</small>
+          <small>Bundles the TypeScript (<code>skymp5-server</code>) and deploys <code>dist_back/skymp5-server.js</code> to the live server (previous bundle backed up). Restart the Game service to run it. <code>scam_native.node</code> comes from the CI <em>PR Windows Flatrim</em> artifacts, or tick CMake below to rebuild and deploy it locally (stop the Game service first).</small>
+          <label class="chk"><input type="checkbox" id="build-server-native" /> Rebuild <code>scam_native.node</code> first (CMake, VS 2022)</label>
           <button id="build-server" class="action go">Build &amp; deploy bundle</button>
         </div>
         <div class="build-col">
@@ -88,6 +89,7 @@
           <h3>Client files</h3>
           <div id="files-version" class="muted small-text">…</div>
           <small>Rebuilds <code>skymp5-client.js</code> into the CI payload at <code>build/dist/client</code>, overlays <code>vgr-frontend</code>, and packages <code>skymp-client.zip</code> + <code>files-version.json</code>. Mind the CLIENT_ZIP_URL warning in the log.</small>
+          <label class="chk"><input type="checkbox" id="build-client-native" /> Rebuild client .dlls first (SkyrimPlatform + MpClientPlugin, CMake)</label>
           <button id="build-client" class="action go">Build client files</button>
         </div>
       </div>

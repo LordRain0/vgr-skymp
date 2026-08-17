@@ -19,9 +19,9 @@ contextBridge.exposeInMainWorld('mgr', {
   newsImportImage: ()      => ipcRenderer.invoke('news:importImage'),
 
   // Build tab
-  buildServer:        ()   => ipcRenderer.invoke('build:server'),
+  buildServer:        (o)  => ipcRenderer.invoke('build:server', o),
   buildLauncher:      ()   => ipcRenderer.invoke('build:launcher'),
-  buildClient:        ()   => ipcRenderer.invoke('build:client'),
+  buildClient:        (o)  => ipcRenderer.invoke('build:client', o),
   gamemodeStatus:     ()   => ipcRenderer.invoke('gamemode:status'),
   gamemodeSync:       ()   => ipcRenderer.invoke('gamemode:sync'),
   launcherGetVersion: ()   => ipcRenderer.invoke('launcher:getVersion'),

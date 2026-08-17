@@ -819,9 +819,10 @@ function wireBuild(btnId, fn, label, after) {
     if (after) after(r)
   })
 }
-wireBuild('#build-server',   () => window.mgr.buildServer(),   'Game server build & deploy')
+// The CMake boxes rebuild the native binaries locally (VS 2022) before the JS build.
+wireBuild('#build-server',   () => window.mgr.buildServer({ native: $('#build-server-native')?.checked || false }), 'Game server build & deploy')
 wireBuild('#build-launcher', () => window.mgr.buildLauncher(), 'Launcher build')
-wireBuild('#build-client',   () => window.mgr.buildClient(),   'Client files build', refreshFilesVersion)
+wireBuild('#build-client',   () => window.mgr.buildClient({ native: $('#build-client-native')?.checked || false }), 'Client files build', refreshFilesVersion)
 
 // Sync is semi-destructive (overwrites live gamemode files) - armed confirm.
 armConfirm($('#gm-sync'), 'Sync to server', async () => {

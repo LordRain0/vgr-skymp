@@ -58,6 +58,183 @@ class Builder {
     return r.ok ? { ok: true } : { ok: false, error: `${label}: dependency install failed` }
   }
 
+  hasCmd(cmd) {
+    try { cp.execSync(`${isWin ? 'where' : 'which'} ${cmd}`, { stdio: 'ignore' }); return true }
+    catch { return false }
+  }
+
+  // Re-read PATH from the registry so tools installed mid-session are found.
+  refreshPath() {
+    if (!isWin) return
+    try {
+      const ps = "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')"
+      const out = cp.execSync(`powershell -NoProfile -Command "${ps}"`, { encoding: 'utf8' }).trim()
+      if (out) process.env.PATH = out
+    } catch {}
+  }
+
+  // ── Native (C++) build: the .dlls and scam_native.node via CMake/MSVC ─────────
+
+  // Locate a VS 2022 install with the C++ toolset.
+  findVsWithCpp() {
+    const vswhere = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe'
+    if (!fs.existsSync(vswhere)) return null
+    try {
+      const out = cp.execSync(
+        `"${vswhere}" -products * -version "[17.0,18.0)" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -latest -format value -property installationPath`,
+        { encoding: 'utf8' }
+      ).trim()
+      const dir = out.split(/\r?\n/)[0]
+      if (dir && fs.existsSync(path.join(dir, 'VC', 'Auxiliary', 'Build', 'vcvars64.bat'))) return dir
+    } catch {}
+    return null
+  }
+
+  // cmake: PATH first, then the copy VS ships with the C++ workload.
+  findCmake(vsDir) {
+    if (this.hasCmd('cmake')) return 'cmake'
+    if (vsDir) {
+      const bundled = path.join(vsDir, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'CMake', 'CMake', 'bin', 'cmake.exe')
+      if (fs.existsSync(bundled)) return bundled
+    }
+    return null
+  }
+
+  // Reports everything the native build needs in one go.
+  checkNativeToolchain() {
+    const problems = []
+    const vsDir = this.findVsWithCpp()
+    if (!vsDir) {
+      problems.push(
+        'Visual Studio 2022 with the "Desktop development with C++" workload.\n' +
+        '      Add it to an existing VS 2022 install (elevated):\n' +
+        '      "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vs_installer.exe" modify ^\n' +
+        '        --productId Microsoft.VisualStudio.Product.Community ^\n' +
+        '        --channelId VisualStudio.17.Release ^\n' +
+        '        --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart'
+      )
+    }
+    const cmake = this.findCmake(vsDir)
+    if (!cmake) problems.push('CMake (comes with the C++ workload above, or install it separately and put it on PATH)')
+    if (!this.hasCmd('git')) problems.push('Git (needed for the vcpkg submodule)')
+    if (!this.hasCmd('python') && !this.hasCmd('python3')) problems.push('Python 3 (some vcpkg ports need it)')
+    const vcpkgDir = path.join(config.repoRoot, 'vcpkg')
+    if (!fs.existsSync(path.join(vcpkgDir, '.git')) && !fs.existsSync(path.join(vcpkgDir, 'bootstrap-vcpkg.bat'))) {
+      problems.push('the vcpkg submodule (run: git submodule update --init --recursive)')
+    }
+    return { vsDir, cmake, vcpkgDir, problems }
+  }
+
+  // Configure + build the C++ with CMake/MSVC. Voice chat is always on, matching
+  // the production client (CI flatrim builds it OFF, so a local build is the way
+  // to get voice-enabled dlls). opts.targets limits the build, omit for everything.
+  async buildNative(opts = {}) {
+    this.banner('Native (C++) build')
+    if (!isWin) return { ok: false, error: 'native build is Windows-only' }
+
+    const tc = this.checkNativeToolchain()
+    if (tc.problems.length) {
+      this.line('[native] cannot build - missing:')
+      for (const p of tc.problems) this.line(`  - ${p}`)
+      this.line('\n[native] Alternative: download the CI "PR Windows Flatrim" dist artifact instead.')
+      return { ok: false, error: `missing build tools: ${tc.problems.length} item(s), see log` }
+    }
+    this.line(`[native] Visual Studio: ${tc.vsDir}`)
+    this.line(`[native] cmake: ${tc.cmake}`)
+
+    // CMakeLists refuses any other binary dir, so this cannot be relocated.
+    const buildDir = config.buildDir
+    fs.mkdirSync(buildDir, { recursive: true })
+
+    // cmake/yarn.cmake shells out to yarn during configure; npm is not accepted there.
+    if (!this.hasCmd('yarn')) {
+      this.line('[native] yarn missing - installing with npm…')
+      const y = await this.run('npm', ['install', '-g', 'yarn'], config.repoRoot, 'install yarn')
+      this.refreshPath()
+      if (!y.ok || !this.hasCmd('yarn')) {
+        return { ok: false, error: 'yarn is required by the CMake configure - install it manually: npm install -g yarn' }
+      }
+    }
+
+    if (!fs.existsSync(path.join(tc.vcpkgDir, 'vcpkg.exe'))) {
+      this.line('[native] bootstrapping vcpkg (first run, this takes a few minutes)…')
+      const boot = await this.run(path.join(tc.vcpkgDir, 'bootstrap-vcpkg.bat'), [], tc.vcpkgDir, 'bootstrap vcpkg')
+      if (!boot.ok) return { ok: false, error: 'vcpkg bootstrap failed - see log' }
+    }
+
+    const serverOnly = Array.isArray(opts.targets) && opts.targets.every(t => t === 'skymp5-server')
+    const buildsServer = !Array.isArray(opts.targets) || opts.targets.includes('skymp5-server')
+
+    const args = [
+      '-B', buildDir,
+      '-G', 'Visual Studio 17 2022',
+      '-A', 'x64',
+      `-DVCPKG_ROOT=${tc.vcpkgDir.replace(/\\/g, '/')}`,
+      '-DCMAKE_BUILD_TYPE=Release',
+      '-DBUILD_NODEJS=OFF',
+      '-DBUILD_FRONT=OFF',
+      '-DBUILD_UNIT_TESTS=OFF',
+      '-DSKYMP_VOICE_CHAT=ON',
+      '-DVCPKG_MANIFEST_FEATURES=voice-chat',
+    ]
+    if (config.gameRoot && fs.existsSync(config.gameRoot)) {
+      args.push(`-DSKYRIM_DIR=${config.gameRoot.replace(/\\/g, '/')}`)
+    }
+
+    // CI builds the client TS bundle before configuring (pr_base "Early build skymp5-client").
+    if (!serverOnly) {
+      const clientDeps = await this.ensureDeps(config.paths.client, 'client')
+      if (!clientDeps.ok) return clientDeps
+      const early = await this.run('npm', ['run', 'build'], config.paths.client, 'client: build bundle')
+      if (!early.ok) return { ok: false, error: 'client bundle build failed - see log' }
+    }
+
+    // shell:false: cmake.exe and several args contain spaces a shell command line would split.
+    this.line('\n[native] configuring (first run compiles all vcpkg dependencies - expect 1-3 hours)…')
+    const cfg = await this.run(tc.cmake, args, config.repoRoot, 'cmake configure', { VCPKG_FEATURE_FLAGS: 'manifests' }, false)
+    if (!cfg.ok) return { ok: false, error: 'cmake configure failed - see log' }
+
+    // The server post-build step regenerates these with upstream defaults, so
+    // snapshot the build-tree copies and put them back afterwards.
+    const guarded = ['server-settings.json', 'launch_server.bat'].map(name => {
+      const file = path.join(buildDir, 'dist', 'server', name)
+      let before = null
+      try { before = fs.readFileSync(file) } catch {}
+      return { file, before }
+    })
+
+    this.line('\n[native] compiling…')
+    const buildArgs = ['--build', buildDir, '--config', 'Release']
+    for (const t of (opts.targets || [])) buildArgs.push('--target', t)
+    const build = await this.run(tc.cmake, buildArgs, config.repoRoot, 'cmake build', null, false)
+
+    for (const g of guarded) {
+      if (!g.before) continue
+      let after = null
+      try { after = fs.readFileSync(g.file) } catch {}
+      if (!after || !after.equals(g.before)) {
+        fs.writeFileSync(g.file, g.before)
+        this.line(`[native] restored ${path.basename(g.file)} (the build regenerates it with upstream defaults)`)
+      }
+    }
+    if (!build.ok) return { ok: false, error: 'cmake build failed - see log' }
+
+    const outDir = path.join(buildDir, 'dist')
+    this.line('')
+    const expected = []
+    if (buildsServer) expected.push('server/scam_native.node')
+    if (!serverOnly) {
+      expected.push('client/Data/SKSE/Plugins/SkyrimPlatform.dll')
+      expected.push('client/Data/SKSE/Plugins/MpClientPlugin.dll')
+    }
+    for (const rel of expected) {
+      const p = path.join(outDir, rel)
+      this.line(fs.existsSync(p) ? `✓ ${rel}` : `MISSING ${rel}`)
+    }
+    this.line(`\n✓ Native build complete; artifacts are in ${outDir}`)
+    return { ok: true, out: outDir }
+  }
+
   // ── Gamemode: repo vgr-gamemode/ vs deployed <serverDir> ──────────────────────
 
   // The synced set: the loader itself plus everything under gamemode_extensions.
@@ -154,6 +331,18 @@ class Builder {
   // ── Game server: bundle the TypeScript and deploy it to the live server ───────
 
   async buildServer(opts = {}) {
+    // The fresh scam_native.node is deployed below, so fail before the long
+    // native build if the live copy is locked by a running game server.
+    const liveNode = path.join(config.paths.serverDir, 'scam_native.node')
+    if (opts.native && opts.deploy && fs.existsSync(liveNode)) {
+      try { fs.closeSync(fs.openSync(liveNode, 'r+')) }
+      catch { return { ok: false, error: 'scam_native.node is locked - stop the Game service before a native server build' } }
+    }
+    if (opts.native) {
+      const n = await this.buildNative({ targets: ['skymp5-server'] })
+      if (!n.ok) return n
+    }
+
     this.banner('Game server (TS bundle)')
     const dir = config.paths.server
     const dep = await this.ensureDeps(dir, 'game server')
@@ -193,6 +382,19 @@ class Builder {
       fs.renameSync(tmp, dest)
       this.line(`[deploy] ${name} → ${liveDir}`)
     }
+    if (opts.native) {
+      const freshNode = path.join(config.paths.serverDistDir, 'scam_native.node')
+      if (!fs.existsSync(freshNode)) return { ok: false, error: `native build did not produce ${freshNode}` }
+      if (fs.existsSync(liveNode)) {
+        const nodeBackupDir = path.dirname(backupDir)
+        fs.mkdirSync(nodeBackupDir, { recursive: true })
+        fs.copyFileSync(liveNode, path.join(nodeBackupDir, 'scam_native.node'))
+      }
+      const tmp = liveNode + '.tmp'
+      fs.copyFileSync(freshNode, tmp)
+      fs.renameSync(tmp, liveNode)
+      this.line(`[deploy] scam_native.node → ${config.paths.serverDir}`)
+    }
     this.line(`[deploy] previous bundle backed up to ${backupDir}`)
     this.line('\n✓ Bundle deployed. Restart the Game service to run it.')
     return { ok: true, bundle, deployed: true }
@@ -223,11 +425,16 @@ class Builder {
 
   // ── Client files: rebuild skymp5-client.js and repackage the launcher bundle ──
 
-  async buildClient() {
+  async buildClient(opts = {}) {
+    if (opts.native) {
+      const n = await this.buildNative({ targets: ['skymp5-client', 'skyrim-platform'] })
+      if (!n.ok) return n
+    }
+
     this.banner('Client files')
     const clientData = path.join(config.paths.clientDistDir, 'Data')
     if (!fs.existsSync(clientData)) {
-      return { ok: false, error: `client payload not found at ${clientData} - download the CI "dist" artifact (PR Windows Flatrim workflow) and extract it into build/dist/client first. The native DLLs are built by CI, not locally.` }
+      return { ok: false, error: `client payload not found at ${clientData} - tick the CMake box to build the DLLs locally, or download the CI "dist" artifact (PR Windows Flatrim workflow) and extract it into build/dist/client first.` }
     }
 
     // Fresh client logic bundle into the payload (webpack targets
