@@ -101,15 +101,15 @@ if not exist "%GAME%" (
 )
 :game_done
 
-:: Profile: third argument, or prompt, defaults to SkyRP
+:: Profile: third argument, or prompt, defaults to VengefulRealms
 set "PROFILE=%~3"
 if defined PROFILE goto :profile_given
 echo.
 echo Enter the ModOrganizer profile name
-echo (press Enter for SkyRP):
+echo (press Enter for VengefulRealms):
 set /p "PROFILE=Profile: "
 :profile_given
-if not defined PROFILE set "PROFILE=SkyRP"
+if not defined PROFILE set "PROFILE=VengefulRealms"
 
 echo.
 echo MO2 root:  %MO2%

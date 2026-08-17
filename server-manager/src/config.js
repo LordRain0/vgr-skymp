@@ -58,12 +58,16 @@ module.exports = {
   liveKitService: 'VgrLiveKit',
 
   // Reference MO2 install used to compile the manifest (the Modlist tab).
-  // Not present on this VPS by default - point VGR_MO2_ROOT at one to use it.
-  mo2Root:  process.env.VGR_MO2_ROOT  || 'X:\\MO2',
-  gameRoot: process.env.VGR_GAME_ROOT || 'X:\\GOG Games\\Skyrim Anniversary Edition',
-  // Default must match compile-manifest.js / BuildManifest.bat ('SkyRP') so
-  // every invocation path builds against the same profile.
-  profile:  process.env.VGR_MO2_PROFILE || 'SkyRP',
+  // Defaults match the production VPS (C:\MO2, launcher-managed layout with
+  // the game copy at C:\MO2\skyrim, profile VengefulRealms); point the
+  // VGR_MO2_* env vars elsewhere on a dev machine. Note: machine-level env
+  // vars only reach this app after Explorer restarts - the in-code defaults
+  // are what actually apply on a freshly configured box.
+  mo2Root:  process.env.VGR_MO2_ROOT  || 'C:\\MO2',
+  gameRoot: process.env.VGR_GAME_ROOT || 'C:\\MO2\\skyrim',
+  // Default must match compile-manifest.js / BuildManifest.bat so every
+  // invocation path builds against the same profile.
+  profile:  process.env.VGR_MO2_PROFILE || 'VengefulRealms',
 
   paths: {
     backend:      path.join(repoRoot, 'skymp5-backend'),

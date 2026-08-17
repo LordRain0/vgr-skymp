@@ -32,7 +32,7 @@ const SEVEN = (() => {
 // Args
 
 function parseArgs(argv) {
-  const a = { profile: 'SkyRP' }
+  const a = { profile: 'VengefulRealms' }
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i]
     if      (k === '--mo2')     a.mo2     = argv[++i]
@@ -45,7 +45,7 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv.slice(2))
 if (!args.mo2) {
-  console.error('Usage: node scripts/compile-manifest.js --mo2 <MO2 root> [--game <game root>] [--profile SkyRP]')
+  console.error('Usage: node scripts/compile-manifest.js --mo2 <MO2 root> [--game <game root>] [--profile VengefulRealms]')
   console.error('       (via npm, pass args after --: npm run compile-manifest -- --mo2 <MO2 root>)')
   process.exit(1)
 }
@@ -439,7 +439,13 @@ async function main() {
   // is the only surviving evidence. Explicit per-archive overrides win:
   // manifest-sources.json "gameNames": { "<archive filename>": "Skyrim"|"SkyrimSE" }.
   function pluginFormVersion(file) {
-    // TES4 record header: Type[4] DataSize[4] Flags[4] FormID[4] VC[4] FormVersion[2]
+    // 'TES4' is the plugin FILE-HEADER RECORD signature shared by every
+    // Bethesda game since Oblivion - Skyrim LE and SSE plugins both start
+    // with it (verified against this modlist: JKs Solitude.esp = TES4/43,
+    // SSE's own Skyrim.esm = TES4/44). It does NOT mean the mod is for
+    // Oblivion; the GAME is what the form version distinguishes (LE <= 43,
+    // SSE 44+).
+    // Record header layout: Type[4] DataSize[4] Flags[4] FormID[4] VC[4] FormVersion[2]
     try {
       const fd = fs.openSync(file, 'r')
       try {
