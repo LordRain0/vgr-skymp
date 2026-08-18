@@ -55,7 +55,14 @@ if (-not (Test-Path (Join-Path $vcpkgDir 'vcpkg.exe'))) {
 
 if (-not $SkipClean) {
   Step 'clean' {
-    if (Test-Path $buildDir) { cmd /c "rmdir /s /q `"$buildDir`"" | Out-Host }
+    # build\client-files holds the LIVE zip the backend serves; wiping it once
+    # took the download endpoint down, so the clean spares it.
+    if (Test-Path $buildDir) {
+      Get-ChildItem $buildDir | Where-Object { $_.Name -ne 'client-files' } | ForEach-Object {
+        cmd /c "rmdir /s /q `"$($_.FullName)`"" 2>$null | Out-Host
+        if (Test-Path $_.FullName) { cmd /c "del /f /q `"$($_.FullName)`"" | Out-Host }
+      }
+    }
     New-Item -ItemType Directory -Force $buildDir | Out-Null
   }
 }
