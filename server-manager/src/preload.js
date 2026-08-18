@@ -40,7 +40,7 @@ contextBridge.exposeInMainWorld('mgr', {
   // Settings tab
   settingsSchema: ()                   => ipcRenderer.invoke('settings:schema'),
   settingsRead:   (key)                => ipcRenderer.invoke('settings:read', key),
-  settingsWrite:  (key, values, extra) => ipcRenderer.invoke('settings:write', key, values, extra),
+  settingsWrite:  (key, values, extra, baseMtimeMs) => ipcRenderer.invoke('settings:write', key, values, extra, baseMtimeMs),
 
   // Modlist tab
   modlistRead:           () => ipcRenderer.invoke('modlist:read'),

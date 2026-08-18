@@ -896,6 +896,7 @@ $('#modlist-update').addEventListener('click', async e => {
 let SCHEMA = { serverSettings: [], backendEnv: [] }
 let settingsKey = 'serverSettings'
 let currentValues = {}
+let settingsBaseMtimeMs = 0
 
 window.mgr.settingsSchema().then(s => { SCHEMA = s; loadSettings() })
 
@@ -916,6 +917,7 @@ async function loadSettings() {
   const r = await window.mgr.settingsRead(settingsKey)
   if (!r.ok) { st.textContent = `Error: ${r.error}` + (r.path ? ` (${r.path})` : ''); return }
   currentValues = r.values || {}
+  settingsBaseMtimeMs = r.mtimeMs || 0
   st.textContent = r.path + (r.seeded ? '  (new — seeded from .env.example)' : '')
   renderSettingsForm(r.extra)
 }
@@ -1021,6 +1023,7 @@ $('#settings-save').addEventListener('click', async () => {
   const values = collectSettings()
   const extra = settingsKey === 'serverSettings' ? ($('#settings-extra')?.value || '') : undefined
   $('#settings-status').textContent = 'saving…'
-  const r = await window.mgr.settingsWrite(settingsKey, values, extra)
+  const r = await window.mgr.settingsWrite(settingsKey, values, extra, settingsBaseMtimeMs)
   $('#settings-status').textContent = r.ok ? `Saved ${r.path}` : `Error: ${r.error}`
+  if (r.ok) loadSettings()
 })

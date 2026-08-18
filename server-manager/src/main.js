@@ -971,7 +971,9 @@ ipcMain.handle('settings:read', (_e, key) => {
     const known = new Set(schema.serverSettings.map(f => f.key))
     const extra = {}
     for (const k of Object.keys(values)) if (!known.has(k)) extra[k] = values[k]
-    return { ok: true, path: file, values, extra }
+    let mtimeMs = 0
+    try { mtimeMs = fs.statSync(file).mtimeMs } catch {}
+    return { ok: true, path: file, values, extra, mtimeMs }
   }
   if (key === 'backendEnv') {
     const file = config.paths.backendEnv
@@ -982,10 +984,15 @@ ipcMain.handle('settings:read', (_e, key) => {
   return { ok: false, error: 'unknown config' }
 })
 
-ipcMain.handle('settings:write', (_e, key, values, extraRaw) => {
+ipcMain.handle('settings:write', (_e, key, values, extraRaw, baseMtimeMs) => {
   try {
     if (key === 'serverSettings') {
       const file = config.paths.serverSettings
+      // A form loaded before someone else edited the file would clobber their
+      // changes (the unknown-key bucket is replaced wholesale on save).
+      if (baseMtimeMs && fs.existsSync(file) && fs.statSync(file).mtimeMs !== baseMtimeMs) {
+        throw new Error('server-settings.json changed on disk since this tab loaded - hit Reload, re-apply your edits, then save')
+      }
       let current = {}
       if (fs.existsSync(file)) {
         // A corrupt file must block the save, or this write replaces the live config with {}.
