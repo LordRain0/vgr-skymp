@@ -36,6 +36,7 @@ const serverSettings = [
   { key: 'regenerationMultiplier',  label: 'Regen multiplier',      type: 'number', group: 'Gameplay', help: 'Scales the health/magicka/stamina regen the server accepts from clients. 1 = race-record rates, 0 = no natural regen.' },
   { key: 'chatRanges',              label: 'Chat ranges',           type: 'json',   group: 'Gameplay', help: 'Audible ranges in game units: { whisper, low, say, wide, shout }. Provided keys override the defaults.' },
   { key: 'voiceChat',               label: 'Voice chat',            type: 'json',   group: 'Gameplay', help: 'LiveKit proximity voice: { enabled, url, apiKey, apiSecret, room, rangeUnits }.' },
+  { key: 'vgrSocial',               label: 'Social Chamber',        type: 'json',   group: 'Gameplay', help: 'Friends + pigeon messaging: { enabled, maxFriends, maxPendingRequests, maxMessageLength, actionCooldownMs, pigeonRoutes: [{ maxDistance, cost, delaySeconds }] }. Null maxDistance = unbounded band. Restart the Game service to apply.' },
 
   // Data & storage
   { key: 'dataDir',        label: 'Data directory', type: 'text',   group: 'Data & storage', placeholder: 'data', help: 'ESMs / ESPs / UI / scripts.' },
