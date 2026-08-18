@@ -55,3 +55,6 @@ skymp5-backend/data/auth-states.json
 tools/voice-test/.env
 *.bak-before-*
 skymp5-backend/data/public-keys.json
+
+# local CI artifact staging
+build-artifacts/
