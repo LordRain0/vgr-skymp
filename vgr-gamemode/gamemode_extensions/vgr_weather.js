@@ -185,7 +185,8 @@ module.exports = (mp) => {
         return;
       }
 
-      weather.setActive(true, true);
+      // Gradual transition: instant swaps race FSMP's weather thread during sky rebuilds
+      weather.setActive(true, false);
 	`,
 
 		updateNeighbor: "",
