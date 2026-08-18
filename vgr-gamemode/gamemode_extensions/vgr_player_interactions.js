@@ -8,6 +8,7 @@ module.exports = (mp) => {
   const crypto = require("crypto");
   const identity = require("./vgr_access_identity");
   const helpers = require("./vgr_player_interaction_helpers");
+  const vgrHelpers = require("./vgr_helpers");
 
   let settings = {};
   try {
@@ -52,6 +53,7 @@ module.exports = (mp) => {
   const CUFF_BASE_IDS = helpers.normalizeCuffIds(config.cuffBaseIds);
   const NORMAL_RELEASE_ITEM_POLICY = config.normalReleaseItemPolicy || "return_to_releaser";
   const ADMIN_RELEASE_ITEM_POLICY = config.adminReleaseItemPolicy || "leave_with_target";
+  const RELEASE_ON_DEATH = config.releaseOnDeath !== false;
 
   let MongoClient = null;
   try {
@@ -72,6 +74,7 @@ module.exports = (mp) => {
   const nameplateSigByActor = new Map();
   const introCache = new Set();
   const activeRestraints = new Map(); // targetCharacterId -> restraint document
+  const restraintWriteLocks = new Set(); // targetCharacterId with a bind mutation in flight
 
   let mongoClientPromise = null;
   let indexPromise = null;
@@ -405,6 +408,9 @@ module.exports = (mp) => {
     const target = Number(targetPcFormId);
     if (!Number.isInteger(requester) || requester <= 0 || !actorExists(requester)) {
       return { ok: false, reason: "Requester is unavailable." };
+    }
+    if (isDeadActor(requester)) {
+      return { ok: false, reason: "You cannot do that right now." };
     }
     if (!Number.isInteger(target) || target <= 0 || !actorExists(target)) {
       return { ok: false, reason: "That player is no longer available." };
@@ -924,58 +930,69 @@ module.exports = (mp) => {
       return;
     }
 
-    const requesterInvBefore = getInventory(validation.requesterPcFormId);
-    const targetInvBefore = getInventory(validation.targetPcFormId);
-    const taken = helpers.takeOneCuff(requesterInvBefore, cuffBaseId, CUFF_BASE_IDS);
-    if (!taken) {
-      pushToast(pcFormId, "You need a set of Prisoner's Cuffs.");
+    // One bind mutation per target at a time so a concurrent apply cannot destroy a cuff.
+    const lockKey = String(validation.targetIdentity.characterId);
+    if (restraintWriteLocks.has(lockKey)) {
+      pushToast(pcFormId, "That player is already restrained.");
       return;
     }
-    const targetNext = helpers.addCuff(targetInvBefore, taken.cuffEntry);
-    const now = helpers.nowIso();
-    const restraint = {
-      schemaVersion: 1,
-      active: true,
-      targetCharacterId: validation.targetIdentity.characterId,
-      targetProfileId: validation.targetIdentity.profileId,
-      targetNameSnapshot: validation.targetIdentity.displayName,
-      targetPcFormId: validation.targetPcFormId,
-      binderCharacterId: validation.requesterIdentity.characterId,
-      binderProfileId: validation.requesterIdentity.profileId,
-      binderNameSnapshot: validation.requesterIdentity.displayName,
-      binderPcFormId: validation.requesterPcFormId,
-      cuffBaseId: Number(cuffBaseId),
-      cuffEntry: taken.cuffEntry,
-      createdAt: now,
-      updatedAt: now,
-    };
-
+    restraintWriteLocks.add(lockKey);
     try {
-      const { restraints } = await getCollections();
-      setInventory(validation.requesterPcFormId, taken.inventory);
-      setInventory(validation.targetPcFormId, targetNext);
-      await restraints.insertOne(restraint);
-      activeRestraints.set(restraint.targetCharacterId, restraint);
-      mp.set(validation.targetPcFormId, "vgrRestraintState", {
+      const requesterInvBefore = getInventory(validation.requesterPcFormId);
+      const targetInvBefore = getInventory(validation.targetPcFormId);
+      const taken = helpers.takeOneCuff(requesterInvBefore, cuffBaseId, CUFF_BASE_IDS);
+      if (!taken) {
+        pushToast(pcFormId, "You need a set of Prisoner's Cuffs.");
+        return;
+      }
+      const targetNext = helpers.addCuff(targetInvBefore, taken.cuffEntry);
+      const now = helpers.nowIso();
+      const restraint = {
+        schemaVersion: 1,
         active: true,
-        binderName: getVisibleName(validation.targetIdentity, validation.requesterIdentity),
-        cuffBaseId: restraint.cuffBaseId,
-        updatedAt: now,
-      });
-      closeSession(pcFormId, "binds_applied");
-      pushToast(validation.requesterPcFormId, "Bindings applied.");
-      pushToast(validation.targetPcFormId, "You have been restrained by " + getVisibleName(validation.targetIdentity, validation.requesterIdentity) + ".");
-      await writeAudit("bindings_applied", validation.requesterIdentity, {
         targetCharacterId: validation.targetIdentity.characterId,
-        cuffBaseId: restraint.cuffBaseId,
-      });
-    } catch (e) {
+        targetProfileId: validation.targetIdentity.profileId,
+        targetNameSnapshot: validation.targetIdentity.displayName,
+        targetPcFormId: validation.targetPcFormId,
+        binderCharacterId: validation.requesterIdentity.characterId,
+        binderProfileId: validation.requesterIdentity.profileId,
+        binderNameSnapshot: validation.requesterIdentity.displayName,
+        binderPcFormId: validation.requesterPcFormId,
+        cuffBaseId: Number(cuffBaseId),
+        cuffEntry: taken.cuffEntry,
+        createdAt: now,
+        updatedAt: now,
+      };
+
       try {
-        setInventory(validation.requesterPcFormId, requesterInvBefore);
-        setInventory(validation.targetPcFormId, targetInvBefore);
-      } catch (_) {}
-      console.error(LOG, "apply binds failed:", e && e.message ? e.message : e);
-      pushToast(pcFormId, "Interaction services are temporarily unavailable.");
+        const { restraints } = await getCollections();
+        setInventory(validation.requesterPcFormId, taken.inventory);
+        setInventory(validation.targetPcFormId, targetNext);
+        await restraints.insertOne(restraint);
+        activeRestraints.set(restraint.targetCharacterId, restraint);
+        mp.set(validation.targetPcFormId, "vgrRestraintState", {
+          active: true,
+          binderName: getVisibleName(validation.targetIdentity, validation.requesterIdentity),
+          cuffBaseId: restraint.cuffBaseId,
+          updatedAt: now,
+        });
+        closeSession(pcFormId, "binds_applied");
+        pushToast(validation.requesterPcFormId, "Bindings applied.");
+        pushToast(validation.targetPcFormId, "You have been restrained by " + getVisibleName(validation.targetIdentity, validation.requesterIdentity) + ".");
+        await writeAudit("bindings_applied", validation.requesterIdentity, {
+          targetCharacterId: validation.targetIdentity.characterId,
+          cuffBaseId: restraint.cuffBaseId,
+        });
+      } catch (e) {
+        try {
+          setInventory(validation.requesterPcFormId, requesterInvBefore);
+          setInventory(validation.targetPcFormId, targetInvBefore);
+        } catch (_) {}
+        console.error(LOG, "apply binds failed:", e && e.message ? e.message : e);
+        pushToast(pcFormId, "Interaction services are temporarily unavailable.");
+      }
+    } finally {
+      restraintWriteLocks.delete(lockKey);
     }
   }
 
@@ -1033,44 +1050,80 @@ module.exports = (mp) => {
       return;
     }
 
-    const targetInvBefore = getInventory(session.targetPcFormId);
-    const requesterInvBefore = getInventory(session.requesterPcFormId);
-    let targetNext = targetInvBefore;
-    let requesterNext = requesterInvBefore;
-    const shouldReturn =
-      isBinder
-        ? NORMAL_RELEASE_ITEM_POLICY === "return_to_releaser"
-        : ADMIN_RELEASE_ITEM_POLICY === "return_to_releaser";
-    const removed = helpers.removeOneCuff(targetInvBefore, restraint.cuffBaseId, CUFF_BASE_IDS);
-    if (removed) {
-      targetNext = removed.inventory;
-      if (shouldReturn) requesterNext = helpers.addCuff(requesterInvBefore, removed.cuffEntry);
+    // One bind mutation per target at a time so a concurrent release cannot mint a cuff.
+    const lockKey = String(restraint.targetCharacterId);
+    if (restraintWriteLocks.has(lockKey)) {
+      pushToast(pcFormId, "That player is busy.");
+      return;
     }
+    restraintWriteLocks.add(lockKey);
+    try {
+      const targetInvBefore = getInventory(session.targetPcFormId);
+      const requesterInvBefore = getInventory(session.requesterPcFormId);
+      let targetNext = targetInvBefore;
+      let requesterNext = requesterInvBefore;
+      const shouldReturn =
+        isBinder
+          ? NORMAL_RELEASE_ITEM_POLICY === "return_to_releaser"
+          : ADMIN_RELEASE_ITEM_POLICY === "return_to_releaser";
+      const removed = helpers.removeOneCuff(targetInvBefore, restraint.cuffBaseId, CUFF_BASE_IDS);
+      if (removed) {
+        targetNext = removed.inventory;
+        if (shouldReturn) requesterNext = helpers.addCuff(requesterInvBefore, removed.cuffEntry);
+      }
 
+      try {
+        const { restraints } = await getCollections();
+        setInventory(session.targetPcFormId, targetNext);
+        if (shouldReturn && removed) setInventory(session.requesterPcFormId, requesterNext);
+        await restraints.updateOne(
+          { targetCharacterId: String(restraint.targetCharacterId), active: true },
+          { $set: { active: false, releasedAt: helpers.nowIso(), releasedByCharacterId: session.requesterIdentity.characterId, updatedAt: helpers.nowIso() } }
+        );
+        activeRestraints.delete(String(restraint.targetCharacterId));
+        mp.set(session.targetPcFormId, "vgrRestraintState", { active: false, updatedAt: helpers.nowIso() });
+        closeSession(pcFormId, "binds_removed");
+        pushToast(session.requesterPcFormId, "Bindings removed.");
+        pushToast(session.targetPcFormId, "Your bindings were removed.");
+        await writeAudit(isBinder ? "bindings_removed" : "bindings_force_removed", session.requesterIdentity, {
+          targetCharacterId: session.targetIdentity.characterId,
+          cuffBaseId: restraint.cuffBaseId,
+        });
+      } catch (e) {
+        try {
+          setInventory(session.targetPcFormId, targetInvBefore);
+          setInventory(session.requesterPcFormId, requesterInvBefore);
+        } catch (_) {}
+        console.error(LOG, "remove binds failed:", e && e.message ? e.message : e);
+        pushToast(pcFormId, "Interaction services are temporarily unavailable.");
+      }
+    } finally {
+      restraintWriteLocks.delete(lockKey);
+    }
+  }
+
+  // Death releases the restraint so it cannot wedge across respawn; the cuff
+  // item stays with the target because there is no releaser to return it to.
+  async function releaseRestraintOnDeath(pcFormId) {
+    const who = getActorIdentity(pcFormId);
+    const restraint = who ? activeRestraints.get(String(who.characterId)) : null;
+    if (!restraint) return;
+    activeRestraints.delete(String(restraint.targetCharacterId));
+    try {
+      mp.set(pcFormId, "vgrRestraintState", { active: false, updatedAt: helpers.nowIso() });
+    } catch (e) {}
     try {
       const { restraints } = await getCollections();
-      setInventory(session.targetPcFormId, targetNext);
-      if (shouldReturn && removed) setInventory(session.requesterPcFormId, requesterNext);
       await restraints.updateOne(
         { targetCharacterId: String(restraint.targetCharacterId), active: true },
-        { $set: { active: false, releasedAt: helpers.nowIso(), releasedByCharacterId: session.requesterIdentity.characterId, updatedAt: helpers.nowIso() } }
+        { $set: { active: false, releasedAt: helpers.nowIso(), releasedByCharacterId: null, releaseReason: "death", updatedAt: helpers.nowIso() } }
       );
-      activeRestraints.delete(String(restraint.targetCharacterId));
-      mp.set(session.targetPcFormId, "vgrRestraintState", { active: false, updatedAt: helpers.nowIso() });
-      closeSession(pcFormId, "binds_removed");
-      pushToast(session.requesterPcFormId, "Bindings removed.");
-      pushToast(session.targetPcFormId, "Your bindings were removed.");
-      await writeAudit(isBinder ? "bindings_removed" : "bindings_force_removed", session.requesterIdentity, {
-        targetCharacterId: session.targetIdentity.characterId,
+      await writeAudit("bindings_released_on_death", who, {
+        targetCharacterId: restraint.targetCharacterId,
         cuffBaseId: restraint.cuffBaseId,
       });
     } catch (e) {
-      try {
-        setInventory(session.targetPcFormId, targetInvBefore);
-        setInventory(session.requesterPcFormId, requesterInvBefore);
-      } catch (_) {}
-      console.error(LOG, "remove binds failed:", e && e.message ? e.message : e);
-      pushToast(pcFormId, "Interaction services are temporarily unavailable.");
+      console.error(LOG, "release on death persistence failed:", e && e.message ? e.message : e);
     }
   }
 
@@ -1461,26 +1514,44 @@ module.exports = (mp) => {
     },
   };
 
-  mp.on("connect", (pcFormId) => {
+  // Connect and disconnect callbacks receive the user id, not the actor form id.
+  const actorLink = vgrHelpers.playerInteractions.createActorHelpers(mp, {});
+
+  mp.on("connect", (userId) => {
     try {
-      pushNameplates(pcFormId, true);
+      const pcFormId = actorLink.actorFromUser(userId);
+      if (pcFormId) pushNameplates(pcFormId, true);
       refreshNameplatesForOnline();
     } catch (e) {}
   });
 
-  mp.on("disconnect", (pcFormId) => {
+  mp.on("disconnect", (userId) => {
     try {
-      closeSession(pcFormId, "disconnect");
-      clearPrompt(pcFormId);
-      clearNameplates(pcFormId);
-      const outgoing = outgoingTradeByActor.get(pcFormId);
-      if (outgoing) removeTradeRequest(pendingTradeRequests.get(outgoing), "disconnect");
-      const incoming = incomingTradeByActor.get(pcFormId);
-      if (incoming) removeTradeRequest(pendingTradeRequests.get(incoming), "disconnect");
-      permissions.invalidate(pcFormId);
+      const pcFormId = actorLink.actorFromUser(userId);
+      if (pcFormId) {
+        closeSession(pcFormId, "disconnect");
+        clearPrompt(pcFormId);
+        clearNameplates(pcFormId);
+        const outgoing = outgoingTradeByActor.get(pcFormId);
+        if (outgoing) removeTradeRequest(pendingTradeRequests.get(outgoing), "disconnect");
+        const incoming = incomingTradeByActor.get(pcFormId);
+        if (incoming) removeTradeRequest(pendingTradeRequests.get(incoming), "disconnect");
+        permissions.invalidate(pcFormId);
+      }
       refreshNameplatesForOnline();
-    } catch (e) {}
+    } catch (e) {
+    } finally {
+      actorLink.forgetUser(userId);
+    }
   });
+
+  if (RELEASE_ON_DEATH && typeof mp.vgrOnDeath === "function") {
+    mp.vgrOnDeath((actorId) => {
+      releaseRestraintOnDeath(actorId).catch((e) => {
+        console.error(LOG, "release on death failed:", e && e.message ? e.message : e);
+      });
+    });
+  }
 
   loadPersistentState();
   console.log(LOG, "module loaded; contextual X key authority installed on DIK", INTERACTION_KEY_DIK);

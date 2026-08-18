@@ -1,5 +1,7 @@
 module.exports = (mp) => {
   const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
   const vgrHelpers = require("./vgr_helpers");
   const tradeHelpers = vgrHelpers.trade;
   const {
@@ -25,6 +27,7 @@ module.exports = (mp) => {
   const TRADE_REQUESTS_ENABLED = config.tradeRequestsEnabled !== false;
   const TRADE_REQUEST_TTL_MS = Math.max(3000, Number(config.tradeRequestTtlMs) || 15000);
   const TRADE_REQUEST_COOLDOWN_MS = Math.max(0, Number(config.tradeRequestCooldownMs) || 5000);
+  const TRADE_MAX_DISTANCE = Math.max(64, Number(config.maxDistance) || 300);
 
   // Dev: offline partner reference for single-client debug testing.
   // formDesc is the MongoDB changeForms key (e.g. "1", "b") — NOT profileId.
@@ -43,6 +46,13 @@ module.exports = (mp) => {
   const lastTradeRequestAt = new Map();
   let vgrTradingUiSeq = 0;
   const actors = vgrHelpers.playerInteractions.createActorHelpers(mp, {});
+
+  // Completed trades append one line to trading.log (rotated by the server manager).
+  const logDir = process.env.VGR_LOG_DIR || settings.logDir || "C:\\logs";
+  const tradeAudit = (line) => {
+    try { fs.appendFile(path.join(logDir, "trading.log"), new Date().toISOString() + " " + line + "\n", () => {}); }
+    catch (e) { }
+  };
 
   const vgrMakeTradeId = () => "trade_" + Date.now() + "_" + crypto.randomBytes(9).toString("base64url");
 
@@ -309,6 +319,15 @@ module.exports = (mp) => {
     ) {
       return { ok: false, reasonCode: "player_busy", reason: "That player is busy." };
     }
+    if (vgrActorRestrained(requester) || vgrActorDead(requester)) {
+      return { ok: false, reasonCode: "player_busy", reason: "You cannot trade right now." };
+    }
+    if (vgrActorRestrained(target) || vgrActorDead(target)) {
+      return { ok: false, reasonCode: "player_busy", reason: "That player is busy." };
+    }
+    if (!vgrTradeRangeOk(requester, target)) {
+      return { ok: false, reasonCode: "player_busy", reason: "Move closer to trade." };
+    }
     const last = lastTradeRequestAt.get(requester) || 0;
     if (Date.now() - last < TRADE_REQUEST_COOLDOWN_MS) {
       return { ok: false, reasonCode: "player_busy", reason: "Trade request cooldown." };
@@ -400,6 +419,22 @@ module.exports = (mp) => {
     }
   };
 
+  const vgrActorDead = (pcFormId) => {
+    try {
+      return actors.isDead(pcFormId) === true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const vgrTradeRangeOk = (a, b) => {
+    try {
+      return actors.rangeStatus(a, b, TRADE_MAX_DISTANCE).ok === true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const vgrRespondTradeRequest = (pcFormId, payload) => {
     const id = payload && payload.requestId;
     const response = String((payload && payload.response) || "").toLowerCase();
@@ -434,7 +469,10 @@ module.exports = (mp) => {
       vgrPlayerTrade.has(request.requesterPcFormId) ||
       vgrPlayerTrade.has(request.targetPcFormId) ||
       vgrActorRestrained(request.requesterPcFormId) ||
-      vgrActorRestrained(request.targetPcFormId)
+      vgrActorRestrained(request.targetPcFormId) ||
+      vgrActorDead(request.requesterPcFormId) ||
+      vgrActorDead(request.targetPcFormId) ||
+      !vgrTradeRangeOk(request.requesterPcFormId, request.targetPcFormId)
     ) {
       vgrRemoveTradeRequest(request, true);
       vgrNotifyActor(request.requesterPcFormId, "That player is no longer available.");
@@ -579,6 +617,25 @@ module.exports = (mp) => {
     vgrResetAccept(session);
   };
 
+  // JSON-quoted name plus fixed-position ids so a crafted name cannot forge a log line.
+  const vgrDescribeParty = (pcFormId) => {
+    const who = actors.identity(pcFormId);
+    const name = who ? who.displayName : actors.displayName(pcFormId, "Adventurer");
+    const profileId = who ? who.profileId : -1;
+    return JSON.stringify(name) + " (profile " + profileId + ", actor " + Number(pcFormId).toString(16) + ")";
+  };
+
+  const vgrDescribeOffer = (offer) => {
+    const items = normalizeOffer(offer);
+    if (!items.length) return "nothing";
+    return items.map((item) => {
+      let label = item.count + "x 0x" + (item.baseId >>> 0).toString(16);
+      const enriched = vgrEnrichItem(item);
+      if (enriched && enriched.name) label += " " + JSON.stringify(enriched.name);
+      return label;
+    }).join(", ");
+  };
+
   const vgrTryFinalize = (session) => {
     if (!session.acceptedA || !session.acceptedB) return false;
     if (session.partnerOffline || !actors.exists(session.playerB)) {
@@ -593,6 +650,28 @@ module.exports = (mp) => {
       return false;
     }
 
+    if (!actors.exists(session.playerA)) {
+      vgrClearSession(session.id, "party_unavailable");
+      return false;
+    }
+    // Revalidate both parties at finalize time, not just when the session opened.
+    if (
+      vgrActorRestrained(session.playerA) || vgrActorRestrained(session.playerB) ||
+      vgrActorDead(session.playerA) || vgrActorDead(session.playerB)
+    ) {
+      vgrNotifyActor(session.playerA, "Trade cancelled.");
+      vgrNotifyActor(session.playerB, "Trade cancelled.");
+      vgrClearSession(session.id, "party_unavailable");
+      return false;
+    }
+    if (!vgrTradeRangeOk(session.playerA, session.playerB)) {
+      vgrNotifyActor(session.playerA, "Move closer to trade.");
+      vgrNotifyActor(session.playerB, "Move closer to trade.");
+      vgrResetAccept(session);
+      vgrPushBoth(session, "update");
+      return false;
+    }
+
     const invA = actors.inventory(session.playerA);
     const invB = actors.inventory(session.playerB);
 
@@ -602,8 +681,16 @@ module.exports = (mp) => {
         throw new Error("Could not write inventory for actor " + session.playerA);
       }
       if (!actors.setInventory(session.playerB, result.invB)) {
+        // Undo the already written side so a half-applied swap cannot dupe.
+        actors.setInventory(session.playerA, invA);
         throw new Error("Could not write inventory for actor " + session.playerB);
       }
+      tradeAudit(
+        "[trade] " + vgrDescribeParty(session.playerA) +
+        " gave [" + vgrDescribeOffer(session.offerA) + "] to " +
+        vgrDescribeParty(session.playerB) +
+        " for [" + vgrDescribeOffer(session.offerB) + "]"
+      );
       console.log(LOG_TRADING, "trade finalized:", session.id);
       vgrClearSession(session.id, "completed");
       return true;
@@ -792,6 +879,10 @@ module.exports = (mp) => {
       const target = Number(targetPcFormId);
       if (!Number.isInteger(requester) || !Number.isInteger(target) || requester <= 0 || target <= 0) return null;
       if (requester === target) return null;
+      if (!actors.exists(requester) || !actors.exists(target)) return null;
+      if (vgrActorRestrained(requester) || vgrActorRestrained(target)) return null;
+      if (vgrActorDead(requester) || vgrActorDead(target)) return null;
+      if (!vgrTradeRangeOk(requester, target)) return null;
       return vgrCreateSession(requester, target, {
         partnerDisplayName: context && context.partnerDisplayName,
         visibleNames: context && context.visibleNames,
