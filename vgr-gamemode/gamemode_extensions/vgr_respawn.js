@@ -1,23 +1,21 @@
 // ==========================================
 // VGR RESPAWN (players)
 // ==========================================
-// Port of the Alduinak respawn system onto the VGR extension layout.
 // On death the engine ragdolls the player and respawns them after spawnDelay
 // at spawnPoint, restoring respawnPercentages of each stat. This extension
-// points the spawn point at the nearest temple interior at ~1 HP (injured),
-// shows the death screen (countdown + choices) through the UI manager, and
-// validates every choice server-side.
-// Choices: permadeath (engine respawn blocked, body remains), resurrect
-// (full health in place, re-death to the same killer within 1h forces
-// permadeath), temple (nearest temple at full health).
-// Registers through mp.vgrOnDeath (vgr_npcs.js owns the mp.onDeath slot) and
-// owns the free mp.onRespawn slot; returning false there blocks the engine
-// revive for permadead corpses.
+// points the spawn point at the nearest temple interior at ~1 HP (health
+// then regains naturally) and shows the death screen (countdown plus a
+// confirm-gated permadeath choice) through the UI manager.
+// Permadeath blocks the engine revive (mp.onRespawn returning false), leaves
+// the corpse, and flags the character permaDead in the backend character
+// store so character select can grey it out.
+// Registers through mp.vgrOnDeath (vgr_npcs.js owns the mp.onDeath slot).
 
 module.exports = (mp) => {
   const LOG = "[VGR respawn]";
   const fs = require("fs");
   const path = require("path");
+  const identity = require("./vgr_access_identity");
 
   let settings = {};
   try {
@@ -29,14 +27,7 @@ module.exports = (mp) => {
   // Tuning
   const BLEEDOUT_SECONDS = Math.max(5, Number(settings.respawnSeconds) || 15);
   const WAKE_HEALTH = 0.01;
-  const FULL_HEALTH = 1.0;
-  const REGEN_INTERVAL_MS = 8 * 60 * 60 * 1000;
-  const REGEN_NATURAL = 0.01;
-  const REGEN_HEALER = 0.05;
-  const ARMED_KILLER_TTL_MS = 60 * 60 * 1000;
   const NEVER_RESPAWN = 1e12;
-  const TICK_MS = 30 * 1000;
-  const HEALTH_EPSILON = 0.005;
 
   // Temple interiors (measured in-game, VGR_Locations survey)
   const SOLITUDE  = { cellOrWorldDesc: "16a02:Skyrim.esm", pos: [1676.93, 1571.19, 0],      rot: [0, 0, 15.75] };
@@ -121,6 +112,39 @@ module.exports = (mp) => {
     catch (e) { }
   };
 
+  // Backend character store: permadeath flags the character doc so character
+  // select can grey it out and the manager can un-PK it.
+  let MongoClient = null;
+  try { MongoClient = require("mongodb").MongoClient; }
+  catch (e) { console.error(LOG, "mongodb driver missing; permadeath will not reach character select"); }
+  let backendClientPromise = null;
+
+  function backendUri() {
+    const access = settings.vgrAccessControl || {};
+    if (access.backendDatabaseUri) return access.backendDatabaseUri;
+    if (!settings.databaseUri) return "";
+    try {
+      const uri = new URL(settings.databaseUri);
+      uri.pathname = "/" + (access.backendDatabaseName || "skymp-backend");
+      return uri.toString();
+    } catch (e) { return ""; }
+  }
+
+  async function setCharacterPermaDead(profileId, value) {
+    if (!MongoClient) return;
+    const uri = backendUri();
+    if (!uri || !Number.isInteger(profileId) || profileId <= 0) return;
+    const access = settings.vgrAccessControl || {};
+    const dbName = access.backendDatabaseName || "skymp-backend";
+    const collection = access.charactersCollection || "characters";
+    if (!backendClientPromise) backendClientPromise = MongoClient.connect(uri, { maxPoolSize: 2 });
+    const db = (await backendClientPromise).db(dbName);
+    await db.collection(collection).updateOne(
+      { profileId, deletedAt: null },
+      { $set: { permaDead: value === true, permaDeadAt: value === true ? new Date().toISOString() : null } }
+    );
+  }
+
   // Death screen payload channel; nonce-deduped because updateOwner runs every frame.
   mp.makeProperty("vgrDeathScreen", {
     isVisibleByOwner: true,
@@ -144,23 +168,6 @@ module.exports = (mp) => {
     mp.vgrCloseUI(actorId, "death_screen");
   };
 
-  // Full restore, deliberately refills magicka/stamina too; only for the
-  // explicit full-health outcomes.
-  const setHealth = (actorId, health) => {
-    safeSet(actorId, "percentages", { health, magicka: 1, stamina: 1 });
-  };
-  // Write health while keeping the player's current magicka/stamina.
-  const setHealthPreserving = (actorId, health) => {
-    const cur = safeGet(actorId, "percentages", null);
-    const magicka = cur && typeof cur.magicka === "number" ? cur.magicka : 1;
-    const stamina = cur && typeof cur.stamina === "number" ? cur.stamina : 1;
-    safeSet(actorId, "percentages", { health, magicka, stamina });
-  };
-  const clearArmedKiller = (actorId) => {
-    safeSet(actorId, "private.resurrectArmedKiller", 0);
-    safeSet(actorId, "private.resurrectArmedUntilMs", 0);
-  };
-
   function onPlayerDeath(dyingActorId, killerId) {
     if (!isPlayer(dyingActorId)) return;
 
@@ -170,37 +177,18 @@ module.exports = (mp) => {
       return;
     }
 
-    // Anti-glitch: a resurrect followed by another death to the same killer
-    // within the arming window forces permadeath instead of a new choice.
-    const armed = safeGet(dyingActorId, "private.resurrectArmedKiller", 0);
-    const armedUntil = safeGet(dyingActorId, "private.resurrectArmedUntilMs", 0);
-    if (killerId && armed === killerId && Date.now() < armedUntil) {
-      audit("PERMADEATH forced: " + dyingActorId.toString(16) + " died again to armed killer " + killerId.toString(16));
-      doPermaDeath(dyingActorId, "died again to the same player after a resurrect");
-      return;
-    }
-    if (armed) clearArmedKiller(dyingActorId);
-
     const pos = safeGet(dyingActorId, "pos", null);
     const world = safeGet(dyingActorId, "worldOrCellDesc", null);
     const temple = pickTemple(world, pos);
 
-    // Default outcome: wake at the nearest temple interior at 1 HP, injured.
-    // These take effect because this handler runs before the engine arms its
-    // respawn timer for this death.
+    // Default outcome: wake at the nearest temple interior at 1 HP; health
+    // regains naturally from there. These take effect because this handler
+    // runs before the engine arms its respawn timer for this death.
     safeSet(dyingActorId, "spawnPoint", temple.dest);
     safeSet(dyingActorId, "spawnDelay", BLEEDOUT_SECONDS);
     safeSet(dyingActorId, "respawnPercentages", { health: WAKE_HEALTH, magicka: 1, stamina: 1 });
 
-    safeSet(dyingActorId, "private.deathKiller", killerId || 0);
-    safeSet(dyingActorId, "private.deathPos", Array.isArray(pos) ? pos : [0, 0, 0]);
-    safeSet(dyingActorId, "private.deathWorld", typeof world === "string" ? world : "");
-    safeSet(dyingActorId, "private.injured", true);
-    safeSet(dyingActorId, "private.injuredHealth", WAKE_HEALTH);
-    safeSet(dyingActorId, "private.regenLastMs", Date.now());
-    safeSet(dyingActorId, "private.regenRate", REGEN_NATURAL);
-
-    // One-shot window: choices are only honoured while this is set.
+    // One-shot window: the permadeath choice is only honoured while this is set.
     safeSet(dyingActorId, "private.deathChoicePending", true);
 
     showDeathScreen(dyingActorId, BLEEDOUT_SECONDS);
@@ -219,100 +207,35 @@ module.exports = (mp) => {
     hideDeathScreen(actorId);
   }
 
-  // Choices come from the browser; only honour them while the sender is
+  // The choice comes from the browser; only honour it while the sender is
   // actually dead and still holds the unconsumed window for this death.
   function onDeathChoice(actorId, choiceRaw) {
-    const choice = String(choiceRaw || "");
+    if (String(choiceRaw || "") !== "permadeath") return;
     if (!isPlayer(actorId)) return;
-    if (choice !== "permadeath" && choice !== "resurrect" && choice !== "temple") return;
     if (safeGet(actorId, "isDead", false) !== true) return;
     if (safeGet(actorId, "private.deathChoicePending", false) !== true) return;
     safeSet(actorId, "private.deathChoicePending", false);
-
-    if (choice === "permadeath") doPermaDeath(actorId, "chose permanent death");
-    else if (choice === "resurrect") doResurrectHere(actorId);
-    else doTempleFullHealth(actorId);
+    doPermaDeath(actorId, "chose permanent death");
   }
 
   // Permadeath holds through onPlayerRespawn returning false plus an inert
   // spawnDelay so the restart re-arm path never schedules a revive either.
   function doPermaDeath(actorId, reason) {
     safeSet(actorId, "private.permaDead", true);
-    safeSet(actorId, "private.injured", false);
     safeSet(actorId, "private.deathChoicePending", false);
-    clearArmedKiller(actorId);
     safeSet(actorId, "spawnDelay", NEVER_RESPAWN);
     safeSet(actorId, "isDead", true);
     hideDeathScreen(actorId);
     audit("PERMADEATH " + actorId.toString(16) + ": " + reason);
     console.log(LOG, "PERMADEATH", actorId.toString(16), reason);
-  }
 
-  function doResurrectHere(actorId) {
-    const killer = safeGet(actorId, "private.deathKiller", 0);
-    const count = safeGet(actorId, "private.resurrectCount", 0) + 1;
-    safeSet(actorId, "isDead", false);
-    setHealth(actorId, FULL_HEALTH);
-    safeSet(actorId, "private.injured", false);
-    safeSet(actorId, "respawnPercentages", { health: FULL_HEALTH, magicka: 1, stamina: 1 });
-    safeSet(actorId, "private.resurrectCount", count);
-    safeSet(actorId, "private.resurrectArmedKiller", killer);
-    safeSet(actorId, "private.resurrectArmedUntilMs", Date.now() + ARMED_KILLER_TTL_MS);
-    hideDeathScreen(actorId);
-    audit("RESURRECT-HERE " + actorId.toString(16) + " use #" + count + " armed vs " + (killer ? killer.toString(16) : "none"));
-  }
-
-  function doTempleFullHealth(actorId) {
-    const deathPos = safeGet(actorId, "private.deathPos", null);
-    const deathWorld = safeGet(actorId, "private.deathWorld", null);
-    const temple = pickTemple(deathWorld, deathPos);
-    safeSet(actorId, "isDead", false);
-    safeSet(actorId, "locationalData", temple.dest);
-    setHealth(actorId, FULL_HEALTH);
-    safeSet(actorId, "private.injured", false);
-    safeSet(actorId, "respawnPercentages", { health: FULL_HEALTH, magicka: 1, stamina: 1 });
-    hideDeathScreen(actorId);
-    audit("TEMPLE-RESPAWN " + actorId.toString(16) + " -> " + temple.name);
-  }
-
-  // Periodic tick: pin injured players' health to the slow recovery curve.
-  // The engine's respawn message tells the client "full health" and natural
-  // regen cropping would accept the client's full bar within minutes.
-  function tick() {
-    const now = Date.now();
-    const players = safeGet(0, "onlinePlayers", []) || [];
-    for (const actorId of players) {
-      if (!actorId || !isPlayer(actorId)) continue;
-      if (safeGet(actorId, "private.injured", false) !== true) continue;
-
-      const last = safeGet(actorId, "private.regenLastMs", now);
-      const rate = safeGet(actorId, "private.regenRate", REGEN_NATURAL);
-      let ceiling = safeGet(actorId, "private.injuredHealth", WAKE_HEALTH);
-      const intervals = Math.floor((now - last) / REGEN_INTERVAL_MS);
-      if (intervals > 0) {
-        ceiling = Math.min(FULL_HEALTH, ceiling + intervals * rate);
-        safeSet(actorId, "private.injuredHealth", ceiling);
-        safeSet(actorId, "private.regenLastMs", last + intervals * REGEN_INTERVAL_MS);
-      }
-      if (ceiling >= FULL_HEALTH) {
-        safeSet(actorId, "private.injured", false);
-        safeSet(actorId, "respawnPercentages", { health: FULL_HEALTH, magicka: 1, stamina: 1 });
-      } else {
-        const cur = safeGet(actorId, "percentages", null);
-        const curHealth = cur && typeof cur.health === "number" ? cur.health : ceiling;
-        if (Math.abs(curHealth - ceiling) > HEALTH_EPSILON) {
-          setHealthPreserving(actorId, ceiling);
-        }
-      }
+    const who = identity.getIdentity(mp, actorId);
+    if (who && who.profileId) {
+      setCharacterPermaDead(who.profileId, true).catch((e) => {
+        console.error(LOG, "backend permaDead flag failed:", e && e.message ? e.message : e);
+      });
     }
   }
-
-  // Call when a healer tends an injured player to bump recovery to 5 HP / 8h.
-  mp.vgrRespawnHealerBoost = (actorId) => {
-    if (safeGet(actorId, "private.injured", false) === true) {
-      safeSet(actorId, "private.regenRate", REGEN_HEALER);
-    }
-  };
 
   // Browser -> server choice relay.
   mp.makeEventSource("_vgrRespawn", `
@@ -338,14 +261,6 @@ module.exports = (mp) => {
     try { return onPlayerRespawn(actorId); }
     catch (e) { console.error(LOG, "onRespawn failed:", e && e.message ? e.message : e); }
   };
-
-  const loop = () => {
-    setTimeout(() => {
-      try { tick(); } catch (e) { console.error(LOG, "tick failed:", e && e.message ? e.message : e); }
-      loop();
-    }, TICK_MS);
-  };
-  loop();
 
   console.log(LOG, "started; bleedout", BLEEDOUT_SECONDS, "s,", ANCHORS.length, "anchors");
 };

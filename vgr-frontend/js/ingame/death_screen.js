@@ -24,7 +24,7 @@ function vgrDeathStopTimer() {
 function vgrDeathPaint() {
 	if (vgrDeathState.seconds > 0) {
 		vgr_death_countdownEl.textContent = String(vgrDeathState.seconds);
-		vgr_death_hintEl.textContent = "You are bleeding out. Choose your fate, or be carried to the nearest temple.";
+		vgr_death_hintEl.textContent = "You are bleeding out. You will wake at the nearest temple.";
 	} else {
 		vgr_death_countdownEl.textContent = "";
 		vgr_death_hintEl.textContent = "You feel yourself being carried to safety...";
