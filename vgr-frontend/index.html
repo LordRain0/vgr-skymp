@@ -151,7 +151,7 @@
           <button id="vgr-woodcutting-button" type="button">Working...</button>
         </div>
 
-        <!-- ===== Social Chamber (mockup) ===== -->
+        <!-- ===== Social Chamber ===== -->
         <div class="friends-container" id="friendsContainer">
           <div class="friends-header">
             <div class="title-section">
@@ -164,12 +164,19 @@
             <button class="action-btn" id="showOnlineBtn">SHOW ONLINE</button>
             <button class="action-btn" id="showAllBtn">ALL FRIENDS</button>
             <button class="action-btn" id="sortByNameBtn">SORT A-Z</button>
-            <button class="action-btn" id="sortByStatusBtn">STATUS SORT</button>
           </div>
 
           <div class="add-friend-panel">
             <input type="text" id="friendNameInput" placeholder="Enter hero name..." maxlength="22">
             <button id="addFriendBtn">ADD FRIEND</button>
+          </div>
+
+          <div class="friend-requests-panel" id="friendRequestsPanel" hidden>
+            <div class="requests-header">
+              <span>PENDING REQUESTS</span>
+              <span class="requests-counter" id="friendRequestsCounter">0</span>
+            </div>
+            <div class="requests-list" id="friendRequestsContainer"></div>
           </div>
 
           <div class="friend-list" id="friendListContainer">

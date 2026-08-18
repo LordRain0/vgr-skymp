@@ -2,6 +2,10 @@
 const MAX_FRIENDS = 12;
 const MAX_PARTY_SIZE = 4;
 
+// Server-driven limits; the friends payload overrides these defaults
+let maxFriendsLimit = MAX_FRIENDS;
+let maxMessageLength = 250;
+
 let friends = [];
 let incomingRequests = [];
 let outgoingRequests = [];
@@ -33,10 +37,12 @@ function notifySocial(message, durationMs = 2200, variant = "info") {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
+    return String(str).replace(/[&<>"']/g, function(m) {
         if (m === '&') return '&amp;';
         if (m === '<') return '&lt;';
         if (m === '>') return '&gt;';
+        if (m === '"') return '&quot;';
+        if (m === "'") return '&#39;';
         return m;
     });
 }
@@ -80,15 +86,19 @@ function addChatMessage(friendIdValue, messageText, sentByMe, timestamp) {
 function sendPrivateMessage(friendIdValue, messageText) {
     const trimmed = messageText.trim();
     if (trimmed === "") return false;
-    if (trimmed.length > 250) {
-        notifySocial("Message too long! (max 250 chars)", 3000, "warning");
+    if (trimmed.length > maxMessageLength) {
+        notifySocial(`Message too long! (max ${maxMessageLength} chars)`, 3000, "warning");
         return false;
     }
 
     const friend = findFriend(friendIdValue);
     if (!friend) return false;
 
-    vgrSocialSend("sendMessage", { toFormDesc: friendIdValue, text: trimmed });
+    vgrSocialSend("sendMessage", {
+        toFormDesc: friendIdValue,
+        text: trimmed,
+        clientNonce: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    });
     return true;
 }
 
@@ -150,8 +160,8 @@ function openChatPopup(friendIdValue) {
         </div>
         <div class="popup-messages"></div>
         <div class="popup-input-area">
-            <input type="text" class="popup-message-input" placeholder="Type a message..." maxlength="250">
-            <button class="popup-send-btn">📡 SEND</button>
+            <input type="text" class="popup-message-input" placeholder="Write a pigeon message..." maxlength="${maxMessageLength}">
+            <button class="popup-send-btn">🕊️ SEND</button>
         </div>
     `;
 
@@ -319,8 +329,8 @@ function leaveParty() {
 function updateCounterUI() {
     const counterSpan = document.getElementById('friendCounter');
     if (counterSpan) {
-        counterSpan.innerText = `${friends.length} / ${MAX_FRIENDS}`;
-        if (friends.length >= MAX_FRIENDS) {
+        counterSpan.innerText = `${friends.length} / ${maxFriendsLimit}`;
+        if (friends.length >= maxFriendsLimit) {
             counterSpan.style.color = "#ffbc7a";
             counterSpan.style.border = "1px solid #ff9050";
         } else {
@@ -339,9 +349,6 @@ function applySort(friendsArray) {
     let sorted = [...friendsArray];
     if (currentSort === "name") {
         sorted.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (currentSort === "status") {
-        const statusOrder = { "online": 1, "away": 2, "offline": 3 };
-        sorted.sort((a, b) => (statusOrder[a.status] || 3) - (statusOrder[b.status] || 3));
     } else {
         sorted.sort((a, b) => friendId(a).localeCompare(friendId(b)));
     }
@@ -470,7 +477,7 @@ function renderFriendList() {
                 </div>
             </div>
             <div class="friend-actions">
-                <button class="icon-btn chat-popup-btn" data-id="${escapeHtml(fid)}" data-name="${escapeHtml(friend.name)}">💬</button>
+                <button class="icon-btn chat-popup-btn" data-id="${escapeHtml(fid)}" data-name="${escapeHtml(friend.name)}" title="Send pigeon">🕊️</button>
                 <button class="icon-btn party-invite-btn" data-id="${escapeHtml(fid)}" data-name="${escapeHtml(friend.name)}">⚔️</button>
                 <button class="icon-btn remove-btn" data-id="${escapeHtml(fid)}">✖</button>
             </div>
@@ -517,9 +524,9 @@ function addFriend(rawName) {
 function setFilterOnline() { currentFilter = "online"; renderFriendList(); notifySocial("Showing online"); }
 function setFilterAll() { currentFilter = "all"; renderFriendList(); notifySocial("All allies"); }
 function setSortByName() { currentSort = "name"; renderFriendList(); notifySocial("Sorted by name"); }
-function setSortByStatus() { currentSort = "status"; renderFriendList(); notifySocial("Sorted by status"); }
-
 function applyFriendsPayload(payload) {
+    if (Number(payload.maxFriends) > 0) maxFriendsLimit = Number(payload.maxFriends);
+    if (Number(payload.maxMessageLength) > 0) maxMessageLength = Number(payload.maxMessageLength);
     const accepted = payload.accepted || payload.friends || [];
     friends = accepted.map(f => ({
         id: f.formDesc || f.id,
@@ -599,7 +606,6 @@ function bindUiEvents() {
     document.getElementById('showOnlineBtn').addEventListener('click', setFilterOnline);
     document.getElementById('showAllBtn').addEventListener('click', setFilterAll);
     document.getElementById('sortByNameBtn').addEventListener('click', setSortByName);
-    document.getElementById('sortByStatusBtn').addEventListener('click', setSortByStatus);
     document.getElementById('leavePartyBtn').addEventListener('click', leaveParty);
 }
 

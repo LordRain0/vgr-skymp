@@ -99,6 +99,7 @@ require(path.join(extensionsDir, 'vgr_enchanting.js'))(mp);
 require(path.join(extensionsDir, 'vgr_woodcutting.js'))(mp);
 require(path.join(extensionsDir, 'vgr_mining.js'))(mp);
 require(path.join(extensionsDir, 'vgr_emotes.js'))(mp);
+require(path.join(extensionsDir, 'vgr_social.js'))(mp);
 require(path.join(extensionsDir, 'vgr_transform_race.js'))(mp);
 
 
