@@ -26,6 +26,10 @@ type Config struct {
 	RoomPrefix    string  `json:"roomPrefix"` // e.g. "eruvos"
 	TickRateMs    int     `json:"tickRateMs"` // how often to run proximity checks
 	MaxStreams    int     `json:"maxStreams"` // max audio streams per listener
+	// UnsubscribePadding keeps an existing voice stream alive slightly beyond
+	// its normal range. This prevents rapid subscribe/unsubscribe flapping when
+	// position snapshots land on opposite sides of the range boundary.
+	UnsubscribePadding float64 `json:"unsubscribePadding"`
 }
 
 // PlayerPosition represents a player's position in the game world
@@ -384,6 +388,17 @@ func (va *VoiceAgent) updateSubscriptions(ctx context.Context) {
 			distSq   float64
 		}
 
+		// Get current subscription state before calculating the desired set. An
+		// already-subscribed speaker receives a small range cushion; new speakers
+		// must still be inside their normal voice-mode range.
+		va.mu.Lock()
+		current, exists := va.subState[listenerID]
+		if !exists {
+			current = make(map[string]bool)
+			va.subState[listenerID] = current
+		}
+		va.mu.Unlock()
+
 		var inRange []speakerDist
 
 		for speakerID, speakerPos := range positions {
@@ -407,7 +422,12 @@ func (va *VoiceAgent) updateSubscriptions(ctx context.Context) {
 				speakerRange = va.config.VoiceRange
 			}
 
-			if distSq <= speakerRange*speakerRange {
+			effectiveRange := speakerRange
+			if current[speakerID] && va.config.UnsubscribePadding > 0 {
+				effectiveRange += va.config.UnsubscribePadding
+			}
+
+			if distSq <= effectiveRange*effectiveRange {
 				inRange = append(inRange, speakerDist{speakerID, distSq})
 			}
 		}
@@ -433,37 +453,30 @@ func (va *VoiceAgent) updateSubscriptions(ctx context.Context) {
 			desired[s.identity] = true
 		}
 
-		// Get current subscription state
-		va.mu.Lock()
-		current, exists := va.subState[listenerID]
-		if !exists {
-			current = make(map[string]bool)
-			va.subState[listenerID] = current
-		}
-		va.mu.Unlock()
-
 		// Unsubscribe speakers no longer in range
 		for speakerID := range current {
 			if !desired[speakerID] {
-				va.setTrackSubscription(ctx, roomName, listenerID, speakerID, false)
-				va.mu.Lock()
-				if va.subState[listenerID] != nil {
-					delete(va.subState[listenerID], speakerID)
+				if va.setTrackSubscription(ctx, roomName, listenerID, speakerID, false) {
+					va.mu.Lock()
+					if va.subState[listenerID] != nil {
+						delete(va.subState[listenerID], speakerID)
+					}
+					va.mu.Unlock()
 				}
-				va.mu.Unlock()
 			}
 		}
 
 		// Subscribe to new speakers in range
 		for speakerID := range desired {
 			if !current[speakerID] {
-				va.setTrackSubscription(ctx, roomName, listenerID, speakerID, true)
-				va.mu.Lock()
-				if va.subState[listenerID] == nil {
-					va.subState[listenerID] = make(map[string]bool)
+				if va.setTrackSubscription(ctx, roomName, listenerID, speakerID, true) {
+					va.mu.Lock()
+					if va.subState[listenerID] == nil {
+						va.subState[listenerID] = make(map[string]bool)
+					}
+					va.subState[listenerID][speakerID] = true
+					va.mu.Unlock()
 				}
-				va.subState[listenerID][speakerID] = true
-				va.mu.Unlock()
 			}
 		}
 	}
@@ -472,7 +485,7 @@ func (va *VoiceAgent) updateSubscriptions(ctx context.Context) {
 // setTrackSubscription subscribes or unsubscribes a listener from
 // a speaker's audio tracks via the LiveKit Room Service API
 func (va *VoiceAgent) setTrackSubscription(ctx context.Context,
-	roomName, listenerID, speakerID string, subscribe bool) {
+	roomName, listenerID, speakerID string, subscribe bool) bool {
 
 	// List the speaker's tracks to find their audio track SID
 	participants, err := va.roomSvc.ListParticipants(ctx, &livekit.ListParticipantsRequest{
@@ -480,7 +493,7 @@ func (va *VoiceAgent) setTrackSubscription(ctx context.Context,
 	})
 	if err != nil {
 		log.Printf("Failed to list participants: %v", err)
-		return
+		return false
 	}
 
 	var trackSIDs []string
@@ -494,6 +507,13 @@ func (va *VoiceAgent) setTrackSubscription(ctx context.Context,
 		}
 	}
 
+	// A speaker can be visible in the room before its microphone track exists.
+	// Keep a subscribe request pending so the next proximity pass retries it.
+	if len(trackSIDs) == 0 {
+		return !subscribe
+	}
+
+	succeeded := true
 	for _, trackSID := range trackSIDs {
 		_, err := va.roomSvc.UpdateSubscriptions(ctx, &livekit.UpdateSubscriptionsRequest{
 			Room:      roomName,
@@ -508,8 +528,10 @@ func (va *VoiceAgent) setTrackSubscription(ctx context.Context,
 			}
 			log.Printf("Failed to %s %s from %s's track: %v",
 				action, listenerID, speakerID, err)
+			succeeded = false
 		}
 	}
+	return succeeded
 }
 
 // distanceBetween computes 3D Euclidean distance
@@ -529,6 +551,7 @@ func loadConfig() Config {
 		RoomPrefix:    getEnv("ROOM_PREFIX", "eruvos"),
 		TickRateMs:    200,
 		MaxStreams:    10,
+		UnsubscribePadding: 250,
 	}
 
 	// Allow override via config file

@@ -6,5 +6,6 @@
   "roomPrefix": "vgr",
   "tickRateMs": 250,
   "maxStreams": 20,
+  "unsubscribePadding": 250,
   "requestTimeoutMs": 5000
 }
