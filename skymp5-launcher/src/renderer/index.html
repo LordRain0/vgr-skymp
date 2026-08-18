@@ -261,15 +261,53 @@
               <select class="setting-input" id="gfx-resolution"></select>
             </div>
             <div class="settings-group">
-              <label class="setting-label">Fade distances</label>
-              <div class="settings-grid">
-                <label class="grid-field">Actor<input type="number" step="0.1" id="gfx-fade-actor" /></label>
-                <label class="grid-field">Item<input type="number" step="0.1" id="gfx-fade-item" /></label>
-                <label class="grid-field">Object<input type="number" step="0.1" id="gfx-fade-object" /></label>
-                <label class="grid-field">Grass<input type="number" step="100" id="gfx-fade-grass" /></label>
-                <label class="grid-field">Shadow<input type="number" step="100" id="gfx-fade-shadow" /></label>
-              </div>
+              <label class="setting-label">Texture Quality</label>
+              <select class="setting-input" id="gfx-texquality">
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
             </div>
+            <div class="settings-group">
+              <label class="setting-label">Antialiasing</label>
+              <select class="setting-input" id="gfx-aa">
+                <option value="off">Off</option>
+                <option value="fxaa">FXAA</option>
+                <option value="taa">TAA</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label class="setting-label">Shadow Quality</label>
+              <select class="setting-input" id="gfx-shadowquality">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="ultra">Ultra</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label class="setting-label">Decal Quantity</label>
+              <select class="setting-input" id="gfx-decals">
+                <option value="off">Off</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="ultra">Ultra</option>
+              </select>
+            </div>
+            <div class="settings-group">
+              <label class="setting-label">Water Reflections</label>
+              <select class="setting-input" id="gfx-reflections">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="ultra">Ultra</option>
+              </select>
+            </div>
+            <label class="setting-checkbox-row"><input type="checkbox" id="gfx-godrays" /><span>Godrays</span></label>
+            <label class="setting-checkbox-row"><input type="checkbox" id="gfx-lensflare" /><span>Lens flare</span></label>
+            <label class="setting-checkbox-row"><input type="checkbox" id="gfx-ao" /><span>Ambient occlusion</span></label>
+            <label class="setting-checkbox-row"><input type="checkbox" id="gfx-precip" /><span>Precipitation occlusion</span></label>
             <p class="setting-hint" id="gfx-path-hint"></p>
           </details>
 
@@ -278,19 +316,23 @@
             <div class="settings-group"><label class="setting-label">Voice Push-to-Talk</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-voice-ptt"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-voice-ptt" title="Reset to default">Reset</button></div></div>
             <div class="settings-group"><label class="setting-label">Voice Mode Cycle</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-voice-mode"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-voice-mode" title="Reset to default">Reset</button></div></div>
             <div class="settings-group"><label class="setting-label">Admin Menu</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-admin"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-admin" title="Reset to default">Reset</button></div></div>
-            <div class="settings-group"><label class="setting-label">Activate Chat</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-chat"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-chat" title="Reset to default">Reset</button></div></div>
-            <div class="settings-group"><label class="setting-label">Release Mouse</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-cursor"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-cursor" title="Reset to default">Reset</button></div></div>
-            <div class="settings-group"><label class="setting-label">Housing Menu</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-housing"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-housing" title="Reset to default">Reset</button></div></div>
-            <div class="settings-group"><label class="setting-label">Player Actions Menu</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-interact"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-interact" title="Reset to default">Reset</button></div></div>
-            <div class="settings-group"><label class="setting-label">Personal Menu</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-personal"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-personal" title="Reset to default">Reset</button></div></div>
-            <div class="settings-group"><label class="setting-label">Faction Menu</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-faction"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-faction" title="Reset to default">Reset</button></div></div>
-            <p class="setting-hint">Click a key, then press the new binding (Esc cancels). Enter always focuses chat. Changes apply after the client reloads.</p>
+            <div class="settings-group"><label class="setting-label">Social Menu</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-social"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-social" title="Reset to default">Reset</button></div></div>
+            <div class="settings-group"><label class="setting-label">Emote Wheel (hold)</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-emote"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-emote" title="Reset to default">Reset</button></div></div>
+            <div class="settings-group"><label class="setting-label">Skills Menu</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-skills"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-skills" title="Reset to default">Reset</button></div></div>
+            <div class="settings-group"><label class="setting-label">Player Interaction</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="hk-interact"></button><button type="button" class="skyrim-small-button hotkey-reset" data-reset="hk-interact" title="Reset to default">Reset</button></div></div>
+            <p class="setting-hint">Click a key, then press the new binding (Esc cancels). Enter, F1, F2, F6 and Escape are fixed keys and cannot be rebound. Changes apply after the client reloads.</p>
           </details>
 
           <details class="settings-collapse">
             <summary>Game Hotkeys</summary>
             <label class="setting-checkbox-row"><input type="checkbox" id="gfx-invert-y" /><span>Invert Y axis</span></label>
-            <p class="setting-hint">Full control remapping is coming soon - remap other controls in-game for now.</p>
+            <div class="settings-group"><label class="setting-label">Activate</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="ghk-activate" disabled></button></div></div>
+            <div class="settings-group"><label class="setting-label">Jump</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="ghk-jump" disabled></button></div></div>
+            <div class="settings-group"><label class="setting-label">Sprint</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="ghk-sprint" disabled></button></div></div>
+            <div class="settings-group"><label class="setting-label">Sneak</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="ghk-sneak" disabled></button></div></div>
+            <div class="settings-group"><label class="setting-label">Shout / Power</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="ghk-shout" disabled></button></div></div>
+            <div class="settings-group"><label class="setting-label">Toggle POV</label><div class="hotkey-row"><button type="button" class="setting-input hotkey-btn" id="ghk-pov" disabled></button></div></div>
+            <p class="setting-hint" id="ghk-hint">Written to the game's controlmap. Rows unlock once the game files are installed.</p>
           </details>
 
         </div>

@@ -31,7 +31,7 @@ navItems.forEach(item => {
 const modalOverlay = document.getElementById('modal-settings')
 
 function openModal() { modalOverlay.hidden = false; loadGameSettingsTab() }
-function closeModal() { modalOverlay.hidden = true }
+function closeModal() { endCapture(true); modalOverlay.hidden = true }
 
 document.getElementById('btn-gear').addEventListener('click', openModal)
 document.getElementById('modal-close').addEventListener('click', closeModal)
@@ -90,6 +90,7 @@ const RESOLUTIONS = ['1280x720', '1366x768', '1600x900', '1920x1080', '2560x1080
 
 function labelForCode(code) {
   if (!code) return '— none —'
+  if (code === 0xff) return 'Not bound' // controlmap sentinel for an unmapped key
   return DIK_LABELS[code] || `0x${code.toString(16)}`
 }
 function setKey(id, code) {
@@ -102,19 +103,30 @@ function setKey(id, code) {
 function getKey(id) { const el = document.getElementById(id); return el ? (parseInt(el.dataset.code, 10) || 0) : 0 }
 
 // Per-row defaults; the Reset button restores these, and load falls back to them.
+// Backspace-unbind is not allowed: every server hotkey keeps a binding.
 const HK_DEFAULTS = {
-  'hk-chat': 20,       // T
-  'hk-cursor': 64,     // F6
-  'hk-housing': 35,    // H
-  'hk-interact': 21,   // Y
-  'hk-personal': 22,   // U
-  'hk-faction': 34,    // G
   'hk-voice-ptt': 47,  // V
   'hk-voice-mode': 58, // Caps Lock
   'hk-admin': 61,      // F3
+  'hk-social': 34,     // G
+  'hk-emote': 48,      // B
+  'hk-skills': 37,     // K
+  'hk-interact': 45,   // X
 }
-// Backspace unbinds menu hotkeys only; voice/admin keys always keep a binding.
-const HK_UNBINDABLE = ['hk-chat', 'hk-cursor', 'hk-housing', 'hk-interact', 'hk-personal', 'hk-faction']
+
+// Game hotkey button ids -> controlmap event names
+const GHK_MAP = {
+  'ghk-activate': 'Activate', 'ghk-jump': 'Jump', 'ghk-sprint': 'Sprint',
+  'ghk-sneak': 'Sneak', 'ghk-shout': 'Shout', 'ghk-pov': 'Toggle POV',
+}
+const GFX_INPUT_IDS = [
+  'gfx-windowmode', 'gfx-resolution', 'gfx-texquality', 'gfx-aa', 'gfx-shadowquality',
+  'gfx-decals', 'gfx-reflections', 'gfx-godrays', 'gfx-lensflare', 'gfx-ao', 'gfx-precip',
+]
+
+function setInputsDisabled(ids, disabled) {
+  for (const id of ids) { const el = document.getElementById(id); if (el) el.disabled = !!disabled }
+}
 
 // Press-to-bind capture
 let activeCapture = null
@@ -158,7 +170,15 @@ Object.keys(HK_DEFAULTS).forEach(id => {
   const btn = document.getElementById(id)
   if (!btn) return
   setKey(id, HK_DEFAULTS[id])
-  btn.addEventListener('click', () => startCapture(btn, HK_UNBINDABLE.includes(id)))
+  btn.addEventListener('click', () => startCapture(btn, false))
+})
+// Game hotkey rows: no unbind either; gameHotkeys:save drops code 0, so an
+// unbound game key would silently keep its old binding.
+Object.keys(GHK_MAP).forEach(id => {
+  const btn = document.getElementById(id)
+  if (!btn) return
+  setKey(id, 0)
+  btn.addEventListener('click', () => startCapture(btn, false))
 })
 document.querySelectorAll('.hotkey-reset').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -183,28 +203,42 @@ async function loadGameSettingsTab() {
         for (const r of list) { const o = document.createElement('option'); o.value = r; o.textContent = r; resSel.appendChild(o) }
         if (cur) resSel.value = cur
       }
-      const f = g.fades || {}
-      const setv = (id, v) => { const e = document.getElementById(id); if (e) e.value = (v === undefined || v === null) ? '' : v }
-      setv('gfx-fade-actor', f.actor); setv('gfx-fade-item', f.item); setv('gfx-fade-object', f.object)
-      setv('gfx-fade-grass', f.grass); setv('gfx-fade-shadow', f.shadow)
       const iy = document.getElementById('gfx-invert-y'); if (iy) iy.checked = !!g.invertY
+      const setVal = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v }
+      const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v }
+      setVal('gfx-texquality', g.texQuality)
+      setVal('gfx-aa', g.aa)
+      setVal('gfx-shadowquality', g.shadowQuality)
+      setVal('gfx-decals', g.decals)
+      setVal('gfx-reflections', g.reflections)
+      setChk('gfx-godrays', g.godrays)
+      setChk('gfx-lensflare', g.lensFlare)
+      setChk('gfx-ao', g.ao)
+      setChk('gfx-precip', g.precip)
+      // Rows stay greyed until the profile ini exists (seeded on install).
+      setInputsDisabled(GFX_INPUT_IDS, !g.exists)
       const hint = document.getElementById('gfx-path-hint')
       if (hint) hint.textContent = g.exists ? `Editing: ${g.path}` : `Will be created on save: ${g.path}`
     }
+    const gh = await window.electronAPI.gameHotkeysLoad()
+    const ghkEditable = !!(gh && gh.ok && gh.hasGamePath)
+    setInputsDisabled(Object.keys(GHK_MAP), !ghkEditable)
+    if (gh && gh.ok) {
+      for (const [id, ev] of Object.entries(GHK_MAP)) {
+        const code = gh.keys ? gh.keys[ev] : null
+        // 0xff (unmapped) passes the guard and renders as "Not bound".
+        if (typeof code === 'number' && code > 0 && code <= 0xff) setKey(id, code)
+      }
+    }
     const h = await window.electronAPI.hotkeysLoad()
     if (h && h.ok) {
-      const chat = Array.isArray(h.chatFocus)
-        ? (h.chatFocus.find(c => c !== 28) || h.chatFocus[0] || HK_DEFAULTS['hk-chat'])
-        : HK_DEFAULTS['hk-chat']
-      setKey('hk-chat', chat)
-      setKey('hk-cursor', h.freeCursor != null ? h.freeCursor : HK_DEFAULTS['hk-cursor'])
-      setKey('hk-housing', h.housing != null ? h.housing : HK_DEFAULTS['hk-housing'])
-      setKey('hk-interact', h.interact != null ? h.interact : HK_DEFAULTS['hk-interact'])
-      setKey('hk-personal', h.personal != null ? h.personal : HK_DEFAULTS['hk-personal'])
-      setKey('hk-faction', h.faction != null ? h.faction : HK_DEFAULTS['hk-faction'])
       setKey('hk-voice-ptt', h.voicePtt != null ? h.voicePtt : HK_DEFAULTS['hk-voice-ptt'])
       setKey('hk-voice-mode', h.voiceModeCycle != null ? h.voiceModeCycle : HK_DEFAULTS['hk-voice-mode'])
       setKey('hk-admin', h.adminMenu != null ? h.adminMenu : HK_DEFAULTS['hk-admin'])
+      setKey('hk-social', h.social != null ? h.social : HK_DEFAULTS['hk-social'])
+      setKey('hk-emote', h.emote != null ? h.emote : HK_DEFAULTS['hk-emote'])
+      setKey('hk-skills', h.skills != null ? h.skills : HK_DEFAULTS['hk-skills'])
+      setKey('hk-interact', h.interact != null ? h.interact : HK_DEFAULTS['hk-interact'])
     }
   } catch (err) { /* settings tab is best-effort */ }
 }
@@ -215,25 +249,47 @@ async function saveGameSettingsTab() {
     const resSel = document.getElementById('gfx-resolution')
     let width = '', height = ''
     if (resSel && /^\d+x\d+$/.test(resSel.value)) { const p = resSel.value.split('x'); width = p[0]; height = p[1] }
-    const val = id => { const e = document.getElementById(id); return e ? e.value.trim() : '' }
     const iy = document.getElementById('gfx-invert-y')
-    await window.electronAPI.graphicsSave({
-      windowMode: wm ? wm.value : 'windowed',
-      width, height,
-      invertY: !!(iy && iy.checked),
-      fades: { actor: val('gfx-fade-actor'), item: val('gfx-fade-item'), object: val('gfx-fade-object'), grass: val('gfx-fade-grass'), shadow: val('gfx-fade-shadow') },
-    })
-    const chatKey = getKey('hk-chat')
+    const invertY = !!(iy && iy.checked)
+    if (wm && !wm.disabled) {
+      const val = (id) => { const el = document.getElementById(id); return el ? el.value : '' }
+      const chk = (id) => { const el = document.getElementById(id); return !!(el && el.checked) }
+      await window.electronAPI.graphicsSave({
+        windowMode: wm ? wm.value : 'windowed',
+        width, height,
+        invertY,
+        texQuality:    val('gfx-texquality'),
+        aa:            val('gfx-aa'),
+        shadowQuality: val('gfx-shadowquality'),
+        decals:        val('gfx-decals'),
+        reflections:   val('gfx-reflections'),
+        godrays:       chk('gfx-godrays'),
+        lensFlare:     chk('gfx-lensflare'),
+        ao:            chk('gfx-ao'),
+        precip:        chk('gfx-precip'),
+      })
+    } else {
+      // Invert-Y lives in the always-enabled Game Hotkeys block: save it even
+      // while the graphics rows are locked, without touching graphics keys.
+      await window.electronAPI.graphicsSave({ invertY })
+    }
+    const ghkFirst = document.getElementById('ghk-activate')
+    if (ghkFirst && !ghkFirst.disabled) {
+      const keys = {}
+      for (const [id, ev] of Object.entries(GHK_MAP)) {
+        const code = getKey(id)
+        if (code > 0) keys[ev] = code
+      }
+      await window.electronAPI.gameHotkeysSave(keys)
+    }
     await window.electronAPI.hotkeysSave({
-      chatFocus: [28, chatKey].filter(c => c > 0),
-      freeCursor: getKey('hk-cursor'),
-      housing:    getKey('hk-housing'),
-      interact:   getKey('hk-interact'),
-      personal:   getKey('hk-personal'),
-      faction:    getKey('hk-faction'),
       voicePtt:       getKey('hk-voice-ptt') || HK_DEFAULTS['hk-voice-ptt'],
       voiceModeCycle: getKey('hk-voice-mode') || HK_DEFAULTS['hk-voice-mode'],
       adminMenu:      getKey('hk-admin') || HK_DEFAULTS['hk-admin'],
+      social:         getKey('hk-social') || HK_DEFAULTS['hk-social'],
+      emote:          getKey('hk-emote') || HK_DEFAULTS['hk-emote'],
+      skills:         getKey('hk-skills') || HK_DEFAULTS['hk-skills'],
+      interact:       getKey('hk-interact') || HK_DEFAULTS['hk-interact'],
     })
   } catch (err) { /* best-effort */ }
 }

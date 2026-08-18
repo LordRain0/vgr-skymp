@@ -261,40 +261,78 @@ function readClientSettings() {
   } catch { return {} }
 }
 
+// MO2 only honors the profile inis the Settings tab edits when local settings
+// are enabled; without this the game reads the My Games inis and every
+// graphics tweak silently does nothing.
+function ensureProfileLocalIni() {
+  try {
+    const settingsIni = path.join(mo2.getProfileDir(), 'settings.ini')
+    const general = ini.read(settingsIni)['General'] || {}
+    if (String(general['LocalSettings'] || '') !== 'true') {
+      ini.write(settingsIni, { General: { LocalSettings: 'true', LocalSaves: 'false' } })
+      log('[defaults] enabled profile-local inis in the MO2 profile')
+    }
+  } catch (err) {
+    log('[defaults] could not enable profile-local inis:', err.message)
+  }
+}
+
 ipcMain.handle('graphics:load', () => {
   try {
     const p = skyrimPrefsPath()
     const data = ini.read(p)
     const disp = data['Display'] || {}
-    const grass = data['Grass'] || {}
     const controls = data['Controls'] || {}
     const full = String(disp['bFull Screen'] || '0') === '1'
     // Default to borderless when the ini doesn't say otherwise (missing file
     // or keys). An explicit bFull Screen=0 + bBorderless=0 reads as windowed.
     const hasMode = ('bFull Screen' in disp) || ('bBorderless' in disp)
     const borderless = hasMode ? String(disp['bBorderless'] || '0') === '1' : true
-    // Resolution fallback chain: profile ini, then the player's original
-    // My Games ini, then 1080p.
+    // Fallback chain for player-owned values: profile ini, then the player's
+    // original My Games ini, then the engine default.
     let orig = {}
     try {
       const src = findOriginalPrefsIni()
-      if (src) orig = ini.read(src)['Display'] || {}
-    } catch { /* fall through to 1080p */ }
+      if (src) orig = ini.read(src)
+    } catch { /* fall through to defaults */ }
+    const origDisp = orig['Display'] || {}
+    const val = (section, key, dflt) => {
+      const a = data[section] || {}
+      if (key in a) return String(a[key])
+      const b = orig[section] || {}
+      if (key in b) return String(b[key])
+      return dflt
+    }
+    const num = (section, key, dflt) => {
+      const n = parseInt(val(section, key, ''), 10)
+      return Number.isNaN(n) ? dflt : n
+    }
+    // Quantize whatever the ini carries into the nearest quality tier.
+    const skip = num('Display', 'iTexMipMapSkip', 0)
+    const shadowRes = num('Display', 'iShadowMapResolution', 2048)
+    const reflH = num('Water', 'iWaterReflectHeight', 512)
+    const maxDecals = num('Decals', 'uMaxDecals', 250)
     return {
       ok: true,
       path: p,
       exists: fs.existsSync(p),
       windowMode: full ? 'fullscreen' : (borderless ? 'borderless' : 'windowed'),
-      width:  disp['iSize W'] || orig['iSize W'] || '1920',
-      height: disp['iSize H'] || orig['iSize H'] || '1080',
+      width:  disp['iSize W'] || origDisp['iSize W'] || '1920',
+      height: disp['iSize H'] || origDisp['iSize H'] || '1080',
       invertY: String(controls['bInvertYValues'] || '0') === '1',
-      fades: {
-        actor:  disp['fLODFadeOutMultActors']  || '',
-        item:   disp['fLODFadeOutMultItems']   || '',
-        object: disp['fLODFadeOutMultObjects'] || '',
-        grass:  grass['fGrassStartFadeDistance'] || '',
-        shadow: disp['fShadowDistance']        || '',
-      },
+      texQuality: skip >= 2 ? 'low' : (skip === 1 ? 'medium' : 'high'),
+      aa: val('Display', 'bUseTAA', '1') === '1' ? 'taa'
+        : (val('Display', 'bFXAAEnabled', '0') === '1' ? 'fxaa' : 'off'),
+      shadowQuality: shadowRes <= 512 ? 'low' : (shadowRes <= 1024 ? 'medium' : (shadowRes <= 2048 ? 'high' : 'ultra')),
+      decals: val('Decals', 'bDecals', '1') === '0' ? 'off'
+        : (maxDecals <= 100 ? 'low' : (maxDecals <= 250 ? 'medium' : (maxDecals <= 350 ? 'high' : 'ultra'))),
+      reflections: reflH >= 1024
+        ? (val('Water', 'bReflectLODTrees', '0') === '1' ? 'ultra' : 'high')
+        : (val('Water', 'bReflectLODLand', '0') === '1' ? 'medium' : 'low'),
+      godrays:   val('Display', 'bVolumetricLightingEnable', '1') === '1',
+      lensFlare: val('Imagespace', 'bLensFlare', '1') === '1',
+      ao:        val('Display', 'bSAOEnable', '1') === '1',
+      precip:    val('Display', 'bPrecipitationOcclusion', '1') === '1',
     }
   } catch (err) {
     return { ok: false, error: err.message }
@@ -304,20 +342,45 @@ ipcMain.handle('graphics:load', () => {
 ipcMain.handle('graphics:save', (_e, g) => {
   try {
     g = g || {}
+    // Defensive: the profile ini is only read by the game when MO2 local settings are on.
+    ensureProfileLocalIni()
     const display = {}
     if (g.windowMode === 'fullscreen')      { display['bFull Screen'] = '1'; display['bBorderless'] = '0' }
     else if (g.windowMode === 'borderless') { display['bFull Screen'] = '0'; display['bBorderless'] = '1' }
     else if (g.windowMode === 'windowed')   { display['bFull Screen'] = '0'; display['bBorderless'] = '0' }
     if (g.width)  display['iSize W'] = String(g.width)
     if (g.height) display['iSize H'] = String(g.height)
-    const f = g.fades || {}
-    const num = (x) => (x !== undefined && x !== null && String(x).trim() !== '')
-    if (num(f.actor))  display['fLODFadeOutMultActors']  = String(f.actor)
-    if (num(f.item))   display['fLODFadeOutMultItems']   = String(f.item)
-    if (num(f.object)) display['fLODFadeOutMultObjects'] = String(f.object)
-    if (num(f.shadow)) display['fShadowDistance']        = String(f.shadow)
+    const TEX = { high: '0', medium: '1', low: '2' }
+    if (TEX[g.texQuality]) display['iTexMipMapSkip'] = TEX[g.texQuality]
+    if (['off', 'fxaa', 'taa'].includes(g.aa)) {
+      display['bUseTAA']      = g.aa === 'taa'  ? '1' : '0'
+      display['bFXAAEnabled'] = g.aa === 'fxaa' ? '1' : '0'
+    }
+    const SHADOW = { low: '512', medium: '1024', high: '2048', ultra: '4096' }
+    if (SHADOW[g.shadowQuality]) display['iShadowMapResolution'] = SHADOW[g.shadowQuality]
+    if (typeof g.godrays === 'boolean') display['bVolumetricLightingEnable'] = g.godrays ? '1' : '0'
+    if (typeof g.ao === 'boolean')      display['bSAOEnable'] = g.ao ? '1' : '0'
+    if (typeof g.precip === 'boolean')  display['bPrecipitationOcclusion'] = g.precip ? '1' : '0'
     const edits = { Display: display, Controls: { bInvertYValues: g.invertY ? '1' : '0' } }
-    if (num(f.grass)) edits['Grass'] = { fGrassStartFadeDistance: String(f.grass) }
+    if (typeof g.lensFlare === 'boolean') {
+      display['bIBLFEnable'] = g.lensFlare ? '1' : '0'
+      edits.Imagespace = { bLensFlare: g.lensFlare ? '1' : '0' }
+    }
+    const DECALS = {
+      off:    { bDecals: '0', bSkinnedDecals: '0' },
+      low:    { bDecals: '1', bSkinnedDecals: '1', uMaxDecals: '100',  uMaxSkinDecals: '25',  uMaxSkinDecalsPerActor: '20' },
+      medium: { bDecals: '1', bSkinnedDecals: '1', uMaxDecals: '250',  uMaxSkinDecals: '50',  uMaxSkinDecalsPerActor: '40' },
+      high:   { bDecals: '1', bSkinnedDecals: '1', uMaxDecals: '350',  uMaxSkinDecals: '75',  uMaxSkinDecalsPerActor: '50' },
+      ultra:  { bDecals: '1', bSkinnedDecals: '1', uMaxDecals: '1000', uMaxSkinDecals: '100', uMaxSkinDecalsPerActor: '60' },
+    }
+    if (DECALS[g.decals]) edits.Decals = DECALS[g.decals]
+    const REFLECTIONS = {
+      low:    { iWaterReflectHeight: '512',  iWaterReflectWidth: '512',  bReflectLODLand: '0', bReflectLODObjects: '0', bReflectLODTrees: '0', bReflectSky: '0' },
+      medium: { iWaterReflectHeight: '512',  iWaterReflectWidth: '512',  bReflectLODLand: '1', bReflectLODObjects: '0', bReflectLODTrees: '0', bReflectSky: '1' },
+      high:   { iWaterReflectHeight: '1024', iWaterReflectWidth: '1024', bReflectLODLand: '1', bReflectLODObjects: '1', bReflectLODTrees: '0', bReflectSky: '1' },
+      ultra:  { iWaterReflectHeight: '1024', iWaterReflectWidth: '1024', bReflectLODLand: '1', bReflectLODObjects: '1', bReflectLODTrees: '1', bReflectSky: '1' },
+    }
+    if (REFLECTIONS[g.reflections]) edits.Water = Object.assign({ bUseWaterReflections: '1' }, REFLECTIONS[g.reflections])
     ini.write(skyrimPrefsPath(), edits)
     return { ok: true, path: skyrimPrefsPath() }
   } catch (err) {
@@ -325,6 +388,7 @@ ipcMain.handle('graphics:save', (_e, g) => {
   }
 })
 
+// The seven hotkeys the VGR client actually reads; every one keeps a binding.
 ipcMain.handle('hotkeys:load', () => {
   try {
     const c = readClientSettings()
@@ -332,15 +396,13 @@ ipcMain.handle('hotkeys:load', () => {
     return {
       ok: true,
       path: clientSettingsPath(),
-      chatFocus:  Array.isArray(c.chatFocusKeyCodes) ? c.chatFocusKeyCodes : null,
-      freeCursor: numOrNull(c.freeCursorKeyCode),
-      housing:    numOrNull(c.housingMenuKeyCode),
-      faction:    numOrNull(c.factionMenuKeyCode),
-      interact:   numOrNull(c.interactMenuKeyCode),
-      personal:   numOrNull(c.personalMenuKeyCode),
       voicePtt:       numOrNull(c.voicePushToTalkKeyCode),
       voiceModeCycle: numOrNull(c.voiceModeCycleKeyCode),
       adminMenu:      numOrNull(c.adminMenuKeyCode),
+      social:         numOrNull(c.socialMenuKeyCode),
+      emote:          numOrNull(c.emoteMenuKeyCode),
+      skills:         numOrNull(c.skillsMenuKeyCode),
+      interact:       numOrNull(c.interactMenuKeyCode),
     }
   } catch (err) {
     return { ok: false, error: err.message }
@@ -351,18 +413,70 @@ ipcMain.handle('hotkeys:save', (_e, h) => {
   try {
     h = h || {}
     const c = readClientSettings()
-    if (Array.isArray(h.chatFocus))        c.chatFocusKeyCodes  = h.chatFocus.filter(n => typeof n === 'number')
-    if (typeof h.freeCursor === 'number')  c.freeCursorKeyCode  = h.freeCursor
-    if (typeof h.housing === 'number')     c.housingMenuKeyCode = h.housing
-    if (typeof h.faction === 'number')     c.factionMenuKeyCode = h.faction
-    if (typeof h.interact === 'number')    c.interactMenuKeyCode = h.interact
-    if (typeof h.personal === 'number')    c.personalMenuKeyCode = h.personal
     if (typeof h.voicePtt === 'number')       c.voicePushToTalkKeyCode = h.voicePtt
     if (typeof h.voiceModeCycle === 'number') c.voiceModeCycleKeyCode  = h.voiceModeCycle
     if (typeof h.adminMenu === 'number')      c.adminMenuKeyCode       = h.adminMenu
+    if (typeof h.social === 'number')         c.socialMenuKeyCode      = h.social
+    if (typeof h.emote === 'number')          c.emoteMenuKeyCode       = h.emote
+    if (typeof h.skills === 'number')         c.skillsMenuKeyCode      = h.skills
+    if (typeof h.interact === 'number')       c.interactMenuKeyCode    = h.interact
     const p = clientSettingsPath()
     fs.mkdirSync(path.dirname(p), { recursive: true })
     fs.writeFileSync(p, JSON.stringify(c, null, 2))
+    return { ok: true, path: p }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+// Game hotkeys edit the keyboard column of the game's controlmap.txt.
+// Values are DirectInput scan codes, the same space the renderer's KEY_TABLE uses.
+const GAME_HOTKEY_EVENTS = ['Activate', 'Jump', 'Sprint', 'Sneak', 'Shout', 'Toggle POV']
+
+function controlmapPath() {
+  const gp = effectiveGamePath()
+  return gp ? path.join(gp, 'Data', 'Interface', 'Controls', 'PC', 'controlmap.txt') : ''
+}
+
+function readControlmapText() {
+  const p = controlmapPath()
+  if (p && fs.existsSync(p)) return { path: p, text: fs.readFileSync(p, 'utf8'), exists: true }
+  const seed = fs.readFileSync(path.join(__dirname, '..', 'assets', 'controlmap.txt'), 'utf8')
+  return { path: p, text: seed, exists: false }
+}
+
+// Anchored on the keyboard column only: the event name plus the first hex field.
+function controlmapEventRe(ev) {
+  const escaped = ev.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp('^(' + escaped + '[ \\t]+)(0x[0-9a-fA-F]+)', 'm')
+}
+
+ipcMain.handle('gameHotkeys:load', () => {
+  try {
+    const cm = readControlmapText()
+    const keys = {}
+    for (const ev of GAME_HOTKEY_EVENTS) {
+      const m = cm.text.match(controlmapEventRe(ev))
+      keys[ev] = m ? parseInt(m[2], 16) : null
+    }
+    return { ok: true, path: cm.path, exists: cm.exists, hasGamePath: !!cm.path, keys }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('gameHotkeys:save', (_e, keys) => {
+  try {
+    const p = controlmapPath()
+    if (!p) return { ok: false, error: 'Skyrim path is not configured yet' }
+    let { text } = readControlmapText()
+    for (const [ev, code] of Object.entries(keys || {})) {
+      if (!GAME_HOTKEY_EVENTS.includes(ev) || typeof code !== 'number' || code <= 0 || code > 0xff) continue
+      const hex = '0x' + code.toString(16)
+      text = text.replace(controlmapEventRe(ev), (_m, head) => head + hex)
+    }
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.writeFileSync(p, text)
     return { ok: true, path: p }
   } catch (err) {
     return { ok: false, error: err.message }
@@ -427,6 +541,9 @@ function applyForcedServerDefaults(gamePath) {
   } catch (err) {
     log('[defaults] could not write controlmap override:', err.message)
   }
+
+  // Profile-local inis, re-checked on every install pass so existing installs pick it up.
+  ensureProfileLocalIni()
 }
 
 // Folder picker
@@ -2465,10 +2582,12 @@ async function runMO2Install({ deepVerify = false } = {}) {
 function writeClientSettings(destPath, srv, serverInfo) {
   // Start fresh every time - do not preserve stale keys from previous writes.
   // Exception: user hotkey bindings, owned by the Settings tab; a launch must never reset them to defaults.
+  // The last five are legacy keys no longer shown in the UI, carried over so an existing file keeps them harmlessly.
   const HOTKEY_KEYS = [
-    'chatFocusKeyCodes', 'freeCursorKeyCode', 'housingMenuKeyCode',
-    'factionMenuKeyCode', 'interactMenuKeyCode', 'personalMenuKeyCode',
     'voicePushToTalkKeyCode', 'voiceModeCycleKeyCode', 'adminMenuKeyCode',
+    'socialMenuKeyCode', 'emoteMenuKeyCode', 'skillsMenuKeyCode', 'interactMenuKeyCode',
+    'chatFocusKeyCodes', 'freeCursorKeyCode', 'housingMenuKeyCode',
+    'personalMenuKeyCode', 'factionMenuKeyCode',
   ]
   let prev = {}
   try { prev = JSON.parse(fs.readFileSync(destPath, 'utf8')) || {} } catch { /* first run */ }
