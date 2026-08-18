@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="css/ingame/locks.css">
   <link rel="stylesheet" href="css/ingame/access_control.css">
   <link rel="stylesheet" href="css/ingame/player_interactions.css">
+  <link rel="stylesheet" href="css/ingame/death_screen.css">
   <link rel="stylesheet" href="css/ingame/player_search.css">
   <link rel="stylesheet" href="css/ingame/admin_menu.css">
   <link rel="stylesheet" href="css/ingame/npc_spawner.css">
@@ -606,6 +607,18 @@
           </div>
         </section>
 
+        <!-- ===== Death Screen ===== -->
+        <section id="vgr-death-screen" aria-hidden="true">
+          <div class="death-title">You Have Fallen</div>
+          <div class="death-countdown" id="vgrDeathCountdown"></div>
+          <div class="death-hint" id="vgrDeathHint"></div>
+          <div class="death-choices">
+            <button type="button" class="death-choice permadeath" data-choice="permadeath" data-confirm="Confirm: die forever?">Permanent Death</button>
+            <button type="button" class="death-choice" data-choice="resurrect" data-confirm="Confirm: rise here?">Rise Where You Fell</button>
+            <button type="button" class="death-choice" data-choice="temple" data-confirm="Confirm: wake at temple?">Wake at the Temple</button>
+          </div>
+        </section>
+
       	<!-- ===== Admin Menu ===== -->
       	<main id="adminMenu" class="admin-menu hidden" aria-hidden="true">
       		<div class="screen-fade"></div>
@@ -994,6 +1007,7 @@
   <script src="js/ingame/locks.js"></script>
   <script src="js/ingame/access_control.js"></script>
   <script src="js/ingame/player_interactions.js"></script>
+  <script src="js/ingame/death_screen.js"></script>
   <script src="js/ingame/player_search.js"></script>
   <script src="js/ingame/admin_menu.js"></script>
   <script src="js/ingame/npc_spawner.js"></script>

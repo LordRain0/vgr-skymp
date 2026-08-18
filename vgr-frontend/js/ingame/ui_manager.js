@@ -234,6 +234,16 @@ let VGR_REGISTERED_UI = {
     z_index: 11
   },
 
+  "death_screen": {
+	active: false,
+    keyCode: null,
+	persistent: false,
+    need_focus: true,
+    interactionType: 'event',
+    blocking: true,     // dead players shouldn't open other UI
+    z_index: 14
+  },
+
   "trading": {
     active: false,
     keyCode: null,
