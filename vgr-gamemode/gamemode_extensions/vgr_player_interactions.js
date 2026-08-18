@@ -1447,7 +1447,16 @@ module.exports = (mp) => {
     });
 
     ctx.sp.on("buttonEvent", (e) => {
-      if (!e || e.code !== ${INTERACTION_KEY_DIK}) return;
+      // Launcher rebind in skymp5-client-settings.txt wins over the server key
+      if (ctx.state.vgrContextualX.keyDik === undefined) {
+        let localKey = 0;
+        try {
+          const s = ctx.sp.settings["skymp5-client"] || {};
+          localKey = Number(s.interactMenuKeyCode) || 0;
+        } catch (err) { }
+        ctx.state.vgrContextualX.keyDik = localKey > 0 && localKey <= 255 ? localKey : ${INTERACTION_KEY_DIK};
+      }
+      if (!e || e.code !== ctx.state.vgrContextualX.keyDik) return;
       if (!e.isPressed) {
         ctx.state.vgrContextualX.xDown = false;
         return;

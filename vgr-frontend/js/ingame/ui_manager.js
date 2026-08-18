@@ -61,23 +61,23 @@ const KEY_TO_DIK = {
   'ShiftLeft': 42,
   'ShiftRight': 54,
   'ControlLeft': 29,
-  'ControlRight': 29,    // DirectInput doesn't distinguish right Ctrl
+  'ControlRight': 157,
   'AltLeft': 56,
-  'AltRight': 56,        // DirectInput doesn't distinguish right Alt
-  'MetaLeft': 91,        // Windows key (left)
-  'MetaRight': 92,       // Windows key (right)
+  'AltRight': 184,
+  'MetaLeft': 219,       // Windows key (left)
+  'MetaRight': 220,      // Windows key (right)
   
   // ========== NAVIGATION / EDITING ==========
-  'ArrowUp': 72,
-  'ArrowDown': 80,
-  'ArrowLeft': 75,
-  'ArrowRight': 77,
-  'Home': 71,
-  'End': 79,
-  'PageUp': 73,
-  'PageDown': 81,
-  'Insert': 82,
-  'Delete': 83,
+  'ArrowUp': 200,
+  'ArrowDown': 208,
+  'ArrowLeft': 203,
+  'ArrowRight': 205,
+  'Home': 199,
+  'End': 207,
+  'PageUp': 201,
+  'PageDown': 209,
+  'Insert': 210,
+  'Delete': 211,
   'Backspace': 14,
   'Enter': 28,
   'Tab': 15,
@@ -97,12 +97,12 @@ const KEY_TO_DIK = {
   'Numpad8': 72,
   'Numpad9': 73,
   'NumpadDecimal': 83,
-  'NumpadDivide': 53,
+  'NumpadDivide': 181,
   'NumpadMultiply': 55,
   'NumpadSubtract': 74,
   'NumpadAdd': 78,
-  'NumpadEnter': 28,     // Same as regular Enter
-  'NumpadEqual': 13,     // Some keyboards have '=' on numpad
+  'NumpadEnter': 156,
+  'NumpadEqual': 141,    // Some keyboards have '=' on numpad
   
   // ========== PUNCTUATION / SYMBOLS (US Layout) ==========
   'Backquote': 41,       // ` ~
@@ -117,52 +117,52 @@ const KEY_TO_DIK = {
   'Period': 52,          // . >
   'Slash': 53,           // / ?
   'IntlBackslash': 86,   // \ | (ISO keyboards)
-  'IntlRo': 89,          // International characters
-  'IntlYen': 90,         // Yen key (Japanese)
+  'IntlRo': 115,         // International characters
+  'IntlYen': 125,        // Yen key (Japanese)
   
   // ========== MEDIA KEYS ==========
-  'AudioVolumeMute': 128,
-  'AudioVolumeUp': 129,
-  'AudioVolumeDown': 130,
-  'MediaTrackNext': 131,
-  'MediaTrackPrevious': 132,
-  'MediaStop': 133,
-  'MediaPlayPause': 134,
-  'LaunchMail': 180,     // Email key
-  'LaunchMediaPlayer': 177, // Media player key
-  'LaunchApp1': 181,     // My Computer key
-  'LaunchApp2': 182,     // Calculator key
+  'AudioVolumeMute': 160,
+  'AudioVolumeUp': 176,
+  'AudioVolumeDown': 174,
+  'MediaTrackNext': 153,
+  'MediaTrackPrevious': 144,
+  'MediaStop': 164,
+  'MediaPlayPause': 162,
+  'LaunchMail': 236,     // Email key
+  'LaunchMediaPlayer': 237, // Media player key
+  'LaunchApp1': 235,     // My Computer key
+  'LaunchApp2': 161,     // Calculator key
   
   // ========== BROWSER KEYS ==========
-  'BrowserSearch': 166,
-  'BrowserFavorites': 167,
-  'BrowserRefresh': 168,
-  'BrowserStop': 169,
-  'BrowserForward': 170,
-  'BrowserBack': 171,
-  'BrowserHome': 172,
+  'BrowserSearch': 229,
+  'BrowserFavorites': 230,
+  'BrowserRefresh': 231,
+  'BrowserStop': 232,
+  'BrowserForward': 233,
+  'BrowserBack': 234,
+  'BrowserHome': 178,
   
   // ========== LOCK KEYS ==========
   'NumLock': 69,
   'ScrollLock': 70,
-  'Pause': 68,           // Pause/Break key
+  'Pause': 197,          // Pause/Break key
   
   // ========== PRINTING ==========
-  'PrintScreen': 55,     // May require special handling
+  'PrintScreen': 183,    // May require special handling
   
   // ========== EXTRA KEYS ==========
-  'ContextMenu': 93,     // Right-click menu key
-  'Sleep': 95,           // Sleep key
-  'WakeUp': 96,          // Wake key
+  'ContextMenu': 221,    // Right-click menu key
+  'Sleep': 223,          // Sleep key
+  'WakeUp': 227,         // Wake key
   'Help': 97,            // Help key (old keyboards)
   
   // ========== OEM SPECIFIC ==========
   'OEMClear': 55,        // Clear key (some keyboards)
   'Abort': 99,           // Abort key
   'Process': 101,        // IME Process key
-  'Convert': 102,        // IME Convert key
-  'NonConvert': 103,     // IME NonConvert key
-  'KanaMode': 104,       // Kana mode (Japanese)
+  'Convert': 121,        // IME Convert key
+  'NonConvert': 123,     // IME NonConvert key
+  'KanaMode': 112,       // Kana mode (Japanese)
   'Lang1': 105,          // Language 1 (Hangul/English)
   'Lang2': 106,          // Language 2 (Hanja)
   'Lang3': 107,          // Language 3
@@ -483,6 +483,15 @@ function vgrInitRegistryUI() {
 	const keyOverrides = window.vgrKeyOverrides || {};
 	if (Number(keyOverrides.adminMenuKey) > 0 && VGR_REGISTERED_UI.admin_menu) {
 		VGR_REGISTERED_UI.admin_menu.dikCode = Number(keyOverrides.adminMenuKey);
+	}
+	if (Number(keyOverrides.socialKey) > 0 && VGR_REGISTERED_UI.social) {
+		VGR_REGISTERED_UI.social.dikCode = Number(keyOverrides.socialKey);
+	}
+	if (Number(keyOverrides.emoteKey) > 0 && VGR_REGISTERED_UI.emote) {
+		VGR_REGISTERED_UI.emote.dikCode = Number(keyOverrides.emoteKey);
+	}
+	if (Number(keyOverrides.skillsKey) > 0 && VGR_REGISTERED_UI.skills) {
+		VGR_REGISTERED_UI.skills.dikCode = Number(keyOverrides.skillsKey);
 	}
 	
 	// Add DIK codes dynamically after object creation

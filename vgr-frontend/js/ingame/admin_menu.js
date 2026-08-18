@@ -467,11 +467,8 @@ function openMenu() {
 }
 
 function onKeyDown(e) {
-    if (e.key === "F4") {
-        e.preventDefault();
-        const menu = document.getElementById("adminMenu");
-        menu.classList.contains("hidden") ? openMenu() : closeMenu();
-    } else if (e.key === "Escape") {
+    // Opening goes through the registry key path so the server permission gate applies
+    if (e.key === "Escape") {
         closeMenu();
     }
 }

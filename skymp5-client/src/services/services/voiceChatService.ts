@@ -90,6 +90,10 @@ export class VoiceChatService extends ClientListener {
       pttKey: this.localPttKey,
       modeKey: this.readLocalKeyOverride("voiceModeCycleKeyCode"),
       adminMenuKey: this.readLocalKeyOverride("adminMenuKeyCode"),
+      socialKey: this.readLocalKeyOverride("socialMenuKeyCode"),
+      emoteKey: this.readLocalKeyOverride("emoteMenuKeyCode"),
+      skillsKey: this.readLocalKeyOverride("skillsMenuKeyCode"),
+      interactKey: this.readLocalKeyOverride("interactMenuKeyCode"),
     };
     try {
       this.sp.browser.executeJavaScript(`window.vgrKeyOverrides = ${JSON.stringify(overrides)};`);
