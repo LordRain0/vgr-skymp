@@ -6,14 +6,11 @@ import { ClientListener, CombinedController, Sp } from "./clientListener";
 import { RemoteServer } from "./remoteServer";
 import { ObjectReference } from "skyrimPlatform";
 import { FormViewArray } from "../../view/formViewArray";
-
-// TODO: refactor
-import { localIdToRemoteId, remoteIdToLocalId } from "../../view/worldViewMisc";
 import { GamemodeApiCtx } from "../messages_gamemode/gamemodeApiCtx";
-
-// The reason we use global skyrimPlatform is that this.sp may be limited, and gamemode api needs unlimited access to skyrimPlatform
-// Sligthly different types
-import * as skyrimPlatform from "skyrimPlatform";
+import {
+    clearGamemodeApiCtxVolatile,
+    getGamemodeApiCommonCtx,
+} from "../messages_gamemode/gamemodeApiCtxUtils";
 import { logError, logTrace } from "../../logging";
 import { SettingsService } from "./settingsService";
 import { ServerJsVerificationService } from "./serverJsVerificationService";
@@ -29,16 +26,10 @@ export class GamemodeUpdateService extends ClientListener {
         this.controller.on("update", () => this.onUpdate());
 
         this.updateOwnerCtx = {
-            sp: skyrimPlatform,
+            ...getGamemodeApiCommonCtx(),
             refr: undefined,
             value: undefined,
             _model: undefined,
-            getFormIdInServerFormat: (clientsideFormId: number) => {
-                return localIdToRemoteId(clientsideFormId);
-            },
-            getFormIdInClientFormat: (serversideFormId: number) => {
-                return remoteIdToLocalId(serversideFormId);
-            },
             get(propName: string) {
                 return (this._model as Record<string, any>)[propName];
             },
@@ -49,19 +40,13 @@ export class GamemodeUpdateService extends ClientListener {
         };
 
         this.updateNeighborCtx = {
+            ...getGamemodeApiCommonCtx(),
             refr: undefined,
             value: undefined,
             _model: undefined,
-            sp: skyrimPlatform,
             state: undefined,
             _view: undefined,
             i: -1,
-            getFormIdInServerFormat: (clientsideFormId: number) => {
-                return localIdToRemoteId(clientsideFormId);
-            },
-            getFormIdInClientFormat: (serversideFormId: number) => {
-                return remoteIdToLocalId(serversideFormId);
-            },
             get(propName: string) {
                 return (this._model as Record<string, any>)[propName];
             },
@@ -102,6 +87,8 @@ export class GamemodeUpdateService extends ClientListener {
                     }
                 } catch (e) {
                     logTrace(this, `updateNeighbor`, key, '-', e);
+                } finally {
+                    clearGamemodeApiCtxVolatile(this.updateNeighborCtx);
                 }
             }
         }
@@ -209,6 +196,8 @@ export class GamemodeUpdateService extends ClientListener {
                 }
             } catch (e) {
                 logTrace(this, `updateOwner`, propName, '-', e);
+            } finally {
+                clearGamemodeApiCtxVolatile(this.updateOwnerCtx);
             }
         }
     }

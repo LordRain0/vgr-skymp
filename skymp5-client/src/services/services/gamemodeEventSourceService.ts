@@ -1,14 +1,10 @@
-import { localIdToRemoteId, remoteIdToLocalId } from "../../view/worldViewMisc";
 import { ConnectionMessage } from "../events/connectionMessage";
 import { CustomEventMessage } from "../messages/customEventMessage";
 import { UpdateGamemodeDataMessage } from "../messages/updateGameModeDataMessage";
 import { ClientListener, CombinedController, Sp } from "./clientListener";
 import { MsgType } from "../../messages";
 import { GamemodeApiEventSourceCtx } from "../messages_gamemode/gamemodeApiEventSourceCtx";
-
-// The reason we use global skyrimPlatform is that this.sp may be limited, and gamemode api needs unlimited access to skyrimPlatform
-// Sligthly different types
-import * as skyrimPlatform from "skyrimPlatform";
+import { getGamemodeApiCommonCtx } from "../messages_gamemode/gamemodeApiCtxUtils";
 import { logError, logTrace } from "../../logging";
 import { ServerJsVerificationService } from "./serverJsVerificationService";
 
@@ -80,6 +76,7 @@ export class GamemodeEventSourceService extends ClientListener {
                 );
 
                 const ctx: GamemodeApiEventSourceCtx = {
+                    ...getGamemodeApiCommonCtx(),
                     refr: undefined,
                     value: undefined,
                     _model: undefined,
@@ -92,23 +89,25 @@ export class GamemodeEventSourceService extends ClientListener {
                         throw new Error("ctx.respawn can't be used in event source");
                     },
 
-                    sp: skyrimPlatform,
                     sendEvent: (...args: unknown[]) => {
+                        if (ctx._expired) {
+                            return;
+                        }
+                        let argsJsonDumps: string[];
+                        try {
+                            argsJsonDumps = args.map(arg => JSON.stringify(arg));
+                        } catch (e) {
+                            return;
+                        }
                         const message: CustomEventMessage = {
                             t: MsgType.CustomEvent,
-                            argsJsonDumps: args.map(arg => JSON.stringify(arg)),
+                            argsJsonDumps,
                             eventName
                         };
                         this.controller.emitter.emit("sendMessage", {
                             message: message,
                             reliability: "reliable"
                         });
-                    },
-                    getFormIdInServerFormat: (clientsideFormId: number) => {
-                        return localIdToRemoteId(clientsideFormId);
-                    },
-                    getFormIdInClientFormat: (serversideFormId: number) => {
-                        return remoteIdToLocalId(serversideFormId);
                     },
                     _fn: fn,
                     _eventName: eventName,
@@ -124,6 +123,9 @@ export class GamemodeEventSourceService extends ClientListener {
 
     private setupEventSource = (ctx: any) => {
         this.controller.once('update', () => {
+            if (ctx._expired) {
+                return;
+            }
             try {
                 ctx._fn(ctx);
                 logTrace(this, `'eventSources`, ctx._eventName, `- Added`);
