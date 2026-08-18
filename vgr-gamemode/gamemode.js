@@ -41,6 +41,27 @@ mp.vgrCloseUI = (pcFormId, uiName) => {
   vgrSendUiManagerPacket(pcFormId, "close", uiName);
 };
 
+// UIs whose key press asks the server before opening (server_gated in the registry).
+const VGR_UI_OPEN_PERMISSIONS = {
+  admin_menu: "vgr.access.manage",
+};
+
+mp._vgrUiManager = (pcFormId, payload) => {
+  if (!payload || payload.kind !== "requestOpen") return;
+  const uiName = String(payload.ui || "").trim();
+  if (!uiName) return;
+
+  const required = VGR_UI_OPEN_PERMISSIONS[uiName];
+  if (required) {
+    const perms = mp.vgrAccessPermissions;
+    if (!perms || perms.hasPermission(pcFormId, required).allowed !== true) {
+      console.log("[VGR UI manager] denied", uiName, "for actor", pcFormId);
+      return;
+    }
+  }
+  mp.vgrOpenUI(pcFormId, uiName);
+};
+
 mp.vgrSendNotification = (pcFormId, type, message, options) => {
   if (pcFormId == null || pcFormId === 0) return;
   let userId = null;

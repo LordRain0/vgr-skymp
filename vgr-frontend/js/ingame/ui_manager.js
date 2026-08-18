@@ -220,7 +220,8 @@ let VGR_REGISTERED_UI = {
     need_focus: true,
     interactionType: 'press',
     blocking: false,
-    z_index: 11
+    z_index: 11,
+    server_gated: true  // key press asks the server; only permitted players get the open
   },
   
   "player_search": {

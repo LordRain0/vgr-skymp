@@ -164,10 +164,14 @@ const getSpecialKeys = () => {
 };
 
 
-const openUI = (name) => {
+const openUI = (name, fromServer) => {
 	//ctx.sp.printConsole("[VGR] UI manager open UI");
 	const config = getUIConfig(name);
 	if (!config) return;
+	if (config.server_gated === true && fromServer !== true) { //server decides whether this UI may open
+		ctx.sendEvent({ kind: "requestOpen", ui: name });
+		return;
+	}
 	const activeConfig = getUIConfig(ctx.state.vgrUi.activeUI);
 	if (config.active == true) {//do nothing if same UI is already open other than regaining focus
 		if (config.need_focus === true && ctx.state.vgrUi.isFocused === false) {
@@ -401,7 +405,7 @@ ctx.sp.on("browserMessage", (e) => {
 		if (!getUIConfig(name_ui)) return;
 		
 		if (msg === "vgr:ui:open") {
-			openUI(name_ui);
+			openUI(name_ui, true);
 			return;
 		}
 		
