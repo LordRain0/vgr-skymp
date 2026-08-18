@@ -25,14 +25,13 @@ function actorExists(mp, pcFormId) {
 }
 
 function getDisplayName(mp, pcFormId, fallback) {
-  const fields = ["appearance", "appearanceDump"];
-  for (const field of fields) {
-    try {
-      const value = mp.get(pcFormId, field);
-      if (value && value.name) return normalizeName(value.name, fallback);
-    } catch (e) {
-      // Field may not be present on older actors.
-    }
+  // Only "appearance" is a registered binding; probing unknown property
+  // names makes the native log a full exception trace per call.
+  try {
+    const value = mp.get(pcFormId, "appearance");
+    if (value && value.name) return normalizeName(value.name, fallback);
+  } catch (e) {
+    // Actor may not have an appearance yet.
   }
   return normalizeName(fallback, "Adventurer");
 }

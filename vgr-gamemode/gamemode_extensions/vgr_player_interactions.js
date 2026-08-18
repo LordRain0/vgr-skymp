@@ -232,28 +232,17 @@ module.exports = (mp) => {
   }
 
   function isDeadActor(pcFormId) {
-    const boolFields = ["isDead", "dead"];
-    for (const field of boolFields) {
-      try {
-        const value = mp.get(pcFormId, field);
-        if (value === true) return true;
-      } catch (e) {}
-    }
-
-    const healthFields = ["healthPercentage", "healthPercent"];
-    for (const field of healthFields) {
-      try {
-        const value = Number(mp.get(pcFormId, field));
-        if (Number.isFinite(value) && value <= 0) return true;
-      } catch (e) {}
-    }
-
+    // Only registered bindings; unknown names make the native log an
+    // exception trace per read, which floods the tick under the prompt
+    // and nameplate loops.
     try {
-      const values = mp.get(pcFormId, "actorValues");
-      const health = values && (values.health || values.Health);
-      if (Number.isFinite(Number(health)) && Number(health) <= 0) return true;
+      if (mp.get(pcFormId, "isDead") === true) return true;
     } catch (e) {}
-
+    try {
+      const pct = mp.get(pcFormId, "percentages");
+      const health = pct ? Number(pct.health) : NaN;
+      if (Number.isFinite(health) && health <= 0) return true;
+    } catch (e) {}
     return false;
   }
 
