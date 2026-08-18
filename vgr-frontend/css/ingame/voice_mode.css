@@ -1,0 +1,49 @@
+#vgr-voice-mode {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 90000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border: 1px solid rgba(190, 151, 75, 0.56);
+  background: linear-gradient(180deg, rgba(20, 15, 10, 0.92), rgba(6, 5, 4, 0.92));
+  color: #eadca4;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+#vgr-voice-mode.visible {
+  opacity: 1;
+}
+
+/* Image icon slot; hidden until a mode icon src is configured */
+#vgr-voice-mode .voice-mode-icon {
+  display: none;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+#vgr-voice-mode.has-icon .voice-mode-icon {
+  display: block;
+}
+
+#vgr-voice-mode.mode-whisper .voice-mode-label {
+  color: #a9c4d4;
+}
+
+#vgr-voice-mode.mode-talk .voice-mode-label {
+  color: #eadca4;
+}
+
+#vgr-voice-mode.mode-yell .voice-mode-label {
+  color: #ffb49e;
+}

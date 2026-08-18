@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="css/ingame/debugview.css">
   <link rel="stylesheet" href="css/ingame/notifications.css">
   <link rel="stylesheet" href="css/ingame/skills.css">
+  <link rel="stylesheet" href="css/ingame/voice_mode.css">
   
 </head>
 <body data-vgr-mode="login">
@@ -619,6 +620,12 @@
           </div>
         </section>
 
+        <!-- ===== Voice Mode HUD ===== -->
+        <div id="vgr-voice-mode" aria-hidden="true">
+          <img id="vgr-voice-mode-icon" class="voice-mode-icon" alt="">
+          <span id="vgr-voice-mode-label" class="voice-mode-label">Talk</span>
+        </div>
+
       	<!-- ===== Admin Menu ===== -->
       	<main id="adminMenu" class="admin-menu hidden" aria-hidden="true">
       		<div class="screen-fade"></div>
@@ -1014,6 +1021,7 @@
   <script src="js/ingame/enchanting.js"></script>
   <script src="js/ingame/debugview.js"></script>
   <script src="js/ingame/skills.js"></script>
+  <script src="js/ingame/voice_mode.js"></script>
   <script src="js/ingame/ui_manager.js"></script>
 </body>
 </html>

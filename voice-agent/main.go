@@ -34,6 +34,7 @@ type PlayerPosition struct {
 	Y           float64 `json:"y"`
 	Z           float64 `json:"z"`
 	WorldOrCell uint32  `json:"worldOrCell"`
+	Range       float64 `json:"range,omitempty"` // per-speaker audible range; 0 falls back to config VoiceRange
 }
 
 // VoiceAgent manages proximity-based voice chat via LiveKit
@@ -68,6 +69,9 @@ func (va *VoiceAgent) Start(ctx context.Context) error {
 	// Start HTTP API for position updates
 	go va.startHTTPServer(ctx)
 
+	// Start proximity subscription management
+	go va.proximityLoop(ctx)
+
 	log.Println("Voice agent started")
 	<-ctx.Done()
 	return nil
@@ -77,6 +81,7 @@ func (va *VoiceAgent) Start(ctx context.Context) error {
 func (va *VoiceAgent) startHTTPServer(ctx context.Context) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/position", va.handlePositionUpdate)
+	mux.HandleFunc("/api/positions-batch", va.handlePositionsBatch)
 	mux.HandleFunc("/api/positions", va.handleGetPositions)
 	mux.HandleFunc("/api/room-info", va.handleRoomInfo)
 	mux.HandleFunc("/api/force-subscribe-all", va.handleForceSubscribeAll)
@@ -118,6 +123,7 @@ func (va *VoiceAgent) handlePositionUpdate(w http.ResponseWriter, r *http.Reques
 		Y           float64 `json:"y"`
 		Z           float64 `json:"z"`
 		WorldOrCell uint32  `json:"worldOrCell"`
+		Range       float64 `json:"range"` // optional per-speaker range
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -131,12 +137,60 @@ func (va *VoiceAgent) handlePositionUpdate(w http.ResponseWriter, r *http.Reques
 	// Also update local positions
 	va.mu.Lock()
 	va.positions[req.Identity] = PlayerPosition{
-		X: req.X, Y: req.Y, Z: req.Z, WorldOrCell: req.WorldOrCell,
+		X: req.X, Y: req.Y, Z: req.Z, WorldOrCell: req.WorldOrCell, Range: req.Range,
 	}
 	va.mu.Unlock()
 
 	log.Printf("Position updated via HTTP: %s -> (%.0f, %.0f, %.0f) world=%d",
 		req.Identity, req.X, req.Y, req.Z, req.WorldOrCell)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
+}
+
+// handlePositionsBatch replaces the known position set from one batched update
+func (va *VoiceAgent) handlePositionsBatch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Positions []struct {
+			Identity    string  `json:"identity"`
+			X           float64 `json:"x"`
+			Y           float64 `json:"y"`
+			Z           float64 `json:"z"`
+			WorldOrCell uint32  `json:"worldOrCell"`
+			Range       float64 `json:"range"` // optional per-speaker range
+		} `json:"positions"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	next := make(map[string]PlayerPosition, len(req.Positions))
+	for _, p := range req.Positions {
+		if p.Identity == "" {
+			continue
+		}
+		next[p.Identity] = PlayerPosition{
+			X: p.X, Y: p.Y, Z: p.Z, WorldOrCell: p.WorldOrCell, Range: p.Range,
+		}
+	}
+
+	va.mu.Lock()
+	va.positions = next
+	va.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true}`))
@@ -316,7 +370,6 @@ func (va *VoiceAgent) updateSubscriptions(ctx context.Context) {
 		return
 	}
 
-	rangeSq := va.config.VoiceRange * va.config.VoiceRange
 	maxStreams := va.config.MaxStreams
 	if maxStreams <= 0 {
 		maxStreams = 10
@@ -348,7 +401,13 @@ func (va *VoiceAgent) updateSubscriptions(ctx context.Context) {
 			dz := speakerPos.Z - listenerPos.Z
 			distSq := dx*dx + dy*dy + dz*dz
 
-			if distSq <= rangeSq {
+			// Per-speaker range (whisper/talk/yell); zero falls back to the global range
+			speakerRange := speakerPos.Range
+			if speakerRange <= 0 {
+				speakerRange = va.config.VoiceRange
+			}
+
+			if distSq <= speakerRange*speakerRange {
 				inRange = append(inRange, speakerDist{speakerID, distSq})
 			}
 		}

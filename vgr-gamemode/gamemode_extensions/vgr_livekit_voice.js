@@ -33,9 +33,16 @@ module.exports = function (mp) {
   const tokenTtlSeconds = voice.tokenTtlSeconds || 300;
   const reconnectCooldownMs = voice.voiceReconnectCooldownMs || 5000;
 
+  // Voice mode cycling: whisper -> talk -> yell, ranges in game units (same units the agent compares against)
+  const modeKey = voice.modeKey || 58; // DIK 58 = Caps Lock
+  const MODE_ORDER = ["whisper", "talk", "yell"];
+  const DEFAULT_MODE = "talk";
+  const modeRanges = Object.assign({ whisper: 500, talk: 1500, yell: 4500 }, voice.modes || {});
+
   const sessions = new Map(); // userId -> { identity, actorId }
   const lastIssued = new Map(); // userId -> timestamp
   const pendingActorTimers = new Map(); // userId -> timer
+  const voiceModes = new Map(); // userId -> mode name, session only
   let updatingAgentPositions = false;
 
   function b64url(input) {
@@ -133,6 +140,69 @@ module.exports = function (mp) {
     };
   }
 
+  function getVoiceMode(userId) {
+    return voiceModes.get(userId) || DEFAULT_MODE;
+  }
+
+  function getVoiceRange(userId) {
+    const range = Number(modeRanges[getVoiceMode(userId)]);
+    return range > 0 ? range : Number(modeRanges[DEFAULT_MODE]) || 1500;
+  }
+
+  // HUD payload channel; nonce-deduped because updateOwner runs every frame
+  mp.makeProperty("vgrVoiceMode", {
+    isVisibleByOwner: true,
+    isVisibleByNeighbors: false,
+    updateOwner: `
+      const value = ctx.value;
+      if (!value || !value.nonce) return;
+      if (ctx.state.vgrVoiceModeNonce === value.nonce) return;
+      ctx.state.vgrVoiceModeNonce = value.nonce;
+      ctx.sp.browser.executeJavaScript("window.vgrVoiceModeUpdate && window.vgrVoiceModeUpdate(" + JSON.stringify({ mode: String(value.mode || "talk"), range: Number(value.range) || 0 }) + ")");
+    `,
+    updateNeighbor: ""
+  });
+
+  function pushModeHud(actorId, mode) {
+    try {
+      mp.set(actorId, "vgrVoiceMode", {
+        nonce: Date.now() + ":" + Math.random(),
+        mode,
+        range: Number(modeRanges[mode]) || 0
+      });
+    } catch (e) {
+      console.warn(`[VGR LiveKit] pushModeHud failed for actor ${actorId}: ${e.message}`);
+    }
+  }
+
+  // Injected key listener; cycles the mode server-side so no client rebuild is needed
+  mp.makeEventSource("_vgrVoiceModeCycle", `
+    ctx.sp.printConsole("[VGR LiveKit] voice mode cycle source loaded");
+    if (!ctx.state.vgrVoiceModeCycle) {
+      ctx.state.vgrVoiceModeCycle = { keyDown: false };
+    }
+    ctx.sp.on("buttonEvent", (e) => {
+      if (e.code !== ${modeKey}) return;
+      if (e.isPressed) {
+        if (ctx.state.vgrVoiceModeCycle.keyDown) return;
+        ctx.state.vgrVoiceModeCycle.keyDown = true;
+        ctx.sendEvent({ kind: "cycleVoiceMode" });
+      } else {
+        ctx.state.vgrVoiceModeCycle.keyDown = false;
+      }
+    });
+  `);
+
+  mp._vgrVoiceModeCycle = (pcFormId, payload) => {
+    if (!payload || payload.kind !== "cycleVoiceMode") return;
+    const userId = actors.userFromActor(pcFormId);
+    if (userId === null) return;
+    const next = MODE_ORDER[(MODE_ORDER.indexOf(getVoiceMode(userId)) + 1) % MODE_ORDER.length];
+    voiceModes.set(userId, next);
+    pushModeHud(pcFormId, next);
+    console.log(`[VGR LiveKit] user ${userId} voice mode -> ${next} (${getVoiceRange(userId)})`);
+  };
+
   async function sendVoiceConfig(userId, forceNewToken = false) {
     const actorId = getActorId(userId);
     if (!actorId) return false;
@@ -171,6 +241,9 @@ module.exports = function (mp) {
 
       sessions.set(userId, { identity, actorId });
       lastIssued.set(userId, now);
+
+      if (!voiceModes.has(userId)) voiceModes.set(userId, DEFAULT_MODE);
+      pushModeHud(actorId, getVoiceMode(userId));
 
       console.log(`[VGR LiveKit] sent voiceConfig to user ${userId} (${identity})`);
       return true;
@@ -263,7 +336,8 @@ module.exports = function (mp) {
         x: position.x,
         y: position.y,
         z: position.z,
-        worldOrCell: position.worldOrCell
+        worldOrCell: position.worldOrCell,
+        range: getVoiceRange(userId)
       });
     }
 
@@ -286,6 +360,7 @@ module.exports = function (mp) {
     clearPendingTimer(userId);
     sessions.delete(userId);
     lastIssued.delete(userId);
+    voiceModes.delete(userId);
     actors.forgetUser(userId);
   });
 
