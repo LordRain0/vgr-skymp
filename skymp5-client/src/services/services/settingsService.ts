@@ -16,6 +16,7 @@ export interface TargetPeer {
   host: string;
   port: number;
   publicKeys?: Record<string, string | undefined>;
+  loadOrder?: string[];
 }
 
 export type TargetPeerCallback = (targetPeer: TargetPeer) => void;
@@ -25,7 +26,7 @@ export class SettingsService extends ClientListener {
     super();
   }
 
-  public getServerMasterKey() {
+  public getServerMasterKey(): string {
     let masterKey = this.sp.settings["skymp5-client"]["server-master-key"];
     if (!masterKey) {
       masterKey = this.sp.settings["skymp5-client"]["master-key"];
@@ -33,7 +34,7 @@ export class SettingsService extends ClientListener {
     if (!masterKey) {
       masterKey = this.sp.settings["skymp5-client"]["server-ip"] + ":" + this.sp.settings["skymp5-client"]["server-port"];
     }
-    return masterKey;
+    return String(masterKey);
   }
 
   public getMasterUrl() {
@@ -60,7 +61,7 @@ export class SettingsService extends ClientListener {
   // have to use callbacks here: promises don't work in the main menu
   private getTargetPeerImpl(callback: TargetPeerCallback) {
     const masterApiClient = this.makeMasterApiClient();
-    const masterKey = this.getServerMasterKey();
+    const masterKey = encodeURIComponent(this.getServerMasterKey());
 
     const serverInfoRequestTimeoutMs = 5000;
     const defaultPeer: TargetPeer = {
@@ -139,24 +140,42 @@ export class SettingsService extends ClientListener {
   }
 
   public async getServerMods(): Promise<Mod[]> {
+    const rawMasterKey = this.getServerMasterKey();
+    const masterKey = encodeURIComponent(rawMasterKey);
+    printConsole(rawMasterKey);
+
+    const fetchManifest = async (client: IHttpClientWithCallback, path: string) => {
+      const res = await client.get(path);
+      if (res.status != 200) {
+        throw new Error(`status code ${res.status}, error ${res.error}`);
+      }
+      const manifest = JSON.parse(res.body) as ServerManifest;
+      if (manifest.versionMajor !== 1) {
+        printConsole(`server manifest version is ${manifest.versionMajor}, we expect 1`);
+        return [];
+      }
+      if ((!manifest.mods || manifest.mods.length === 0) && Array.isArray(manifest.loadOrder)) {
+        return manifest.loadOrder.map((filename) => ({ filename }));
+      }
+      return manifest.mods || [];
+    };
+
+    const masterSetting = this.sp.settings["skymp5-client"]["master"] as string | undefined;
+    if (!masterSetting) {
+      const resourceClient = new HttpClient(this.getDirectServerResourceUrl()) as IHttpClientWithCallback;
+      try {
+        printConsole(`Trying to get server mods from direct server resources`);
+        return await fetchManifest(resourceClient, "/manifest.json");
+      } catch (e) {
+        printConsole(`Direct manifest request/parse error: ${e}`);
+      }
+    }
+
     const masterApiClient = this.makeMasterApiClient();
-
-    const masterKey = this.getServerMasterKey();
-    printConsole(masterKey);
-
     for (let attempt = 0; attempt < 5; ++attempt) {
       try {
         printConsole(`Trying to get server mods, attempt ${attempt}`);
-        const res = await masterApiClient.get(`/api/servers/${masterKey}/manifest.json`);
-        if (res.status != 200) {
-          throw new Error(`status code ${res.status}, error ${res.error}`);
-        }
-        const manifest = JSON.parse(res.body) as ServerManifest;
-        if (manifest.versionMajor !== 1) {
-          printConsole(`server manifest version is ${manifest.versionMajor}, we expect 1`);
-          return [];
-        }
-        return manifest.mods;
+        return await fetchManifest(masterApiClient, `/api/servers/${masterKey}/manifest.json`);
       } catch (e) {
         printConsole(`Request/parse error: ${e}`);
         await Utility.wait(0.1 + Math.random());
@@ -171,6 +190,13 @@ export class SettingsService extends ClientListener {
       return url.slice(0, url.length - 1);
     }
     return url;
+  };
+
+  private getDirectServerResourceUrl() {
+    const host = this.sp.settings["skymp5-client"]["server-ip"] as string;
+    const port = this.sp.settings["skymp5-client"]["server-port"] as number;
+    const resourcePort = port === 7777 ? 3000 : port + 1;
+    return `http://${host}:${resourcePort}`;
   };
 
   private targetPeerCache: TargetPeer | null = null;

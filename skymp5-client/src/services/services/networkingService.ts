@@ -19,7 +19,7 @@ export class NetworkingService extends ClientListener {
   }
 
   private onSendMessage(e: SendMessageEvent<AnyMessage>) {
-    this.sp.mpClientPlugin.send(JSON.stringify(e.message), this.isReliable(e.reliability));
+    this.sendMessageSafe(e.message, e.reliability, "sendMessage");
   }
 
   private onSendRawMessage(e: SendRawMessageEvent) {
@@ -46,7 +46,50 @@ export class NetworkingService extends ClientListener {
 
     delete e.message._refrId;
 
-    this.sp.mpClientPlugin.send(JSON.stringify(e.message), this.isReliable(e.reliability));
+    this.sendMessageSafe(e.message as unknown as AnyMessage, e.reliability, "sendMessageWithRefrId");
+  }
+
+  private sendMessageSafe(message: AnyMessage, reliability: "reliable" | "unreliable", context: string) {
+    const normalizedMessage = this.normalizeOutgoingMessage(message, context);
+    if (!normalizedMessage) {
+      return;
+    }
+
+    const payload = JSON.stringify(normalizedMessage);
+    try {
+      this.sp.mpClientPlugin.send(payload, this.isReliable(reliability));
+    } catch (e) {
+      logError(this, `mpClientPlugin.send failed in ${context}:`, e, `payload=${payload}`);
+    }
+  }
+
+  private normalizeOutgoingMessage(message: AnyMessage, context: string): AnyMessage | undefined {
+    if (message.t !== MsgType.UpdateEquipment) {
+      return message;
+    }
+
+    const messageAny = message as any;
+    const data = messageAny.data;
+    if (data && data.inv && Array.isArray(data.inv.entries)) {
+      return message;
+    }
+
+    if (data && Array.isArray(data.entries)) {
+      logError(this, `Repairing malformed UpdateEquipment in ${context}: data was Inventory, expected Equipment`);
+      messageAny.data = {
+        inv: data,
+        leftSpell: 0,
+        rightSpell: 0,
+        voiceSpell: 0,
+        equippedShout: 0,
+        instantSpell: 0,
+        numChanges: Number.isInteger(messageAny.numChanges) ? messageAny.numChanges : 0
+      };
+      return message;
+    }
+
+    logError(this, `Dropping malformed UpdateEquipment in ${context}:`, JSON.stringify(message));
+    return undefined;
   }
 
   connect(hostName: string, port: number) {

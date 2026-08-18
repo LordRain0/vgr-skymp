@@ -5,12 +5,16 @@ import { SpApiInteractor } from "../services/spApiInteractor";
 import { GamemodeUpdateService } from "../services/services/gamemodeUpdateService";
 
 export class FormViewArray {
-  updateForm(form: FormModel, i: number) {
+  updateForm(
+    form: FormModel,
+    i: number,
+    gamemodeUpdateService?: GamemodeUpdateService,
+  ) {
     const view = this.formViews[i];
     if (!view) {
       this.formViews[i] = new FormView(form.refrId);
     } else {
-      view.update(form);
+      view.update(form, gamemodeUpdateService);
     }
   }
 
@@ -63,12 +67,12 @@ export class FormViewArray {
           const backup = form.isHostedByOther;
           form.isHostedByOther = true;
           // TODO: Explain why do not GamemodeApiSupport.setI(i); here
-          this.updateForm(form, i);
+          this.updateForm(form, i, gamemodeUpdateService);
           form.isHostedByOther = backup;
         }
       } else {
         gamemodeUpdateService.setI(i);
-        this.updateForm(form, i);
+        this.updateForm(form, i, gamemodeUpdateService);
       }
 
       if (offset && form.movement && realPos) {

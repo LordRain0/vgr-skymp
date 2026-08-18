@@ -223,8 +223,13 @@ ParseCommandResult ParseCommand(std::string command)
     command.erase(0, pos + delimiterSpase.length());
   }
 
-  if (command.size() >= 1)
-    res.params.push_back(command);
+  if (command.size() >= 1) {
+    if (res.commandName.empty()) {
+      res.commandName = command;
+    } else {
+      res.params.push_back(command);
+    }
+  }
 
   return res;
 }

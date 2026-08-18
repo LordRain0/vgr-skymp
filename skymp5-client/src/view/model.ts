@@ -8,6 +8,7 @@ import { CreateActorMessageMainProps, CreateActorMessageAdditionalProps } from "
 // Own properties (not inherited) are being assigned locally
 export interface FormModel extends CreateActorMessageAdditionalProps, CreateActorMessageMainProps{
   idx?: number;
+  baseRecordType?: "DOOR";
   movement?: Movement;
   numMovementChanges?: number;
   numAppearanceChanges?: number;

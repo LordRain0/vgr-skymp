@@ -3,12 +3,14 @@ import {
   Ammo,
   Game,
   ObjectReference,
+  Shout,
   Spell,
+  storage,
   Ui,
   setInventory,
 } from 'skyrimPlatform';
 
-import { Entry, Inventory, getInventory } from './inventory';
+import { Entry, Inventory, getInventory, sanitizeInventoryForSerialization } from './inventory';
 
 export const enum SpellType {
   Left,
@@ -55,9 +57,20 @@ export interface Equipment {
   leftSpell?: number;
   rightSpell?: number;
   voiceSpell?: number;
+  equippedShout?: number;
   instantSpell?: number;
   numChanges: number;
 }
+
+const raceMenuKeepUnequippedStorageKey = 'skympRaceMenuKeepUnequipped';
+
+export const setRaceMenuKeepUnequipped = (value: boolean): void => {
+  storage[raceMenuKeepUnequippedStorageKey] = value;
+};
+
+export const isRaceMenuKeepUnequipped = (): boolean => {
+  return storage[raceMenuKeepUnequippedStorageKey] === true;
+};
 
 const filterWorn = (inv: Inventory): Inventory => {
   return { entries: inv.entries.filter((x) => x.worn || x.wornLeft) };
@@ -80,11 +93,14 @@ const removeUnnecessaryExtra = (inv: Inventory, ignoreAmmo: boolean): Inventory 
 };
 
 export const getEquipment = (ac: Actor, numChanges: number): Equipment => {
+  const shout = ac.getEquippedShout();
+
   return {
-    inv: getInventory(ac),
+    inv: sanitizeInventoryForSerialization(filterWorn(getInventory(ac))),
     leftSpell: getEquipedSpell(ac, SpellType.Left),
     rightSpell: getEquipedSpell(ac, SpellType.Right),
-    voiceSpell: getEquipedSpell(ac, SpellType.Voice),
+    voiceSpell: shout ? 0 : getEquipedSpell(ac, SpellType.Voice),
+    equippedShout: shout ? shout.getFormID() : 0,
     instantSpell: getEquipedSpell(ac, SpellType.Instant),
     numChanges,
   };
@@ -106,6 +122,25 @@ export const syncSpellEquipment = (
   }
 };
 
+export const syncShoutEquipment = (
+  ac: Actor,
+  shoutBaseId: number | undefined,
+) => {
+  if (shoutBaseId !== undefined && shoutBaseId > 0) {
+    const shout = Shout.from(Game.getFormEx(shoutBaseId));
+    if (shout) {
+      ac.addShout(shout);
+      ac.equipShout(shout);
+    }
+  } else {
+    const equippedShout = ac.getEquippedShout();
+
+    if (equippedShout) {
+      ac.unequipShout(equippedShout);
+    }
+  }
+};
+
 export const applyEquipment = (ac: Actor, eq: Equipment): boolean => {
   ac.removeAllItems(null, false, true);
 
@@ -119,7 +154,13 @@ export const applyEquipment = (ac: Actor, eq: Equipment): boolean => {
 
   syncSpellEquipment(ac, eq.leftSpell, SpellType.Left);
   syncSpellEquipment(ac, eq.rightSpell, SpellType.Right);
-  syncSpellEquipment(ac, eq.voiceSpell, SpellType.Voice);
+  if (eq.equippedShout !== undefined && eq.equippedShout > 0) {
+    syncSpellEquipment(ac, undefined, SpellType.Voice);
+    syncShoutEquipment(ac, eq.equippedShout);
+  } else {
+    syncShoutEquipment(ac, undefined);
+    syncSpellEquipment(ac, eq.voiceSpell, SpellType.Voice);
+  }
   syncSpellEquipment(ac, eq.instantSpell, SpellType.Instant);
 
   return true;
@@ -131,6 +172,8 @@ export const isBadMenuShown = (): boolean => {
     Ui.isMenuOpen('FavoritesMenu') ||
     Ui.isMenuOpen('MagicMenu') ||
     Ui.isMenuOpen('ContainerMenu') ||
+    Ui.isMenuOpen('RaceSex Menu') ||
+    isRaceMenuKeepUnequipped() ||
     Ui.isMenuOpen('Crafting Menu') // Actually I don't think it causes crashes
   );
 };

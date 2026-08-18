@@ -3,6 +3,15 @@ import { Appearance, applyTints } from "../sync/appearance";
 import { NiPoint3 } from "../sync/movement";
 import { ObjectReferenceEx } from "../extensions/objectReferenceEx";
 
+const getExactObjectReference = (formId: number): ObjectReference | null => {
+  try {
+    const refr = ObjectReference.from(Game.getFormEx(formId));
+    return refr && refr.getFormID() === formId ? refr : null;
+  } catch (_) {
+    return null;
+  }
+};
+
 export class SpawnProcess {
   constructor(
     appearance: Appearance | null,
@@ -10,17 +19,19 @@ export class SpawnProcess {
     refrId: number,
     private callback: () => void,
   ) {
-    const refr = ObjectReference.from(Game.getFormEx(refrId));
-    if (!refr || refr.getFormID() !== refrId) {
+    const refr = getExactObjectReference(refrId);
+    if (!refr) {
       return;
     }
 
-    refr.setPosition(...pos).then(() => this.enable(appearance, refrId));
+    void refr.setPosition(...pos)
+      .then(() => this.enable(appearance, refrId))
+      .catch(() => {});
   }
 
   private enable(appearance: Appearance | null, refrId: number) {
-    const refr = ObjectReference.from(Game.getFormEx(refrId));
-    if (!refr || refr.getFormID() !== refrId) {
+    const refr = getExactObjectReference(refrId);
+    if (!refr) {
       return;
     }
 
@@ -28,24 +39,34 @@ export class SpawnProcess {
     if (ac && appearance) {
       applyTints(ac, appearance);
     }
-    refr.enable(false).then(() => this.resurrect(refrId));
+    void refr.enable(false)
+      .then(() => this.resurrect(refrId))
+      .catch(() => {});
   }
 
   private resurrect(refrId: number) {
-    const refr = ObjectReference.from(Game.getFormEx(refrId));
-    if (!refr || refr.getFormID() !== refrId) {
+    const refr = getExactObjectReference(refrId);
+    if (!refr) {
       return;
     }
 
     const ac = Actor.from(refr);
     if (ac) {
-      return ac.resurrect().then(() => {
+      void ac.resurrect().then(() => {
         this.callback();
-      });
+      }).catch(() => {});
+      return;
     }
 
-    ObjectReferenceEx.dealWithRef(refr, refr.getBaseObject()!);
+    const base = refr.getBaseObject();
+    if (!base) {
+      return;
+    }
 
-    return refr.setMotionType(MotionType.Keyframed, true).then(this.callback);
+    ObjectReferenceEx.dealWithRef(refr, base);
+
+    void refr.setMotionType(MotionType.Keyframed, true)
+      .then(() => this.callback())
+      .catch(() => {});
   }
 }

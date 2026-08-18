@@ -7,11 +7,68 @@
 #include "savefile/SFSeekerOfDifferences.h"
 #include "savefile/SFWriter.h"
 
+#include <algorithm>
+#include <cctype>
+#include <unordered_set>
+
 namespace fs = std::filesystem;
 
 CMRC_DECLARE(skyrim_plugin_resources);
 
 constexpr auto g_saveFilePrefix = "TESMODPLATFORM-";
+
+namespace {
+std::string ToLower(std::string s)
+{
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return s;
+}
+
+struct RuntimePlugins
+{
+  std::vector<std::string> regular;
+  std::vector<std::string> light;
+};
+
+RuntimePlugins GetRuntimePlugins()
+{
+  RuntimePlugins res;
+  auto dataHandler = RE::TESDataHandler::GetSingleton();
+
+  if (!dataHandler) {
+    throw NullPointerException("dataHandler");
+  }
+
+#ifndef ENABLE_SKYRIM_VR
+  auto files = dataHandler->compiledFileCollection.files;
+  auto smallFiles = dataHandler->compiledFileCollection.smallFiles;
+#else
+  auto files = dataHandler->VRcompiledFileCollection->files;
+  auto smallFiles = dataHandler->VRcompiledFileCollection->smallFiles;
+#endif
+
+  for (auto& file : files) {
+    res.regular.push_back(std::string(file->fileName));
+  }
+
+  for (auto& file : smallFiles) {
+    res.light.push_back(std::string(file->fileName));
+  }
+
+  return res;
+}
+
+std::unordered_set<std::string> GetLowerPluginSet(
+  const std::vector<std::string>& plugins)
+{
+  std::unordered_set<std::string> res;
+  for (auto& plugin : plugins) {
+    res.insert(ToLower(plugin));
+  }
+  return res;
+}
+}
 
 class LoadGameEventSink : public RE::BSTEventSink<RE::TESLoadGameEvent>
 {
@@ -143,18 +200,8 @@ std::wstring LoadGame::GetPathToMyDocuments()
 
 void LoadGame::ModifyPluginInfo(std::shared_ptr<SaveFile_::SaveFile>& save)
 {
-  std::vector<std::string> newPlugins;
-  auto dataHandler = RE::TESDataHandler::GetSingleton();
-
-  if (!dataHandler) {
-    throw NullPointerException("dataHandler");
-  }
-
-  for (auto& file : dataHandler->files) {
-    newPlugins.push_back(std::string(file->fileName));
-  }
-
-  save->OverwritePluginInfo(newPlugins);
+  auto plugins = GetRuntimePlugins();
+  save->OverwritePluginInfo(plugins.regular, plugins.light);
 }
 
 void LoadGame::ModifySaveTime(std::shared_ptr<SaveFile_::SaveFile>& save,
@@ -232,7 +279,20 @@ void LoadGame::ModifyLoadOrder(std::shared_ptr<SaveFile_::SaveFile> save,
                                std::vector<std::string>* loadOrder)
 {
   if (loadOrder) {
-    save->OverwritePluginInfo(*loadOrder);
+    auto runtimePlugins = GetRuntimePlugins();
+    auto lightPluginNames = GetLowerPluginSet(runtimePlugins.light);
+
+    std::vector<std::string> regularPlugins;
+    std::vector<std::string> lightPlugins;
+    for (auto& plugin : *loadOrder) {
+      if (lightPluginNames.count(ToLower(plugin)) != 0) {
+        lightPlugins.push_back(plugin);
+      } else {
+        regularPlugins.push_back(plugin);
+      }
+    }
+
+    save->OverwritePluginInfo(regularPlugins, lightPlugins);
   }
 }
 

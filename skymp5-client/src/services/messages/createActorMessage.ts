@@ -25,6 +25,7 @@ export interface CreateActorMessage extends CreateActorMessageMainProps {
     idx: number;
     baseRecordType?: "DOOR"; // see PartOne.cpp
     transform: Transform;
+    teleportPointFallback?: Transform;
     isMe: boolean;
     props?: CreateActorMessageAdditionalProps;
     customPropsJsonDumps: CustomPropsEntry[];
@@ -51,6 +52,8 @@ export interface CreateActorMessageAdditionalProps {
     isHostedByOther?: boolean;
     isRaceMenuOpen?: boolean;
     learnedSpells?: number[];
+    learnedShouts?: number[];
+    unlockedWords?: number[];
     healRate?: number;
     healRateMult?: number;
     health?: number;

@@ -1,14 +1,12 @@
-import { localIdToRemoteId, remoteIdToLocalId } from "../../view/worldViewMisc";
-import { logError, logTrace } from "../../logging";
+import { logError } from "../../logging";
 import { ConnectionMessage } from "../events/connectionMessage";
 import { CustomPacketMessage } from "../messages/customPacketMessage";
 import { GamemodeApiCtx } from "../messages_gamemode/gamemodeApiCtx";
+import { getGamemodeApiCommonCtx } from "../messages_gamemode/gamemodeApiCtxUtils";
 import { ClientListener, CombinedController, Sp } from "./clientListener";
-import { NetworkingService } from "./networkingService";
 import { RemoteServer } from "./remoteServer";
 import { ServerJsVerificationService } from "./serverJsVerificationService";
-import { once, printConsole } from "skyrimPlatform";
-import * as sp from "skyrimPlatform";
+import { printConsole } from "skyrimPlatform";
 
 export class SweetTaffyEvalService extends ClientListener {
     constructor(private sp: Sp, private controller: CombinedController) {
@@ -65,10 +63,8 @@ export class SweetTaffyEvalService extends ClientListener {
                     const myFormModel = worldModel.forms[worldModel.playerCharacterFormIdx];
 
                     const ctx: Partial<GamemodeApiCtx> = {
-                        sp: sp,
+                        ...getGamemodeApiCommonCtx(),
                         _model: myFormModel,
-                        getFormIdInServerFormat: localIdToRemoteId,
-                        getFormIdInClientFormat: remoteIdToLocalId,
                         get(propName: string) {
                             return (this._model as Record<string, any>)?.[propName];
                         }

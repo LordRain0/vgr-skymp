@@ -21,6 +21,7 @@ import {
   ActorBase,
   FormType,
   Form,
+  settings,
 } from "skyrimPlatform";
 
 export interface Extra {
@@ -47,6 +48,9 @@ export type Entry = BasicEntry & Extra;
 export interface Inventory {
   entries: Entry[];
 }
+
+const debugInventoryApply =
+  settings["skymp5-client"]?.["debugInventoryApply"] === true;
 
 // 'loxsword (Legendary)' => 'loxsword'
 const getRealName = (s?: string): string => {
@@ -202,6 +206,31 @@ const squash = (inv: Inventory): Inventory => {
   return { entries: res.filter((x) => x.count !== 0) };
 };
 
+export const sanitizeInventoryForSerialization = (inv: Inventory): Inventory => {
+  return {
+    entries: inv.entries
+      .map((e) => {
+        const count = Math.trunc(e.count);
+        if (!Number.isFinite(e.count) || count <= 0) {
+          if (debugInventoryApply) {
+            printConsole(
+              `Dropping non-positive inventory serialization entry baseId=${e.baseId.toString(
+                16
+              )} count=${e.count}`
+            );
+          }
+          return undefined;
+        }
+
+        return {
+          ...e,
+          count,
+        };
+      })
+      .filter((e): e is Entry => e !== undefined),
+  };
+};
+
 const getExtraContainerChangesAsInventory = (
   refr: ObjectReference
 ): Inventory => {
@@ -343,8 +372,9 @@ export const applyInventory = (
   let res = true;
 
   diff.sort((a, b) => (a.count < b.count ? -1 : 1));
-  diff.forEach((e, i) => {
-    if (i > 0 && enableCrashProtection) {
+
+  diff.forEach((e, entryIndex) => {
+    if (entryIndex > 0 && enableCrashProtection) {
       res = false;
       return;
     }
@@ -382,7 +412,7 @@ export const applyInventory = (
         }
       }
 
-      if (e.count > 1 && Ammo.from(Game.getFormEx(e.baseId))) {
+      if (absCount > 1 && Ammo.from(f)) {
         absCount = 1;
         oneStepCount = e.count;
         if (e.count > 60000) {
@@ -424,27 +454,27 @@ export const applyInventory = (
         e.maxCharge ? e.maxCharge : 0,
         !!e.removeEnchantmentOnUnequip,
         e.chargePercent ? e.chargePercent : 0,
-        e.name ? cropName(e.name) : f.getName(),
+        e.name ? cropName(e.name) : "",
         e.soul ? e.soul : 0,
         e.poisonId ? Potion.from(Game.getFormEx(e.poisonId)) : null,
         e.poisonCount ? e.poisonCount : 0
       ];
 
-      const argsToPrint = addItemExArgs.map((arg) => {
-        if (arg instanceof ObjectReference) {
-          return `ObjectReference(${arg.getFormID().toString(16)})`;
-        } else if (arg instanceof Form) {
-          return `Form(${arg.getFormID().toString(16)})`;
-        } else {
-          return JSON.stringify(arg);
-        }
-      });
-
-      printConsole(
-        `TESModPlatform.addItemEx(${argsToPrint.join(", ")})`
-      );
-
-      TESModPlatform.addItemEx(...addItemExArgs);
+      try {
+        TESModPlatform.addItemEx(...addItemExArgs);
+      } catch (error) {
+        res = false;
+        printConsole(
+          `TESModPlatform.addItemEx failed: ${error}; args=${JSON.stringify(
+            addItemExArgs.map((arg) => {
+              if (arg instanceof ObjectReference || arg instanceof Form) {
+                return `Form(${arg.getFormID().toString(16)})`;
+              }
+              return arg;
+            })
+          )}`
+        );
+      }
     }
 
     if (queueNiNodeUpdateNeeded) {

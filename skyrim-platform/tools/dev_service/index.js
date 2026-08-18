@@ -177,6 +177,10 @@ const watchCallback = (_eventType, fileName) => {
           path.join(distDir, "Data/Platform/Distribution/RuntimeDependencies")
         );
         cp(
+          path.join(sourceDir, "src/platform_se/skyrim_platform/certs/cacert.pem"),
+          path.join(distDir, "Data/Platform/Distribution/RuntimeDependencies")
+        );
+        cp(
           path.join(sourceDir, `src/platform_se/pex/TESModPlatform.pex`),
           path.join(distDir, "Data/Scripts")
         );
@@ -184,6 +188,25 @@ const watchCallback = (_eventType, fileName) => {
           `${getBinaryDir()}/skymp5-server/cpp/${buildCfg}/MpClientPlugin.dll`,
           path.join(distDir, "Data/SKSE/Plugins")
         );
+		
+        // livekit.dll and livekit_ffi.dll are runtime dependencies of MpClientPlugin.dll (voice chat).
+        // They must be in the game root so SetDllDirectoryA(".") can find them.
+        for (const dllName of ["livekit.dll", "livekit_ffi.dll"]) {
+          const dll = `${getBinaryDir()}/skymp5-server/cpp/${buildCfg}/${dllName}`;
+          if (fs.existsSync(dll)) {
+            cp(dll, distDir);
+          }
+        }
+		/*
+        cp(
+          path.join(
+            sourceDir,
+            "tools/system_polyfill/dist/___systemPolyfill.js"
+          ),
+          path.join(distDir, "Data/Platform/Distribution")
+        );*/
+		//-end livekit
+		
         fs.copySync(
           path.join(sourceDir, "tools/plugin-example"),
           path.join(distDir, "Data/Platform/plugin-example")

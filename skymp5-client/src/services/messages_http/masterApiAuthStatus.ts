@@ -1,6 +1,6 @@
 export interface MasterApiAuthStatus {
     token: string;
-    masterApiId: number;
+    masterApiId: number | null;
     discordUsername: string | null;
     discordDiscriminator: string | null;
     discordAvatar: string | null;

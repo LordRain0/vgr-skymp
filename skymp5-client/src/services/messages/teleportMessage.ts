@@ -1,4 +1,5 @@
 import { MsgType } from "../../messages";
+import { Transform } from "../../sync/movement";
 
 export interface TeleportMessage {
     t: MsgType.Teleport;
@@ -6,4 +7,5 @@ export interface TeleportMessage {
     pos: number[];
     rot: number[];
     worldOrCell: number;
+    teleportPointFallback?: Transform;
 }

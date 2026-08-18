@@ -36,7 +36,7 @@ export class ObjectReferenceEx {
 
   static dealWithRef(self: ObjectReference, base: Form): void {
     const t = base.getType();
-    const isItem = FormTypeEx.isItem(t);
+    const isPickupableItem = FormTypeEx.isPickupableItem(base);
 
     // BlackFallsBarrow02, door isn't opening via SetOpen so we're hacking it.
     // Not blocking activation & asking parent to activate until will be in the correct state
@@ -47,7 +47,7 @@ export class ObjectReferenceEx {
     if (t === FormType.Furniture
       || t === FormType.Activator
       || t === FormType.Container
-      || isItem
+      || isPickupableItem
       || t === FormType.NPC
       || (t === FormType.Door && self.getBaseObject()?.getFormID() !== caveGSecretDoor01)) {
       self.blockActivation(true);
@@ -59,7 +59,7 @@ export class ObjectReferenceEx {
       self.lock(false, false);
     }
 
-    if (isItem) {
+    if (isPickupableItem) {
       self.setMotionType(MotionType.Keyframed, false);
     }
 

@@ -2,6 +2,7 @@
 #include "BrowserApi.h"    // APIs for register in CommonExecutionListener
 #include "CallNativeApi.h" // CallNativeApi::NativeCallRequirements
 #include "CameraApi.h"
+#include "CellDebugApi.h"
 #include "ConsoleApi.h" // CommonExecutionListener
 #include "ConstEnumApi.h"
 #include "DevApi.h"
@@ -34,6 +35,11 @@ bool EndsWith(const std::wstring& value, const std::wstring& ending)
 {
   return ending.size() <= value.size() &&
     std::equal(ending.rbegin(), ending.rend(), value.rbegin());
+}
+
+bool IsSkympClientPapyrusEventAllowConfig(const std::filesystem::path& path)
+{
+  return path.filename() == L"skymp5-client-AllowPapyrusEvents.json";
 }
 }
 
@@ -176,6 +182,9 @@ private:
         LoadPluginFile(env, path);
         continue;
       }
+      if (IsSkympClientPapyrusEventAllowConfig(path)) {
+        continue;
+      }
       logger::warn("Found unprocessed file: {}", path.string());
     }
   }
@@ -275,6 +284,7 @@ private:
       EncodingApi::Register(env, e);
       LoadGameApi::Register(env, e);
       CameraApi::Register(env, e);
+      CellDebugApi::Register(env, e);
       MpClientPluginApi::Register(env, e);
       ObjectReferenceApi::Register(env, e);
       HttpClientApi::Register(env, e);
