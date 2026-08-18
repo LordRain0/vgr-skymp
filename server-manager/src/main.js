@@ -559,6 +559,7 @@ function charFromCf(cf) {
     inventory: (cf.inv && Array.isArray(cf.inv.entries)) ? cf.inv.entries : [],
     spellCount: Array.isArray(cf.learnedSpells) ? cf.learnedSpells.length : 0,
     spawnDelay: cf.spawnDelay,
+    permaDead: !!(cf.dynamicFields && cf.dynamicFields['private.permaDead'] === true),
     appearance,
   }
 }
@@ -767,12 +768,81 @@ function sanitizeInvEntries(list) {
   return out
 }
 
+// Flip permadeath on a character: the changeForm holds the live state
+// (dynamicFields keys are literal dotted names, so the whole object is
+// rewritten) and the backend character doc drives character select.
+async function setPermaDead(formDesc, value) {
+  const settings = readServerSettings()
+  let profileId = null
+  const mutate = cf => {
+    profileId = Number(cf.profileId)
+    const df = (cf.dynamicFields && typeof cf.dynamicFields === 'object') ? cf.dynamicFields : {}
+    df['private.permaDead'] = value === true
+    df['private.deathChoicePending'] = false
+    const set = { dynamicFields: df }
+    if (value === true) {
+      set.isDead = true
+      set.spawnDelay = 1e12
+    } else {
+      set.isDead = false
+      set.spawnDelay = Number(settings.respawnSeconds) || 15
+      set.healthPercentage = 1
+    }
+    return set
+  }
+  if ((settings.databaseDriver || 'file') === 'mongodb') {
+    await withMongoChangeForms(settings, async col => {
+      const cf = await col.findOne({ formDesc, recType: 1 })
+      if (!cf) throw new Error(`no character with formDesc ${formDesc}`)
+      await col.updateOne({ formDesc, recType: 1 }, { $set: mutate(cf) })
+    })
+  } else {
+    let saved = false
+    for (const [file, cf] of fileChangeForms(settings)) {
+      if (cf.formDesc !== formDesc || cf.recType !== 1) continue
+      Object.assign(cf, mutate(cf))
+      fs.writeFileSync(file, JSON.stringify(cf, null, 2))
+      saved = true
+      break
+    }
+    if (!saved) throw new Error(`no character with formDesc ${formDesc}`)
+  }
+  _charCache = { at: 0, map: new Map() }
+  if (Number.isFinite(profileId) && profileId >= 0) await setBackendPermaDead(profileId, value === true)
+}
+
+async function setBackendPermaDead(profileId, value) {
+  let MongoClient
+  try { ({ MongoClient } = require('mongodb')) }
+  catch { throw new Error('mongodb module not installed in server-manager - run npm install') }
+  const settings = readServerSettings()
+  const uri = config.readBackendEnv('BACKEND_DATABASE_URI') || settings.databaseUri
+  if (!uri) throw new Error('no backend database uri configured')
+  const dbName = config.readBackendEnv('BACKEND_DATABASE_NAME') || 'skymp-backend'
+  const client = new MongoClient(uri, { serverSelectionTimeoutMS: 3000 })
+  try {
+    await client.connect()
+    await client.db(dbName).collection('characters').updateOne(
+      { profileId: Number(profileId), deletedAt: null },
+      { $set: { permaDead: value, permaDeadAt: value ? new Date().toISOString() : null } }
+    )
+  } finally { await client.close() }
+}
+
 async function saveCharacter(formDesc, patch) {
   if (typeof formDesc !== 'string' || !formDesc) throw new Error('missing formDesc')
+  let did = false
+  if (patch && typeof patch.permaDead === 'boolean') {
+    await setPermaDead(formDesc, patch.permaDead)
+    did = true
+  }
   const set = {}
   if (patch && patch.appearance !== undefined) set.appearanceDump = sanitizeAppearance(patch.appearance)
   if (patch && patch.invEntries !== undefined) set.inv = { entries: sanitizeInvEntries(patch.invEntries) }
-  if (!Object.keys(set).length) throw new Error('nothing to save')
+  if (!Object.keys(set).length) {
+    if (did) return
+    throw new Error('nothing to save')
+  }
   const settings = readServerSettings()
   if ((settings.databaseDriver || 'file') === 'mongodb') {
     await withMongoChangeForms(settings, async col => {

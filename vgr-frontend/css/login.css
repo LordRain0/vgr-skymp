@@ -339,6 +339,39 @@ body[data-vgr-login-disposed="true"] .brand-watermark {
     linear-gradient(180deg, rgba(24, 7, 6, 0.24), rgba(5, 2, 2, 0.62));
 }
 
+#vgr-login-layer .character-card.perma-dead {
+  cursor: not-allowed;
+  opacity: 0.65;
+  border-color: rgba(90, 90, 96, 0.6);
+}
+
+#vgr-login-layer .character-card.perma-dead .character-portrait img {
+  filter: grayscale(1) brightness(0.5);
+}
+
+#vgr-login-layer .perma-skull {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  background: radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.72));
+  color: #cfc6ae;
+  text-transform: uppercase;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.9);
+}
+
+#vgr-login-layer .perma-skull strong {
+  font-size: 52px;
+  line-height: 1;
+}
+
+#vgr-login-layer .perma-skull span {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+}
+
 #vgr-login-layer .character-portrait {
   position: relative;
   display: grid;

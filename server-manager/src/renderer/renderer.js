@@ -578,10 +578,40 @@ function openCharModal(c) {
   const pos = c.position ? c.position.map(n => Math.round(n)).join(', ') : '—'
   $('#cm-meta').textContent =
     `${c.worldOrCell || '—'} (${pos}) · HP ${fmtPct(c.health)} · MP ${fmtPct(c.magicka)} · SP ${fmtPct(c.stamina)} · ${c.spellCount} spells`
+  renderCmLifeDeath()
   renderCmAppearance()
   renderCmInventory()
   $('#char-modal').hidden = false
   fetchItemNames()
+}
+
+// Permadeath toggle: un-ticking restores the character (alive, normal spawn
+// delay) and clears the flag character select greys the slot out with.
+function renderCmLifeDeath() {
+  const box = $('#cm-lifedeath')
+  box.innerHTML = ''
+  const label = el('label', { className: 'chk' })
+  const chk = el('input', { type: 'checkbox' })
+  chk.checked = !!cmChar.permaDead
+  label.appendChild(chk)
+  label.appendChild(document.createTextNode(' Permanently dead (un-tick to restore the character)'))
+  box.appendChild(label)
+  chk.addEventListener('change', async () => {
+    chk.disabled = true
+    $('#cm-status').textContent = chk.checked ? 'marking permanently dead…' : 'restoring character…'
+    const r = await window.mgr.charsSave(cmChar.formDesc, { permaDead: chk.checked })
+    if (r.ok) {
+      cmChar.permaDead = chk.checked
+      $('#cm-status').textContent = chk.checked
+        ? 'Character marked permanently dead.'
+        : 'Character restored - they will wake at their spawn point on next login.'
+      if (selectedDiscordId) selectPlayer(selectedDiscordId)
+    } else {
+      chk.checked = !!cmChar.permaDead
+      $('#cm-status').textContent = `Error: ${r.error}`
+    }
+    chk.disabled = false
+  })
 }
 
 async function fetchItemNames() {

@@ -426,6 +426,7 @@
       deleteAt: raw.deleteAt || null,
       deletionStartedAt: raw.deletionStartedAt || null,
       deletedAt: raw.deletedAt || null,
+      permaDead: raw.permaDead === true,
       index: index || 0
     };
   }
@@ -636,6 +637,10 @@
   }
 
   function chooseCharacter(character) {
+    if (character && character.permaDead) {
+      setFooter("That character has passed on permanently.");
+      return;
+    }
     state.selected = normalizeCharacter(character);
     state.createSelected = false;
     state.queue = { position: null, total: null, status: "idle" };
@@ -1047,6 +1052,10 @@
       if (pendingDeletion) {
         card.classList.add("pending-deletion");
       }
+      if (character.permaDead) {
+        card.classList.add("perma-dead");
+        card.disabled = true;
+      }
       if (state.selected && String(state.selected.profileId) === String(character.profileId)) {
         card.classList.add("selected");
       }
@@ -1085,6 +1094,18 @@
         initials.textContent = getCharacterInitials(character);
         portrait.appendChild(portraitImage);
         portrait.appendChild(initials);
+
+        if (character.permaDead) {
+          var skull = document.createElement("div");
+          skull.className = "perma-skull";
+          var skullIcon = document.createElement("strong");
+          skullIcon.textContent = "☠";
+          var skullLabel = document.createElement("span");
+          skullLabel.textContent = "Fallen";
+          skull.appendChild(skullIcon);
+          skull.appendChild(skullLabel);
+          portrait.appendChild(skull);
+        }
       }
 
       var info = document.createElement("div");

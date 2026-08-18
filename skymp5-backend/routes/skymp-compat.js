@@ -78,6 +78,11 @@ async function requirePlayableCharacter(profileId, discordId, res) {
     return null
   }
 
+  if (character.permaDead === true) {
+    res.status(409).json({ error: 'characterPermaDead' })
+    return null
+  }
+
   return character
 }
 
