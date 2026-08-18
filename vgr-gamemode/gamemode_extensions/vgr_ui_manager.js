@@ -309,20 +309,37 @@ const trimAnimSuffix = (eventName) => {
 };
 
 
+let idleCancelInProgress = false;
+
 const ifIdleAnim_ForceDefault = async () => {
-	const currentAnimEvent = ctx.state.vgrAnim?.lastAnimEvent;
-	
-	if (!isIdleAnimEvent(currentAnimEvent)) return; //skip if not idle animationevent
-	
-	ctx.sp.printConsole("[VGR] UI manager: ", "Animation Event: ", currentAnimEvent);
-	
-	const base = trimAnimSuffix(currentAnimEvent);
-	if (!base) return;
-	
-	if (await sendAnimationEventAndCheck(base + "ExitStart", 0.15)) return;
-	if (await sendAnimationEventAndCheck(base + "Exit", 0.15)) return;
-	
-	await sendAnimationEventAndCheck("IdleForceDefaultState", 0.15);
+	if (idleCancelInProgress) return;
+
+	const emoteState = ctx.state.vgrEmote;
+	const currentAnimEvent = emoteState?.animation || ctx.state.vgrAnim?.lastAnimEvent;
+	if (emoteState?.active !== true) return;
+
+	//never poke animations at a dead or downed actor
+	const deathUi = getUIConfig("death_screen");
+	if (deathUi && deathUi.active === true) return;
+
+	idleCancelInProgress = true;
+	emoteState.active = false;
+	emoteState.animation = null;
+	try {
+		ctx.sp.printConsole("[VGR] UI manager: cancelling emote", currentAnimEvent || "unknown");
+
+		// This reliably breaks persistent poses even when no animation-specific
+		// Exit event exists. It is only reached after an emote/cancel key press.
+		if (await sendAnimationEventAndCheck("IdleForceDefaultState", 0.15)) {
+			return;
+		}
+
+		const base = trimAnimSuffix(currentAnimEvent);
+		if (base && await sendAnimationEventAndCheck(base + "ExitStart", 0.15)) return;
+		if (base && await sendAnimationEventAndCheck(base + "Exit", 0.15)) return;
+	} finally {
+		idleCancelInProgress = false;
+	}
 };
 
 

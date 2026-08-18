@@ -5,82 +5,82 @@ const EMOTE_GROUPS = [
         id: "greetings",
         label: "Greetings",
         emotes: [
-            { id: "0003EA32", label: "Wave", animationString: "IdleWave" },
-            { id: "000F7C8C", label: "War Cheer", animationString: "IdleCivilWarCheer" },
-            { id: "000B240C", label: "Salute", animationString: "IdleSalute" },
-            { id: "000D8734", label: "Silent Bow", animationString: "IdleSilentBow" },
-            { id: "0006FF15", label: "Get Attention", animationString: "IdleGetAttention" },
-            { id: "00075C62", label: "Look Far", animationString: "IdleLookFar" },
-            { id: "000ABEF2", label: "Knock Door", animationString: "IdleMT_DoorBang" }
+            { id: "0003EA32", label: "Wave", animationString: "IdleWave", previewImage: "assets/emotes/IdleWave.gif" },
+            { id: "000F7C8C", label: "War Cheer", animationString: "IdleCivilWarCheer", previewImage: "assets/emotes/IdleCivilWarCheer.gif" },
+            { id: "000B240C", label: "Salute", animationString: "IdleSalute", previewImage: "assets/emotes/IdleSalute.gif" },
+            { id: "000D8734", label: "Silent Bow", animationString: "IdleSilentBow", previewImage: "assets/emotes/IdleSilentBow.gif" },
+            { id: "0006FF15", label: "Get Attention", animationString: "IdleGetAttention", previewImage: "assets/emotes/IdleGetAttention.gif" },
+            { id: "00075C62", label: "Look Far", animationString: "IdleLookFar", previewImage: "assets/emotes/IdleLookFar.gif" },
+            { id: "000ABEF2", label: "Knock Door", animationString: "IdleMT_DoorBang", previewImage: "assets/emotes/IdleMT_DoorBang.gif" }
         ]
     },
     {
         id: "reactions",
         label: "Reactions",
         emotes: [
-            { id: "000D8730", label: "Clapping", animationString: "IdleApplaud2" },
-            { id: "000D8732", label: "Applaud", animationString: "IdleApplaud4" },
-            { id: "000D8733", label: "Clapping Overhead", animationString: "IdleApplaud5" },
-            { id: "00075C5F", label: "Laugh", animationString: "IdleLaugh" },
-            { id: "00105D47", label: "Surrender", animationString: "IdleSurrender" },
-            { id: "000EF94C", label: "Scared", animationString: "IdleCowerEnter" },
-            { id: "000977EC", label: "Wipe Brow", animationString: "IdleWipeBrow" },
-            { id: "000B8F1A", label: "Wounded", animationString: "IdleWounded_02" }
+            { id: "000D8730", label: "Clapping", animationString: "IdleApplaud2", previewImage: "assets/emotes/IdleApplaud2.gif" },
+            { id: "000D8732", label: "Applaud", animationString: "IdleApplaud4", previewImage: "assets/emotes/IdleApplaud4.gif" },
+            { id: "000D8733", label: "Clapping Overhead", animationString: "IdleApplaud5", previewImage: "assets/emotes/IdleApplaud5.gif" },
+            { id: "00075C5F", label: "Laugh", animationString: "IdleLaugh", previewImage: "assets/emotes/IdleLaugh.gif" },
+            { id: "00105D47", label: "Surrender", animationString: "IdleSurrender", previewImage: "assets/emotes/IdleSurrender.gif" },
+            { id: "000EF94C", label: "Scared", animationString: "IdleCowerEnter", previewImage: "assets/emotes/IdleCowerEnter.gif" },
+            { id: "000977EC", label: "Wipe Brow", animationString: "IdleWipeBrow", previewImage: "assets/emotes/IdleWipeBrow.gif" },
+            { id: "000B8F1A", label: "Wounded", animationString: "IdleWounded_02", previewImage: "assets/emotes/IdleWounded_02.gif" }
         ]
     },
     {
         id: "stances",
         label: "Stances",
         emotes: [
-            { id: "00042E63", label: "Lay Down", animationString: "IdleLayDown" },
-            { id: "000E8642", label: "Warm Hands", animationString: "IdleWarmHandsStanding" },
-            { id: "000E8643", label: "Warm Hands (Sit)", animationString: "IdleWarmHandsCrouched" },
+            { id: "00042E63", label: "Lay Down", animationString: "IdleLayDown", previewImage: "assets/emotes/IdleLayDown.gif" },
+            { id: "000E8642", label: "Warm Hands", animationString: "IdleWarmHandsStanding", previewImage: "assets/emotes/IdleWarmHandsStanding.gif" },
+            { id: "000E8643", label: "Warm Hands (Sit)", animationString: "IdleWarmHandsCrouched", previewImage: "assets/emotes/IdleWarmHandsCrouched.gif" },
             //{ id: "000F11E4", label: "Crouched Pray", animationString: "IdleCrouchedPray" },
-            { id: "000977EF", label: "Pray", animationString: "IdleGrave_01" },
-            { id: "0006F300", label: "Worship", animationString: "IdlePray" },
-            { id: "000C4EF9", label: "Sit Crossed", animationString: "IdleSitCrossLeggedEnter" },
-            { id: "000E8E52", label: "Kneel", animationString: "IdleKneelingEnter" },
-            { id: "000B8F1B", label: "Sit Lazy", animationString: "IdleWounded_03" }
+            { id: "000977EF", label: "Pray", animationString: "IdleGrave_01", previewImage: "assets/emotes/IdleGrave_01.gif" },
+            { id: "0006F300", label: "Worship", animationString: "IdlePray", previewImage: "assets/emotes/IdlePray.gif" },
+            { id: "000C4EF9", label: "Sit Crossed", animationString: "IdleSitCrossLeggedEnter", previewImage: "assets/emotes/IdleSitCrossLeggedEnter.gif" },
+            { id: "000E8E52", label: "Kneel", animationString: "IdleKneelingEnter", previewImage: "assets/emotes/IdleKneelingEnter.gif" },
+            { id: "000B8F1B", label: "Sit Lazy", animationString: "IdleWounded_03", previewImage: "assets/emotes/IdleWounded_03.gif" }
         ]
     },    
     {
         id: "dialog",
         label: "Dialog",
         emotes: [
-            { id: "000FF7F4", label: "Crossed Arms", animationString: "OffsetArmsCrossedStart" },
-            { id: "000977F0", label: "Formal Stand", animationString: "IdleGrave_02" },
-            { id: "000B240A", label: "Hands Behind", animationString: "IdleHandsBehindBack" },
-            { id: "00075C3D", label: "Examine", animationString: "IdleExamine" },
-            { id: "000977ED", label: "Study", animationString: "IdleStudy" },
-            { id: "0200D287", label: "Hand On Chin", animationString: "IdleDialogueHandOnChinGesture" },
-            { id: "000B8F1E", label: "Point Far", animationString: "IdlePointFar_01" }
+            { id: "000FF7F4", label: "Crossed Arms", animationString: "OffsetArmsCrossedStart", previewImage: "assets/emotes/OffsetArmsCrossedStart.gif" },
+            { id: "000977F0", label: "Formal Stand", animationString: "IdleGrave_02", previewImage: "assets/emotes/IdleGrave_02.gif" },
+            { id: "000B240A", label: "Hands Behind", animationString: "IdleHandsBehindBack", previewImage: "assets/emotes/IdleHandsBehindBack.gif" },
+            { id: "00075C3D", label: "Examine", animationString: "IdleExamine", previewImage: "assets/emotes/IdleExamine.gif" },
+            { id: "000977ED", label: "Study", animationString: "IdleStudy", previewImage: "assets/emotes/IdleStudy.gif" },
+            { id: "0200D287", label: "Hand On Chin", animationString: "IdleDialogueHandOnChinGesture", previewImage: "assets/emotes/IdleDialogueHandOnChinGesture.gif" },
+            { id: "000B8F1E", label: "Point Far", animationString: "IdlePointFar_01", previewImage: "assets/emotes/IdlePointFar_01.gif" }
         ]
     },
     {
         id: "activities",
         label: "Activities",
         emotes: [
-            { id: "000FD68B", label: "Drink", animationString: "IdleDrink" },
-            { id: "00064100", label: "Eating", animationString: "IdleEatingStandingStart" },
-            { id: "000640FE", label: "Sweeping", animationString: "IdleLooseSweepingStart" },
-            { id: "00075CB4", label: "Use Hoe", animationString: "IdleHoe" },
-            { id: "000F1AA0", label: "Ritual", animationString: "IdleRitualStart" },
-            { id: "00089975", label: "Read Note", animationString: "IdleNoteRead" },
-            { id: "0010DDBF", label: "Read Book", animationString: "IdleBook_PageTurn" }
+            { id: "000FD68B", label: "Drink", animationString: "IdleDrink", previewImage: "assets/emotes/IdleDrink.gif" },
+            { id: "00064100", label: "Eating", animationString: "IdleEatingStandingStart", previewImage: "assets/emotes/IdleEatingStandingStart.gif" },
+            { id: "000640FE", label: "Sweeping", animationString: "IdleLooseSweepingStart", previewImage: "assets/emotes/IdleLooseSweepingStart.gif" },
+            { id: "00075CB4", label: "Use Hoe", animationString: "IdleHoe", previewImage: "assets/emotes/IdleHoe.gif" },
+            { id: "000F1AA0", label: "Ritual", animationString: "IdleRitualStart", previewImage: "assets/emotes/IdleRitualStart.gif" },
+            { id: "00089975", label: "Read Note", animationString: "IdleNoteRead", previewImage: "assets/emotes/IdleNoteRead.gif" },
+            { id: "0010DDBF", label: "Read Book", animationString: "IdleBook_PageTurn", previewImage: "assets/emotes/IdleBook_PageTurn.gif" }
         ]
     },
     {
         id: "entertainment",
         label: "Entertain",
         emotes: [
-            { id: "000F7C8A", label: "Cicero Dance 1", animationString: "IdleCiceroDance1" },
-            { id: "000F7C8B", label: "Cicero Dance 2", animationString: "IdleCiceroDance2" },
-            { id: "00103653", label: "Cicero Dance 3", animationString: "IdleCiceroDance3" },
-            { id: "00096F8B", label: "Play Drum", animationString: "IdleDrumStart" },
-            { id: "00096F8C", label: "Play Flute", animationString: "IdleFluteStart" },
-            { id: "00096F8D", label: "Play Lute", animationString: "IdleLuteStart" },
-            { id: "000F6CCE", label: "Horn (Imper.)", animationString: "IdleBlowHornImperial" },
-            { id: "000F6CCD", label: "Horn (Stormcl.)", animationString: "IdleBlowHornStormcloak" }
+            { id: "000F7C8A", label: "Cicero Dance 1", animationString: "IdleCiceroDance1", previewImage: "assets/emotes/IdleCiceroDance1.gif" },
+            { id: "000F7C8B", label: "Cicero Dance 2", animationString: "IdleCiceroDance2", previewImage: "assets/emotes/IdleCiceroDance2.gif" },
+            { id: "00103653", label: "Cicero Dance 3", animationString: "IdleCiceroDance3", previewImage: "assets/emotes/IdleCiceroDance3.gif" },
+            { id: "00096F8B", label: "Play Drum", animationString: "IdleDrumStart", previewImage: "assets/emotes/IdleDrumStart.gif" },
+            { id: "00096F8C", label: "Play Flute", animationString: "IdleFluteStart", previewImage: "assets/emotes/IdleFluteStart.gif" },
+            { id: "00096F8D", label: "Play Lute", animationString: "IdleLuteStart", previewImage: "assets/emotes/IdleLuteStart.gif" },
+            { id: "000F6CCE", label: "Horn (Imper.)", animationString: "IdleBlowHornImperial", previewImage: "assets/emotes/IdleBlowHornImperial.gif" },
+            { id: "000F6CCD", label: "Horn (Stormcl.)", animationString: "IdleBlowHornStormcloak", previewImage: "assets/emotes/IdleBlowHornStormcloak.gif" }
         ]
     }
 ];

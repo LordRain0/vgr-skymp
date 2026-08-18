@@ -328,7 +328,7 @@ let VGR_REGISTERED_UI = {
 
 const VGR_KEY_SPECIAL = {
   "focus_key": {keyCodes: []},
-  "cancel_idle_anim_key": {keyCodes: ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space']},
+  "cancel_idle_anim_key": {keyCodes: ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyR']},
   "force_ui_close_key": {keyCodes: ['Escape']}
 };
 
