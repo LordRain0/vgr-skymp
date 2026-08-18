@@ -31,7 +31,7 @@ export class DiscordBanSystem implements System {
         const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
         try {
-            await client.login(discordAuth.botToken);
+            await client.login(discordAuth.botToken.replace(/^Bot\s+/i, ""));
         } catch (e) {
             return console.error(`Error logging in Discord client: ${e}`);
         }

@@ -157,7 +157,7 @@ export class Login implements System {
               `https://discord.com/api/guilds/${guildConfig.guildId}/members/${profile.discordId}`,
               {
                 method: 'GET',
-                headers: { 'Authorization': `${discordAuth.botToken}` },
+                headers: { 'Authorization': this.botAuthHeader(discordAuth.botToken) },
                 ...this.getFetchOptions('discordAuth_multi'),
               },
             );
@@ -240,6 +240,12 @@ export class Login implements System {
     }
   }
 
+  // Discord's REST API wants "Bot <token>"; discord.js wants the raw token.
+  // Accept either form in the settings and normalize per consumer.
+  private botAuthHeader(botToken: string): string {
+    return botToken.startsWith("Bot ") ? botToken : `Bot ${botToken}`;
+  }
+
   private postServerLoginToDiscord(eventLogChannelId: string, botToken: string, options: { userId: number, ipToPrint: string, actorIds: string[], profile: UserProfile }) {
     const { userId, ipToPrint, actorIds, profile } = options;
 
@@ -249,7 +255,7 @@ export class Login implements System {
     this.fetchRetry(`https://discord.com/api/channels/${eventLogChannelId}/messages`, {
       method: 'POST',
       headers: {
-        'Authorization': `${botToken}`,
+        'Authorization': this.botAuthHeader(botToken),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
