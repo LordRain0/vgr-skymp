@@ -11,7 +11,7 @@ import { Animation, AnimationSource } from "../../sync/animation";
 import { Actor, EquipEvent, FormType } from "skyrimPlatform";
 import { getAppearance } from "../../sync/appearance";
 import { ActorValues, getActorValues } from "../../sync/actorvalues";
-import { getEquipment } from "../../sync/equipment";
+import { getEquipment, isRaceMenuKeepUnequipped } from "../../sync/equipment";
 import { nextHostAttempt } from "../../view/hostAttempts";
 import { SkympClient } from "./skympClient";
 import { MessageWithRefrId } from "../events/sendMessageWithRefrIdEvent";
@@ -23,8 +23,16 @@ import { UpdateAppearanceMessage } from "../messages/updateAppearanceMessage";
 import { RemoteServer } from "./remoteServer";
 import { DeathService } from "./deathService";
 import { logTrace } from "../../logging";
+import { AuthGameData, authGameDataStorageKey } from "../../features/authModel";
+import { SettingsService } from "./settingsService";
 
 const playerFormId = 0x14;
+
+interface InputTargetContext {
+    refrId?: number;
+    owner: Actor | null;
+    form?: FormModel;
+}
 
 // TODO: split this service into EquipmentService, MovementService, AnimationService, ActorValueService, HostAttemptsService
 export class SendInputsService extends ClientListener {
@@ -38,9 +46,9 @@ export class SendInputsService extends ClientListener {
 
     private onUpdate() {
         if (!this.singlePlayerService.isSinglePlayer) {
-            this.sendInputs();
-
             const player = this.sp.Game.getPlayer()!;
+            this.sendInputs(player);
+
             const isPlayerCasting = player.getAnimationVariableBool("IsCastingRight")
                 || player.getAnimationVariableBool("IsCastingLeft")
                 || player.getAnimationVariableBool("IsCastingDual");
@@ -52,6 +60,10 @@ export class SendInputsService extends ClientListener {
     }
 
     private onEquip(event: EquipEvent) {
+        if (this.isRaceMenuEquipmentSuppressed()) {
+            return;
+        }
+
         if (!event.actor || !event.baseObj) {
             return;
         }
@@ -75,6 +87,10 @@ export class SendInputsService extends ClientListener {
     }
 
     private onUnequip(event: EquipEvent) {
+        if (this.isRaceMenuEquipmentSuppressed()) {
+            return;
+        }
+
         if (!event.actor || !event.baseObj) {
             return;
         }
@@ -90,32 +106,42 @@ export class SendInputsService extends ClientListener {
         this.sp.Utility.wait(3).then(() => (this.equipmentChanged = true));
     }
 
-    private sendInputs() {
-        const hosted =
-            typeof this.sp.storage['hosted'] === typeof [] ? this.sp.storage['hosted'] : [];
-        const targets = [undefined].concat(hosted as any);
-
+    private sendInputs(player: Actor) {
+        const hosted = Array.isArray(this.sp.storage['hosted'])
+            ? this.sp.storage['hosted'] as number[]
+            : [];
+        const targets = ([undefined] as Array<number | undefined>).concat(
+            hosted,
+        );
         const modelSource = this.controller.lookupListener(RemoteServer);
-
         const world = modelSource.getWorldModel();
+        const formByRefrId = hosted.length > 1
+            ? this.makeFormByRefrId(world)
+            : undefined;
 
         targets.forEach((target) => {
-            const targetFormModel = target ? this.getForm(target, world) : this.getForm(undefined, world);
-            this.sendMovement(target, targetFormModel);
-            this.sendAnimation(target);
-            this.sendAppearance(target);
-            this.sendEquipment(target);
-            this.sendActorValuePercentage(target, targetFormModel);
+            const targetContext = this.getInputTargetContext(
+                target,
+                world,
+                formByRefrId,
+                player,
+            );
+            this.sendMovement(targetContext);
+            this.sendAnimation(targetContext);
+            this.sendAppearance(targetContext, player);
+            this.sendEquipment(targetContext, player);
+            this.sendActorValuePercentage(targetContext, player);
         });
         this.sendHostAttempts();
     }
 
-    private sendMovement(_refrId?: number, form?: FormModel) {
-        const owner = this.getInputOwner(_refrId);
+    private sendMovement(target: InputTargetContext) {
+        const owner = target.owner;
         if (!owner) {
           return;
         }
 
+        const _refrId = target.refrId;
         const refrIdStr = `${_refrId}`;
         const sendMovementRateMs = 130;
         const now = Date.now();
@@ -123,7 +149,7 @@ export class SendInputsService extends ClientListener {
         if (!last || now - last > sendMovementRateMs) {
             const message: MessageWithRefrId<UpdateMovementMessage> = {
                 t: MsgType.UpdateMovement,
-                data: getMovement(owner, form),
+                data: getMovement(owner, target.form),
                 _refrId
             };
             this.controller.emitter.emit("sendMessageWithRefrId", {
@@ -134,18 +160,17 @@ export class SendInputsService extends ClientListener {
         }
     }
 
-    private sendActorValuePercentage(_refrId?: number, form?: FormModel) {
-        const canSend = form && (form.isDead ?? false) === false;
+    private sendActorValuePercentage(target: InputTargetContext, player: Actor) {
+        const canSend = target.form && (target.form.isDead ?? false) === false;
         if (!canSend) {
           return;
         }
 
-        const owner = this.getInputOwner(_refrId);
-        if (!owner) {
+        if (!target.owner) {
           return;
         }
 
-        const av = getActorValues(this.sp.Game.getPlayer() as Actor);
+        const av = getActorValues(player);
         const currentTime = Date.now();
         if (
             this.actorValuesNeedUpdate === false &&
@@ -183,7 +208,7 @@ export class SendInputsService extends ClientListener {
         const message: MessageWithRefrId<ChangeValuesMessage> = {
             t: MsgType.ChangeValues,
             data: av,
-            _refrId
+            _refrId: target.refrId
         };
         this.controller.emitter.emit("sendMessageWithRefrId", {
             message,
@@ -195,8 +220,8 @@ export class SendInputsService extends ClientListener {
 
     }
 
-    private sendAnimation(_refrId?: number) {
-        const owner = this.getInputOwner(_refrId);
+    private sendAnimation(target: InputTargetContext) {
+        const owner = target.owner;
         if (!owner) {
           return;
         }
@@ -223,7 +248,7 @@ export class SendInputsService extends ClientListener {
                 const message: MessageWithRefrId<UpdateAnimationMessage> = {
                     t: MsgType.UpdateAnimation,
                     data: anim,
-                    _refrId
+                    _refrId: target.refrId
                 };
                 this.controller.emitter.emit("sendMessageWithRefrId", {
                     message,
@@ -233,8 +258,8 @@ export class SendInputsService extends ClientListener {
         }
     }
 
-    private sendAppearance(_refrId?: number) {
-        if (_refrId) {
+    private sendAppearance(target: InputTargetContext, player: Actor) {
+        if (target.refrId) {
           return;
         }
         const shown = this.sp.Ui.isMenuOpen('RaceSex Menu');
@@ -243,12 +268,13 @@ export class SendInputsService extends ClientListener {
             if (!shown) {
                 this.sp.printConsole('Exited from race menu');
 
-                const appearance = getAppearance(this.sp.Game.getPlayer() as Actor);
+                const appearance = getAppearance(player);
+                this.syncCharacterMetadataFromAppearance(appearance);
                 // TODO: log appearance contents to debug appearance issues?
                 const message: MessageWithRefrId<UpdateAppearanceMessage> = {
                     t: MsgType.UpdateAppearance,
                     data: appearance,
-                    _refrId
+                    _refrId: target.refrId
                 };
                 this.controller.emitter.emit("sendMessageWithRefrId", {
                     message,
@@ -258,9 +284,42 @@ export class SendInputsService extends ClientListener {
         }
     }
 
-    private sendEquipment(_refrId?: number) {
-        if (_refrId) {
+    private syncCharacterMetadataFromAppearance(appearance: { name?: string }) {
+        const authGameData = this.sp.storage[authGameDataStorageKey] as AuthGameData | undefined;
+        const remoteAuthData = authGameData?.remote;
+        const profileId = remoteAuthData?.masterApiId;
+        const name = `${appearance.name || ''}`.trim();
+
+        if (!remoteAuthData?.session || !Number.isInteger(profileId) || !name) {
+            return;
+        }
+
+        const settingsService = this.controller.lookupListener(SettingsService);
+        const client = new this.sp.HttpClient(settingsService.getMasterUrl());
+
+        client.post(`/api/users/me/characters/${profileId}/update`, {
+            body: JSON.stringify({ name }),
+            contentType: 'application/json',
+            headers: {
+                authorization: remoteAuthData.session,
+            },
+            // @ts-ignore
+        }, (res) => {
+            if (res.status === 200) {
+                logTrace(this, `Synced character name "${name}" for profileId ${profileId}`);
+            } else {
+                logTrace(this, `Failed to sync character name for profileId ${profileId}: status ${res.status}`);
+            }
+        });
+    }
+
+    private sendEquipment(target: InputTargetContext, player: Actor) {
+        if (target.refrId) {
           return;
+        }
+        if (this.isRaceMenuEquipmentSuppressed()) {
+            this.equipmentChanged = false;
+            return;
         }
         if (this.equipmentChanged) {
             this.equipmentChanged = false;
@@ -268,13 +327,13 @@ export class SendInputsService extends ClientListener {
             ++this.numEquipmentChanges;
 
             const eq = getEquipment(
-                this.sp.Game.getPlayer() as Actor,
+                player,
                 this.numEquipmentChanges,
             );
             const message: MessageWithRefrId<UpdateEquipmentMessage> = {
                 t: MsgType.UpdateEquipment,
                 data: eq,
-                _refrId
+                _refrId: target.refrId
             };
 
             this.controller.emitter.emit("sendMessageWithRefrId", {
@@ -299,17 +358,48 @@ export class SendInputsService extends ClientListener {
         });
     }
 
-    private getInputOwner(_refrId?: number) {
-        return _refrId
-            ? this.sp.Actor.from(this.sp.Game.getFormEx(worldViewMisc.remoteIdToLocalId(_refrId)))
-            : this.sp.Game.getPlayer();
+    private getInputTargetContext(
+        refrId: number | undefined,
+        world: WorldModel,
+        formByRefrId: Map<number, FormModel> | undefined,
+        player: Actor,
+    ): InputTargetContext {
+        return {
+            refrId,
+            owner: this.getInputOwner(refrId, player),
+            form: this.getForm(refrId, world, formByRefrId),
+        };
     }
 
-    private getForm(refrId: number | undefined, world: WorldModel): FormModel | undefined {
+    private getInputOwner(_refrId: number | undefined, player: Actor) {
+        return _refrId
+            ? this.sp.Actor.from(this.sp.Game.getFormEx(worldViewMisc.remoteIdToLocalId(_refrId)))
+            : player;
+    }
+
+    private getForm(
+        refrId: number | undefined,
+        world: WorldModel,
+        formByRefrId: Map<number, FormModel> | undefined,
+    ): FormModel | undefined {
         const form = refrId
-            ? world?.forms.find((f) => f?.refrId === refrId)
+            ? formByRefrId?.get(refrId) ?? world.forms.find((f) => f?.refrId === refrId)
             : world.forms[world.playerCharacterFormIdx];
         return form;
+    }
+
+    private makeFormByRefrId(world: WorldModel) {
+        const formByRefrId = new Map<number, FormModel>();
+        for (const form of world.forms) {
+            if (form?.refrId !== undefined) {
+                formByRefrId.set(form.refrId, form);
+            }
+        }
+        return formByRefrId;
+    }
+
+    private isRaceMenuEquipmentSuppressed() {
+        return isRaceMenuKeepUnequipped() || this.sp.Ui.isMenuOpen('RaceSex Menu');
     }
 
     private updateActorValuesAfterAnimation(animName: string) {

@@ -3,6 +3,28 @@ import { Inventory, applyInventory } from "../sync/inventory";
 import { logError, logTrace } from "../logging";
 import { SetNodeScaleEntry, SetNodeTextureSetEntry } from "src/services/messages/createActorMessage";
 
+const getExactObjectReference = (formId: number): ObjectReference | null => {
+  try {
+    const refr = ObjectReference.from(Game.getFormEx(formId));
+    return refr && refr.getFormID() === formId ? refr : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const getExactObjectReferenceFromForm = (formId: number): ObjectReference | null => {
+  try {
+    const refr = ObjectReference.from(Game.getForm(formId));
+    return refr && refr.getFormID() === formId ? refr : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const isOpenOrOpening = (openState: number): boolean => {
+  return openState === 1 || openState === 2;
+};
+
 // For 0xff000000+ used from FormView
 // For objects from master files used directly from remoteServer.ts
 export class ModelApplyUtils {
@@ -11,6 +33,10 @@ export class ModelApplyUtils {
   }
 
   static applyModelIsOpen(refr: ObjectReference, isOpen: boolean) {
+    if (isOpenOrOpening(refr.getOpenState()) === isOpen) {
+      return;
+    }
+
     refr.setOpen(isOpen);
 
     // See also objectReferenceEx.ts
@@ -20,17 +46,16 @@ export class ModelApplyUtils {
     const parentActivatorId = 0x460ca;
 
     if (refr.getBaseObject()?.getFormID() === caveGSecretDoor01) {
-      const openOrOpening = [1, 2].includes(refr.getOpenState());
-      if (openOrOpening) {
-        if (!isOpen) {
-          refr.activate(ObjectReference.from(Game.getForm(parentActivatorId)), false);
-        }
+      if (isOpenOrOpening(refr.getOpenState()) === isOpen) {
+        return;
       }
-      if (!openOrOpening) {
-        if (isOpen) {
-          refr.activate(ObjectReference.from(Game.getForm(parentActivatorId)), false);
-        }
+
+      const parentActivator = getExactObjectReferenceFromForm(parentActivatorId);
+      if (!parentActivator) {
+        return;
       }
+
+      refr.activate(parentActivator, false);
     }
   }
 
@@ -41,9 +66,9 @@ export class ModelApplyUtils {
     }
 
     if (disabled) {
-      refr.disable(false);
+      void refr.disable(false).catch(() => {});
     } else {
-      refr.enable(true);
+      void refr.enable(true).catch(() => {});
     }
   }
 
@@ -73,12 +98,12 @@ export class ModelApplyUtils {
           } else {
             refr.setHarvested(isHarvested);
             const id = refr.getFormID();
-            refr.disable(false).then(() => {
-              const restoredRefr = ObjectReference.from(Game.getFormEx(id));
+            void refr.disable(false).then(() => {
+              const restoredRefr = getExactObjectReference(id);
               if (restoredRefr) {
-                restoredRefr.enable(false);
+                void restoredRefr.enable(false).catch(() => {});
               }
-            });
+            }).catch(() => {});
           }
         }
       } else {
@@ -86,15 +111,15 @@ export class ModelApplyUtils {
         if (isHarvested != wasHarvested) {
           if (isHarvested) {
             const id = refr.getFormID();
-            refr.disable(false).then(() => {
-              const restoredRefr = ObjectReference.from(Game.getFormEx(id));
+            void refr.disable(false).then(() => {
+              const restoredRefr = getExactObjectReference(id);
               if (restoredRefr && !restoredRefr.isDisabled()) {
-                restoredRefr.delete();
+                void restoredRefr.delete().catch(() => {});
                 // Deletion takes time, so in practice this would be called a lot of times
               }
-            });
+            }).catch(() => {});
           } else {
-            refr.enable(true);
+            void refr.enable(true).catch(() => {});
           }
         }
       }

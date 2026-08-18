@@ -37,6 +37,13 @@ std::unique_ptr<Settings::File> Settings::GetPlatformSettings()
     file->SetString("Browser", "BackendName", "auto",
                     "; Browser backend name: off/tilted/nirnlab/auto");
 
+    file->SetString(
+      "Browser", "NirnLabRendererType", "DeferredContext",
+      "; NirnLab renderer type: DeferredContext/SyncCopy");
+
+    file->SetBool("Browser", "NirnLabNativeMenuLangSwitching", true,
+                  "; Enable NirnLab language switching hooks in native menus");
+
     file->Save();
   }
 

@@ -1,16 +1,36 @@
-import { FormType } from "skyrimPlatform";
+import {
+  Form,
+  FormType,
+  isPickupableItem as nativeIsPickupableItem,
+} from "skyrimPlatform";
 
 export class FormTypeEx {
-  static isItem(type: FormType) {
-    return type === FormType.Ammo ||
-      type === FormType.Armor ||
-      type === FormType.Book ||
-      type === FormType.Ingredient ||
-      type === FormType.Light ||
-      type === FormType.Potion ||
-      type === FormType.ScrollItem ||
-      type === FormType.SoulGem ||
-      type === FormType.Weapon ||
-      type === FormType.Misc;
+  static isItem(form: Form | null | undefined) {
+    if (!form) {
+      return false;
+    }
+
+    const type = form.getType();
+    if (type === FormType.Light) {
+      return nativeIsPickupableItem(form.getFormID());
+    }
+
+    return FormTypeEx.simpleItemTypes.has(type);
   }
+
+  static isPickupableItem(form: Form | null | undefined) {
+    return this.isItem(form);
+  }
+
+  private static readonly simpleItemTypes = new Set<number>([
+    FormType.Ammo,
+    FormType.Armor,
+    FormType.Book,
+    FormType.Ingredient,
+    FormType.Potion,
+    FormType.ScrollItem,
+    FormType.SoulGem,
+    FormType.Weapon,
+    FormType.Misc,
+  ]);
 }

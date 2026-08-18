@@ -1621,4 +1621,28 @@ export declare function interruptCast(actorCasterFormId: number, castingSource: 
 export declare function getAnimationVariablesFromActor(actorFormId: number): ActorAnimationVariables;
 export declare function applyAnimationVariablesToActor(actorFormId: number, animationVariables: ActorAnimationVariables): boolean;
 
+export declare function isPickupableItem(formId: number): boolean;
 export declare function setCollision(refrFormId: number, collision: boolean): void;
+
+export interface CellEnvironmentDebugData {
+  winningCellPlugin: string | null;
+  xcll: string | null;
+  ltmp: string | null;
+  ltmpInheritanceFlags: string | null;
+  imgs: string | null;
+  clmt: string | null;
+  xclr: string | null;
+  xclm: string | null;
+  xclw: string | null;
+  effectiveSources: {
+    ambient: string | null;
+    fog: string | null;
+    directional: string | null;
+    imageSpace: string | null;
+    climate: string | null;
+    music: string | null;
+    water: string | null;
+  };
+}
+
+export declare function getCellEnvironmentDebugData(cellFormId: number): CellEnvironmentDebugData | null;

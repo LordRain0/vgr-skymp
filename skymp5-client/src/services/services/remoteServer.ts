@@ -1,7 +1,6 @@
 // @ts-expect-error (TODO: Remove in 2.10.0)
 import { Actor, Form, FormType, Menu, interruptCast, castSpellImmediate, printConsole, applyAnimationVariablesToActor, ActorAnimationVariables } from 'skyrimPlatform';
 import {
-  Armor,
   Cell,
   Game,
   ObjectReference,
@@ -22,13 +21,15 @@ import { IdManager } from '../../lib/idManager';
 import { nameof } from '../../lib/nameof';
 import { setActorValuePercentage } from '../../sync/actorvalues';
 import { applyAppearanceToPlayer } from '../../sync/appearance';
-import { applyEquipment, isBadMenuShown } from '../../sync/equipment';
-import { Inventory, applyInventory } from '../../sync/inventory';
+import { applyEquipment, isBadMenuShown, isRaceMenuKeepUnequipped, setRaceMenuKeepUnequipped } from '../../sync/equipment';
+import { Entry, Inventory, applyInventory, getInventory } from '../../sync/inventory';
 import { Movement } from '../../sync/movement';
+import { learnShouts, unlockWords } from '../../sync/shout';
 import { learnSpells, removeAllSpells } from '../../sync/spell';
 import { ModelApplyUtils } from '../../view/modelApplyUtils';
 import { FormModel, WorldModel } from '../../view/model';
 import { LoadGameService } from './loadGameService';
+import { getClientLoadOrder } from "./clientLoadOrder";
 import { UpdateMovementMessage } from '../messages/updateMovementMessage';
 import { ChangeValuesMessage } from '../messages/changeValuesMessage';
 import { UpdateAnimationMessage } from '../messages/updateAnimationMessage';
@@ -76,8 +77,165 @@ const setPcInventory = (inv: Inventory): void => {
   storage['pcInv'] = inv;
 };
 
+const getExactObjectReference = (formId: number): ObjectReference | null => {
+  try {
+    const refr = ObjectReference.from(Game.getFormEx(formId));
+    return refr && refr.getFormID() === formId ? refr : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+type MovementTarget = {
+  pos: number[];
+  rot: number[];
+  worldOrCell: number;
+  teleportPointFallback?: MovementTarget;
+};
+
+const isResolvableWorldOrCell = (worldOrCell: number): boolean => {
+  try {
+    const form = Game.getFormEx(worldOrCell);
+    if (!form) {
+      return false;
+    }
+    return !!Cell.from(form) || !!WorldSpace.from(form);
+  } catch (_) {
+    return false;
+  }
+};
+
+const resolveMovementTarget = (target: MovementTarget, context: string): MovementTarget => {
+  if (isResolvableWorldOrCell(target.worldOrCell)) {
+    return target;
+  }
+
+  const fallback = target.teleportPointFallback;
+  if (!fallback) {
+    logError("RemoteServer", `${context} world/cell is unresolved and no teleportPointFallback was provided`, target.worldOrCell.toString(16));
+    return target;
+  }
+
+  if (!isResolvableWorldOrCell(fallback.worldOrCell)) {
+    logError(
+      "RemoteServer",
+      `${context} world/cell and teleportPointFallback are both unresolved`,
+      target.worldOrCell.toString(16),
+      fallback.worldOrCell.toString(16),
+    );
+    return target;
+  }
+
+  logTrace(
+    "RemoteServer",
+    `using teleportPointFallback for ${context}`,
+    target.worldOrCell.toString(16),
+    "->",
+    fallback.worldOrCell.toString(16),
+  );
+
+  return fallback;
+};
+
+const getExactActor = (formId: number): Actor | null => {
+  const refr = getExactObjectReference(formId);
+  return refr ? Actor.from(refr) : null;
+};
+
 let pcInvLastApply = 0;
+let raceMenuKeepUnequippedSince = 0;
+let raceMenuWasOpen = false;
+let raceMenuOpenRequestId = 0;
+let raceMenuOpenPending = false;
+
+const raceMenuOpenRetryIntervalSeconds = 1;
+
+const getInventoryEntryKey = (entry: Entry): string => JSON.stringify({
+  baseId: entry.baseId,
+  health: entry.health,
+  enchantmentId: entry.enchantmentId,
+  maxCharge: entry.maxCharge,
+  removeEnchantmentOnUnequip: !!entry.removeEnchantmentOnUnequip,
+  chargePercent: entry.chargePercent,
+  name: entry.name,
+  soul: entry.soul,
+  poisonId: entry.poisonId,
+  poisonCount: entry.poisonCount,
+});
+
+const getInventoryWithoutWornState = (inventory: Inventory): Inventory => {
+  const entries = new Map<string, Entry>();
+
+  inventory.entries.forEach((entry) => {
+    const res = { ...entry };
+    delete res.worn;
+    delete res.wornLeft;
+
+    const key = getInventoryEntryKey(res);
+    const existing = entries.get(key);
+    if (existing) {
+      existing.count += res.count;
+    } else {
+      entries.set(key, res);
+    }
+  });
+
+  return { entries: Array.from(entries.values()).filter((entry) => entry.count !== 0) };
+};
+
+const shouldSuppressPcInventoryApplyForRaceMenu = (): boolean => {
+  return isRaceMenuKeepUnequipped() || Ui.isMenuOpen('RaceSex Menu');
+};
+
+const getPcInventoryForStorage = (inventory: Inventory): Inventory => {
+  return shouldSuppressPcInventoryApplyForRaceMenu()
+    ? getInventoryWithoutWornState(inventory)
+    : inventory;
+};
+
+const beginRaceMenuKeepUnequipped = () => {
+  setRaceMenuKeepUnequipped(true);
+  raceMenuKeepUnequippedSince = Date.now();
+};
+
+const isRaceMenuOpenRequestPending = (): boolean => {
+  return raceMenuOpenPending;
+};
+
+const updateRaceMenuKeepUnequippedState = () => {
+  const raceMenuOpen = Ui.isMenuOpen('RaceSex Menu');
+  if (raceMenuOpen) {
+    raceMenuWasOpen = true;
+    raceMenuOpenPending = false;
+    return;
+  }
+
+  if (raceMenuWasOpen) {
+    raceMenuWasOpen = false;
+    setRaceMenuKeepUnequipped(false);
+    raceMenuKeepUnequippedSince = 0;
+    return;
+  }
+
+  if (isRaceMenuKeepUnequipped() && raceMenuKeepUnequippedSince === 0) {
+    setRaceMenuKeepUnequipped(false);
+    return;
+  }
+
+  if (
+    isRaceMenuKeepUnequipped() &&
+    !isRaceMenuOpenRequestPending() &&
+    raceMenuKeepUnequippedSince > 0 &&
+    Date.now() - raceMenuKeepUnequippedSince > 30000
+  ) {
+    setRaceMenuKeepUnequipped(false);
+    raceMenuKeepUnequippedSince = 0;
+    raceMenuOpenPending = false;
+  }
+};
+
 on('update', () => {
+  updateRaceMenuKeepUnequippedState();
   if (isBadMenuShown()) {
     return;
   }
@@ -90,12 +248,54 @@ on('update', () => {
   }
 });
 
-const unequipIronHelmet = () => {
-  const ironHelment = Armor.from(Game.getFormEx(0x00012e4d));
-  const pl = Game.getPlayer();
-  if (pl) {
-    pl.unequipItem(ironHelment, false, true);
+const unequipPlayerForRaceMenu = () => {
+  beginRaceMenuKeepUnequipped();
+
+  const player = Game.getPlayer();
+  if (!player) {
+    return;
   }
+
+  const inventory = getPcInventory() ?? getInventory(player);
+  setPcInventory(getInventoryWithoutWornState(inventory));
+  player.unequipAll();
+  player.queueNiNodeUpdate();
+};
+
+const shouldKeepPlayerUnequippedForRaceMenu = (msg: CreateActorMessage): boolean => {
+  return msg.isMe && shouldSuppressPcInventoryApplyForRaceMenu();
+};
+
+const scheduleRaceMenuUnequip = (requestId: number, delaySeconds: number): void => {
+  Utility.wait(delaySeconds).then(() => {
+    if (requestId !== raceMenuOpenRequestId || !shouldSuppressPcInventoryApplyForRaceMenu()) {
+      return;
+    }
+
+    unequipPlayerForRaceMenu();
+  });
+};
+
+const scheduleRaceMenuOpenRetry = (requestId: number, delaySeconds: number): void => {
+  Utility.wait(delaySeconds).then(() => {
+    if (
+      requestId !== raceMenuOpenRequestId ||
+      !isRaceMenuOpenRequestPending() ||
+      !isRaceMenuKeepUnequipped()
+    ) {
+      return;
+    }
+
+    if (Ui.isMenuOpen('RaceSex Menu')) {
+      raceMenuOpenPending = false;
+      return;
+    }
+
+    unequipPlayerForRaceMenu();
+    Game.showRaceMenu();
+    scheduleRaceMenuUnequip(requestId, 0.1);
+    scheduleRaceMenuOpenRetry(requestId, raceMenuOpenRetryIntervalSeconds);
+  });
 };
 
 export class RemoteServer extends ClientListener {
@@ -159,7 +359,7 @@ export class RemoteServer extends ClientListener {
 
     const msg = event.message;
     once('update', () => {
-      setPcInventory(msg.inventory);
+      setPcInventory(getPcInventoryForStorage(msg.inventory));
 
       let blocked = false;
 
@@ -168,7 +368,7 @@ export class RemoteServer extends ClientListener {
       });
 
       if (!blocked) {
-        pcInvLastApply = 0;
+        pcInvLastApply = shouldSuppressPcInventoryApplyForRaceMenu() ? Date.now() : 0;
       }
     });
   }
@@ -179,7 +379,7 @@ export class RemoteServer extends ClientListener {
 
       const remoteId = event.message.target;
       const localId = remoteIdToLocalId(remoteId);
-      const refr = ObjectReference.from(Game.getFormEx(localId));
+      const refr = getExactObjectReference(localId);
 
       if (refr === null) {
         logError(this, 'onOpenContainerMessage - refr not found', 'remoteId', remoteId.toString(16), 'localId', localId.toString(16));
@@ -258,16 +458,31 @@ export class RemoteServer extends ClientListener {
       const refrId = refr?.getFormID();
 
       const removeRagdollCallback = () => {
+        const target = id === this.getMyActorIndex()
+          ? resolveMovementTarget(msg, "teleport")
+          : msg;
+
+        if (id === this.getMyActorIndex()) {
+          storage['vgrLastTeleportTarget'] = {
+            id,
+            refrId: refrId ?? null,
+            pos: target.pos,
+            rot: target.rot,
+            worldOrCell: target.worldOrCell,
+            time: Date.now(),
+          };
+        }
+
         TESModPlatform.moveRefrToPosition(
           ObjectReference.from(Game.getFormEx(refrId || 0)),
-          Cell.from(Game.getFormEx(msg.worldOrCell)),
-          WorldSpace.from(Game.getFormEx(msg.worldOrCell)),
-          msg.pos[0],
-          msg.pos[1],
-          msg.pos[2],
-          msg.rot[0],
-          msg.rot[1],
-          msg.rot[2],
+          Cell.from(Game.getFormEx(target.worldOrCell)),
+          WorldSpace.from(Game.getFormEx(target.worldOrCell)),
+          target.pos[0],
+          target.pos[1],
+          target.pos[2],
+          target.rot[0],
+          target.rot[1],
+          target.rot[2],
         );
       };
       const actor = Actor.from(refr);
@@ -281,6 +496,8 @@ export class RemoteServer extends ClientListener {
 
   private onCreateActorMessage(event: ConnectionMessage<CreateActorMessage>): void {
     const msg = event.message;
+    this.traceCreateActorMessage(msg);
+
     if (this.skipFormViewCreation(msg)) {
       const refrId = msg.refrId!;
       this.onceLoad(refrId, (refr: ObjectReference) => {
@@ -310,7 +527,7 @@ export class RemoteServer extends ClientListener {
               (async () => {
                 for (let i = 0; i < 5; i++) {
                   // retry. pillars in bleakfalls are not reliable for some reason
-                  let res2 = ObjectReference.from(Game.getFormEx(refrid))?.playAnimation(animation);
+                  let res2 = getExactObjectReference(refrid)?.playAnimation(animation);
                   if (res2) {
                     break;
                   }
@@ -344,8 +561,6 @@ export class RemoteServer extends ClientListener {
       return;
     }
 
-    logTrace(this, "Create actor");
-
     const i = this.getIdManager().allocateIdFor(msg.idx);
     if (this.worldModel.forms.length <= i) {
       this.worldModel.forms.length = i + 1;
@@ -377,6 +592,7 @@ export class RemoteServer extends ClientListener {
       numAppearanceChanges: 0,
       baseId: msg.baseId,
       refrId: msg.refrId,
+      baseRecordType: msg.baseRecordType,
       isMyClone: msg.isMe,
     };
     this.worldModel.forms[i] = form;
@@ -432,10 +648,52 @@ export class RemoteServer extends ClientListener {
     }
 
     const numSetInventory = this.numSetInventory;
+    let pcMagicApplied = false;
+
+    const applyPcMagic = () => {
+      if (!msg.isMe || !msg.props || pcMagicApplied) {
+        return;
+      }
+
+      const player = Game.getPlayer();
+      if (!player) {
+        return;
+      }
+
+      pcMagicApplied = true;
+
+      if (msg.props.learnedSpells) {
+        removeAllSpells(player);
+        learnSpells(player, msg.props.learnedSpells);
+        logTrace(this,
+          `player learnedSpells:`, JSON.stringify(msg.props.learnedSpells),
+        );
+      }
+
+      if (msg.props.learnedShouts) {
+        learnShouts(player, msg.props.learnedShouts);
+        logTrace(this,
+          `player learnedShouts:`, JSON.stringify(msg.props.learnedShouts),
+        );
+      }
+
+      if (msg.props.unlockedWords) {
+        unlockWords(msg.props.unlockedWords);
+        logTrace(this,
+          `player unlockedWords:`, JSON.stringify(msg.props.unlockedWords),
+        );
+      }
+    };
 
     const applyPcInv = () => {
-      if (msg.equipment) {
+      applyPcMagic();
+
+      const keepUnequippedForRaceMenu = shouldKeepPlayerUnequippedForRaceMenu(msg);
+
+      if (msg.equipment && !keepUnequippedForRaceMenu) {
         applyEquipment(Game.getPlayer()!, msg.equipment)
+      } else if (keepUnequippedForRaceMenu) {
+        unequipPlayerForRaceMenu();
       }
 
       if (numSetInventory !== this.numSetInventory) {
@@ -447,27 +705,19 @@ export class RemoteServer extends ClientListener {
         this.onSetInventoryMessage({
           message: {
             t: MsgType.SetInventory,
-            inventory: msg.props.inventory
+            inventory: keepUnequippedForRaceMenu
+              ? getInventoryWithoutWornState(msg.props.inventory)
+              : msg.props.inventory
           }
         });
       }
     };
 
-    if (msg.isMe && msg.props && msg.props.learnedSpells) {
-      const learnedSpells = msg.props.learnedSpells;
-
+    if (msg.isMe && msg.props &&
+      (msg.props.learnedSpells || msg.props.learnedShouts ||
+        msg.props.unlockedWords)) {
       once('update', () => {
-        Utility.wait(1).then(() => {
-          const player = Game.getPlayer();
-
-          if (player) {
-            removeAllSpells(player);
-            learnSpells(player, learnedSpells);
-            logTrace(this,
-              `player learnedSpells:`, JSON.stringify(learnedSpells),
-            );
-          }
-        });
+        Utility.wait(1).then(applyPcMagic);
       });
     }
 
@@ -485,6 +735,10 @@ export class RemoteServer extends ClientListener {
     if (msg.isMe) {
       const spawnTask = { running: false };
       once('update', () => {
+        const createActorTarget = resolveMovementTarget({
+          ...msg.transform,
+          teleportPointFallback: msg.teleportPointFallback,
+        }, "createActor");
         // Use MoveRefrToPosition to spawn if possible (not in main menu)
         // In case of connection lost this is essential
         if (!spawnTask.running) {
@@ -495,14 +749,14 @@ export class RemoteServer extends ClientListener {
               logTrace(this, 'Spawning...');
               TESModPlatform.moveRefrToPosition(
                 Game.getPlayer(),
-                Cell.from(Game.getFormEx(msg.transform.worldOrCell)),
-                WorldSpace.from(Game.getFormEx(msg.transform.worldOrCell)),
-                msg.transform.pos[0],
-                msg.transform.pos[1],
-                msg.transform.pos[2],
-                msg.transform.rot[0],
-                msg.transform.rot[1],
-                msg.transform.rot[2],
+                Cell.from(Game.getFormEx(createActorTarget.worldOrCell)),
+                WorldSpace.from(Game.getFormEx(createActorTarget.worldOrCell)),
+                createActorTarget.pos[0],
+                createActorTarget.pos[1],
+                createActorTarget.pos[2],
+                createActorTarget.rot[0],
+                createActorTarget.rot[1],
+                createActorTarget.rot[2],
               );
               await Utility.wait(1);
               const pl = Game.getPlayer();
@@ -516,8 +770,8 @@ export class RemoteServer extends ClientListener {
               ];
               const sqr = (x: number) => x * x;
               const distance = Math.sqrt(
-                sqr(pos[0] - msg.transform.pos[0]) +
-                sqr(pos[1] - msg.transform.pos[1]),
+                sqr(pos[0] - createActorTarget.pos[0]) +
+                sqr(pos[1] - createActorTarget.pos[1]),
               );
               if (distance < 256) {
                 break;
@@ -572,17 +826,19 @@ export class RemoteServer extends ClientListener {
           if (!spawnTask.running) {
             spawnTask.running = true;
 
-            let loadOrder = new Array<string>();
-            for (let i = 0; i < this.sp.Game.getModCount(); ++i) {
-              loadOrder.push(this.sp.Game.getModName(i));
-            }
+            const loadOrder = getClientLoadOrder(this.sp.Game);
 
-            logTrace(this, `loading game in world/cell`, msg.transform.worldOrCell.toString(16));
+            const loadGameTarget = resolveMovementTarget({
+              ...msg.transform,
+              teleportPointFallback: msg.teleportPointFallback,
+            }, "loadGame");
+
+            logTrace(this, `loading game in world/cell`, loadGameTarget.worldOrCell.toString(16));
             const loadGameService = this.controller.lookupListener(LoadGameService);
             loadGameService.loadGame(
-              msg.transform.pos,
-              msg.transform.rot,
-              msg.transform.worldOrCell,
+              loadGameTarget.pos,
+              loadGameTarget.rot,
+              loadGameTarget.worldOrCell,
               msg.appearance
                 ? {
                   name: msg.appearance.name,
@@ -616,6 +872,36 @@ export class RemoteServer extends ClientListener {
         });
       });
     }
+  }
+
+  private traceCreateActorMessage(msg: CreateActorMessage): void {
+    if (this.sp.settings["skymp5-client"]?.["debugCreateActor"] !== true) {
+      return;
+    }
+
+    const hex = (value: number | undefined) =>
+      value === undefined ? "<none>" : `0x${value.toString(16)}`;
+    const props = msg.props ? Object.keys(msg.props) : [];
+    const path = this.skipFormViewCreation(msg) ? "directApply" : "formView";
+
+    logTrace(
+      this,
+      "CreateActor",
+      `path=${path}`,
+      `idx=${msg.idx}`,
+      `refrId=${hex(msg.refrId)}`,
+      `baseId=${hex(msg.baseId)}`,
+      `world=${hex(msg.transform.worldOrCell)}`,
+      `isMe=${msg.isMe}`,
+      `baseRecordType=${msg.baseRecordType ?? "<none>"}`,
+      `hasEquipment=${!!msg.equipment}`,
+      `equipmentEntries=${msg.equipment?.inv?.entries.length ?? 0}`,
+      `hasAppearance=${!!msg.appearance}`,
+      `hasAnimation=${!!msg.animation}`,
+      `hasProps=${!!msg.props}`,
+      `propNames=${props.length ? props.join(",") : "<none>"}`,
+      `customProps=${msg.customPropsJsonDumps.length}`,
+    );
   }
 
   private onDestroyActorMessage(event: ConnectionMessage<DestroyActorMessage>): void {
@@ -730,9 +1016,9 @@ export class RemoteServer extends ClientListener {
     const msgData = this.extractUpdatePropertyMessageData(msg);
 
     if (this.skipFormViewCreation(msg)) {
-      const refrId = msg.refrId;
+      const refrId = msg.refrId!;
       once('update', () => {
-        const refr = ObjectReference.from(Game.getFormEx(refrId));
+        const refr = getExactObjectReference(refrId);
         if (!refr) {
           logError(this, 'UpdateProperty: refr not found');
           return;
@@ -791,7 +1077,7 @@ export class RemoteServer extends ClientListener {
       const actor =
         id === this.getWorldModel().playerCharacterFormIdx
           ? Game.getPlayer()!
-          : Actor.from(Game.getFormEx(remoteIdToLocalId(form.refrId ?? 0)));
+          : getExactActor(remoteIdToLocalId(form.refrId ?? 0));
       if (actor) {
         try {
           this.controller.emitter.emit("applyDeathStateEvent", {
@@ -800,8 +1086,14 @@ export class RemoteServer extends ClientListener {
           });
         } catch (e) {
           if (e instanceof RespawnNeededError) {
-            actor.disableNoWait(false);
-            actor.delete();
+            const actorId = actor.getFormID();
+            const currentActor = actorId === 0x14
+              ? Game.getPlayer()
+              : getExactActor(actorId);
+            if (currentActor && currentActor.getFormID() === actorId) {
+              currentActor.disableNoWait(false);
+              void currentActor.delete().catch(() => {});
+            }
           } else {
             throw e;
           }
@@ -846,15 +1138,33 @@ export class RemoteServer extends ClientListener {
     const msg = event.message;
 
     if (msg.open) {
+      raceMenuOpenRequestId++;
+      const requestId = raceMenuOpenRequestId;
+      raceMenuOpenPending = true;
+      beginRaceMenuKeepUnequipped();
+
       // wait 0.3s cause we can see visual bugs when teleporting
       // and showing this menu at the same time in onConnect
       once('update', () =>
         Utility.wait(0.3).then(() => {
-          unequipIronHelmet();
+          if (requestId !== raceMenuOpenRequestId || !isRaceMenuKeepUnequipped()) {
+            return;
+          }
+
+          unequipPlayerForRaceMenu();
           Game.showRaceMenu();
+          scheduleRaceMenuUnequip(requestId, 0.1);
+          scheduleRaceMenuUnequip(requestId, 1.1);
+          scheduleRaceMenuUnequip(requestId, 1.5);
+          scheduleRaceMenuOpenRetry(requestId, raceMenuOpenRetryIntervalSeconds);
         }),
       );
     } else {
+      raceMenuOpenRequestId++;
+      setRaceMenuKeepUnequipped(false);
+      raceMenuKeepUnequippedSince = 0;
+      raceMenuWasOpen = false;
+      raceMenuOpenPending = false;
       // TODO: Implement closeMenu in SkyrimPlatform
     }
   }
@@ -898,7 +1208,7 @@ export class RemoteServer extends ClientListener {
     maxAttempts: number = 120,
   ) {
     once('update', () => {
-      const refr = ObjectReference.from(Game.getFormEx(refrId));
+      const refr = getExactObjectReference(refrId);
       if (refr) {
         callback(refr);
       } else {

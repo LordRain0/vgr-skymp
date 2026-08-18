@@ -3,9 +3,47 @@
 #include <NirnLabUIPlatformAPI/API.h>
 #include <NirnLabUIPlatformAPI/SKSELoader.h>
 
+#include <algorithm>
+#include <cctype>
+
 #include "EventsApi.h"
 #include "NapiHelper.h"
+#include "Settings.h"
 #include "SkyrimPlatform.h"
+
+namespace {
+NL::UI::RendererType GetNirnLabRendererType()
+{
+  auto settings = Settings::GetPlatformSettings();
+  std::string rendererType =
+    settings->GetString("Browser", "NirnLabRendererType", "DeferredContext");
+
+  std::transform(rendererType.begin(), rendererType.end(),
+                 rendererType.begin(), [](unsigned char c) {
+                   return static_cast<char>(std::tolower(c));
+                 });
+
+  if (rendererType == "synccopy" || rendererType == "sync_copy" ||
+      rendererType == "sync" || rendererType == "1") {
+    return NL::UI::RendererType::SyncCopy;
+  }
+  if (rendererType == "deferredcontext" ||
+      rendererType == "deferred_context" || rendererType == "deferred" ||
+      rendererType == "0") {
+    return NL::UI::RendererType::DeferredContext;
+  }
+
+  logger::warn("invalid Browser.NirnLabRendererType '{}', using DeferredContext",
+               rendererType);
+  return NL::UI::RendererType::DeferredContext;
+}
+
+bool GetNirnLabNativeMenuLangSwitching()
+{
+  auto settings = Settings::GetPlatformSettings();
+  return settings->GetBool("Browser", "NirnLabNativeMenuLangSwitching", true);
+}
+}
 
 void BrowserApiNirnLab::HandleSkseMessage(
   SKSE::MessagingInterface::Message* a_msg)
@@ -13,6 +51,8 @@ void BrowserApiNirnLab::HandleSkseMessage(
   logger::info("skse message type {}", a_msg->type);
   NL::UI::Settings settings{};
   settings.remoteDebuggingPort = 9000;
+  settings.rendererType = GetNirnLabRendererType();
+  settings.nativeMenuLangSwitching = GetNirnLabNativeMenuLangSwitching();
   // settings....mainmenu = false;
   NL::UI::SKSELoader::ProcessSKSEMessage(a_msg, &settings);
 }
@@ -111,6 +151,9 @@ void BrowserApiNirnLab::UpdateUrl()
   if (!browser) {
     return;
   }
+  if (wantedUrl.empty()) {
+    return;
+  }
   browser->LoadBrowserURL(wantedUrl.c_str(), false);
 }
 
@@ -140,7 +183,7 @@ void BrowserApiNirnLab::ApiInit()
       "BrowserApiNirnLab::ApiInit: api must not be null here");
   }
 
-  NL::JS::JSFuncInfo callback{
+  static NL::JS::JSFuncInfo callback{
     .objectName = "skyrimPlatform",
     .funcName = "sendMessage",
     .callbackData = {
@@ -165,10 +208,11 @@ void BrowserApiNirnLab::ApiInit()
   auto callbackPtr = &callback;
 
   constexpr auto kNirnlabBrowserName = "SkyrimPlatform_Default";
+  constexpr auto kNirnlabInitialUrl = "file:///Data/Platform/UI/index.html";
 
   const NL::UI::IUIPlatformAPI::BrowserRefHandle browserHandle =
     api->AddOrGetBrowser(kNirnlabBrowserName, &callbackPtr, 1,
-                         "file:///Data/Platform/UI/index.html", browser);
+                         kNirnlabInitialUrl, browser);
   if (browserHandle == NL::UI::IUIPlatformAPI::InvalidBrowserRefHandle) {
     logger::error("browser init failed: InvalidBrowserRefHandle");
     return;
@@ -178,5 +222,7 @@ void BrowserApiNirnLab::ApiInit()
     return;
   }
 
+  logger::info("browser init succeeded: {} -> {}", kNirnlabBrowserName,
+               kNirnlabInitialUrl);
   UpdateAll();
 }

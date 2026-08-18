@@ -1,6 +1,9 @@
 project(skymp5-client)
 
 file(GLOB_RECURSE sources ${CMAKE_CURRENT_LIST_DIR}/src/*)
+set(allow_papyrus_events_config
+  ${CMAKE_CURRENT_LIST_DIR}/skymp5-client-AllowPapyrusEvents.json
+)
 
 if(BUILD_CLIENT)
   include(${CMAKE_SOURCE_DIR}/cmake/yarn.cmake)
@@ -20,16 +23,18 @@ if(BUILD_CLIENT)
   )
   add_custom_target(skymp5-client ALL
     DEPENDS ${out}
-    SOURCES ${sources}
+    SOURCES ${sources} ${allow_papyrus_events_config}
   )
 
   add_custom_command(
     TARGET skymp5-client POST_BUILD
     COMMAND ${CMAKE_COMMAND} -DCLIENT_SETTINGS_JSON_PATH=${CMAKE_BINARY_DIR}/dist/client/Data/Platform/Plugins/skymp5-client-settings.txt -DOFFLINE_MODE=${OFFLINE_MODE} -P ${CMAKE_SOURCE_DIR}/cmake/scripts/generate_client_settings.cmake
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/dist/client/Data/Platform/Plugins
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${allow_papyrus_events_config} ${CMAKE_BINARY_DIR}/dist/client/Data/Platform/Plugins/skymp5-client-AllowPapyrusEvents.json
   )
 else()
   add_custom_target(skymp5-client ALL
-    SOURCES ${source}
+    SOURCES ${source} ${allow_papyrus_events_config}
     COMMAND ${CMAKE_COMMAND} -E echo "Building skymp5-client is disabled. To enable it, set BUILD_CLIENT to ON."
   )
 endif()

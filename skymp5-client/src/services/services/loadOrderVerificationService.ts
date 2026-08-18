@@ -1,9 +1,10 @@
-import { Game, Utility, printConsole, createText, setTextSize } from "skyrimPlatform";
+import { Utility, printConsole, createText, setTextSize } from "skyrimPlatform";
 import { getScreenResolution } from "../../view/formView";
 import { ClientListener, CombinedController, Sp } from "./clientListener";
 import { Mod } from "../messages_http/serverManifest";
 import { logTrace } from "../../logging";
 import { SettingsService } from "./settingsService";
+import { getClientLoadOrder } from "./clientLoadOrder";
 
 const STATE_KEY = 'loadOrderCheckState';
 
@@ -42,10 +43,13 @@ export class LoadOrderVerificationService extends ClientListener {
         let fail = [];
         for (let i = 0; i < serverMods.length; ++i) {
           // Need case-insensitive check for 1.6+
+          const serverHasFileInfo =
+            typeof serverMods[i].size === "number" &&
+            typeof serverMods[i].crc32 === "number";
           if (
             clientMods[i].filename.toLowerCase() !== serverMods[i].filename.toLowerCase() ||
-            clientMods[i].size !== serverMods[i].size ||
-            clientMods[i].crc32 !== serverMods[i].crc32
+            (serverHasFileInfo && clientMods[i].size !== serverMods[i].size) ||
+            (serverHasFileInfo && clientMods[i].crc32 !== serverMods[i].crc32)
           ) {
             fail.push(i);
             printConsole(`${i}-th mod (numbered from 0) does not match.`);
@@ -120,14 +124,16 @@ export class LoadOrderVerificationService extends ClientListener {
   }
 
   private getClientMods() {
-    return this.enumerateClientMods(Game.getModCount, Game.getModName);
+    const loadOrder = getClientLoadOrder(this.sp.Game);
+    return this.enumerateClientMods(() => loadOrder.length, (i) => loadOrder[i]);
   };
 
   private printModOrder(header: string, order: Mod[]) {
-    printConsole(header);
+    const lines = [header];
     for (const [i, mod] of Object.entries(order)) {
-      printConsole(`#${i} ${JSON.stringify(mod)}`);
+      lines.push(`#${i} ${JSON.stringify(mod)}`);
     }
+    printConsole(lines.join("\n"));
   };
 
   private getFileInfoSafe(filename: string) {

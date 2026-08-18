@@ -1,9 +1,10 @@
 export interface RemoteAuthGameData {
   session: string;
-  masterApiId: number;
+  masterApiId: number | null;
   discordUsername: string | null;
   discordDiscriminator: string | null;
   discordAvatar: string | null;
+  hwidHash?: string | null;
 };
 
 export interface LocalAuthGameData {

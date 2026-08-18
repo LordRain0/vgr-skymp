@@ -188,7 +188,7 @@ bool IsDerivedFrom(const RE::BSScript::ObjectTypeInfo& obj,
   while (p) {
     if (!stricmp(p->GetName(), requestedParamType.GetName()))
       return true;
-    p = obj.GetParent();
+    p = p->GetParent();
   }
   return false;
 }

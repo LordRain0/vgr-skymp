@@ -5,6 +5,8 @@ import { getEquipment } from "../../sync/equipment";
 import { QueryBlockSetInventoryEvent } from "../events/queryBlockSetInventoryEvent";
 import { logError, logTrace } from "../../logging";
 
+const debugBowShotInventoryBlock = false;
+
 export class PlayerBowShotService extends ClientListener {
     constructor(private sp: Sp, private controller: CombinedController) {
         super();
@@ -42,9 +44,11 @@ export class PlayerBowShotService extends ClientListener {
 
     private onQueryBlockSetInventoryEvent(e: QueryBlockSetInventoryEvent) {
         if (Date.now() < this.inventoryUnblockMoment) {
-            logTrace(this, "Blocked inventory operation");
+            if (debugBowShotInventoryBlock) {
+                logTrace(this, "Blocked inventory operation");
+            }
             e.block();
-        } else {
+        } else if (debugBowShotInventoryBlock) {
             logTrace(this, "Not blocked inventory operation");
         }
     }

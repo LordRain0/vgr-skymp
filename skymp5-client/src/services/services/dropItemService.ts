@@ -1,4 +1,4 @@
-import { Actor, ContainerChangedEvent } from "skyrimPlatform";
+import { Actor, ContainerChangedEvent, ObjectReference } from "skyrimPlatform";
 import { ClientListener, CombinedController, Sp } from "./clientListener";
 
 import { MsgType } from "../../messages";
@@ -57,12 +57,20 @@ export class DropItemService extends ClientListener {
             const worldCleanerService = this.controller.lookupListener(WorldCleanerService);
 
             set.forEach((refrId) => {
-                const ref = this.sp.ObjectReference.from(this.sp.Game.getFormEx(refrId));
+                let ref: ObjectReference | null = null;
+                try {
+                    ref = this.sp.ObjectReference.from(this.sp.Game.getFormEx(refrId));
+                } catch (_) {
+                    return;
+                }
+                if (ref !== null && ref.getFormID() !== refrId) {
+                    return;
+                }
                 if (ref !== null && ref.isDeleted() === false) {
                     const refrId = ref.getFormID();
 
                     if (worldCleanerService.getWcProtection(refrId) === 0) {
-                        ref.delete();
+                        void ref.delete().catch(() => {});
                         ++numFound;
                         logTrace(this, "Found and deleted reference " + refrId.toString(16));
                     } else {

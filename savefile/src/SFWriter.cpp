@@ -40,6 +40,10 @@ bool SaveFile_::Writer::CreateSaveFile(const std::filesystem::path& p)
 
   Write(saveStructure->pluginInfo.numPlugins);
   Write(saveStructure->pluginInfo.pluginsName);
+  if (saveStructure->pluginInfo.hasLightPlugins) {
+    Write(saveStructure->pluginInfo.numLightPlugins);
+    Write(saveStructure->pluginInfo.lightPluginsName);
+  }
 
   assert(this->currentWritePositionInFile ==
          saveStructure->pluginInfoSize + stepBeforePluginInfo);

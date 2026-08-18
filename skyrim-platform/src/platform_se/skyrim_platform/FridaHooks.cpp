@@ -6,11 +6,201 @@
 #include "PapyrusTESModPlatform.h"
 #include "StringHolder.h"
 
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <fmt/format.h>
+#include <vector>
 
 /**
  * Send Event hook
  */
+
+namespace {
+bool StartsWithIgnoreCase(const char* s, const std::string& prefix)
+{
+  if (!s) {
+    return false;
+  }
+  const auto prefixLength = prefix.size();
+  return strlen(s) >= prefixLength &&
+    _strnicmp(s, prefix.c_str(), prefixLength) == 0;
+}
+
+bool EqualsIgnoreCase(const char* lhs, const std::string& rhs)
+{
+  return lhs && !stricmp(lhs, rhs.c_str());
+}
+
+struct PapyrusEventAllowConfigSection
+{
+  std::vector<std::string> startsWithAllow;
+  std::vector<std::string> allowExplicit;
+};
+
+struct PapyrusEventAllowConfig
+{
+  PapyrusEventAllowConfigSection events;
+  PapyrusEventAllowConfigSection scripts;
+};
+
+PapyrusEventAllowConfig GetDefaultPapyrusEventAllowConfig()
+{
+  PapyrusEventAllowConfig config;
+  config.scripts.startsWithAllow = { "SKI_" };
+  config.scripts.allowExplicit = { "defaultDisableHavokOnLoad" };
+  return config;
+}
+
+PapyrusEventAllowConfig g_papyrusEventAllowConfig =
+  GetDefaultPapyrusEventAllowConfig();
+
+void AppendStringArray(const nlohmann::json& root, const char* key,
+                       std::vector<std::string>& result)
+{
+  if (!root.contains(key)) {
+    return;
+  }
+
+  if (!root[key].is_array()) {
+    logger::warn(
+      "Papyrus event allow config key '{}' must be an array of strings", key);
+    return;
+  }
+
+  for (const auto& value : root[key]) {
+    if (!value.is_string()) {
+      logger::warn(
+        "Papyrus event allow config key '{}' contains a non-string value", key);
+      continue;
+    }
+    result.push_back(value.get<std::string>());
+  }
+}
+
+void AppendConfigSection(const nlohmann::json& root, const char* key,
+                         PapyrusEventAllowConfigSection& section)
+{
+  if (!root.contains(key)) {
+    return;
+  }
+
+  if (!root[key].is_object()) {
+    logger::warn("Papyrus event allow config key '{}' must be an object", key);
+    return;
+  }
+
+  AppendStringArray(root[key], "StartsWith_Allow", section.startsWithAllow);
+  AppendStringArray(root[key], "AllowExplicit", section.allowExplicit);
+}
+
+PapyrusEventAllowConfig ParsePapyrusEventAllowConfig(
+  const nlohmann::json& root)
+{
+  auto config = GetDefaultPapyrusEventAllowConfig();
+  AppendConfigSection(root, "Events", config.events);
+  AppendConfigSection(root, "Scripts", config.scripts);
+  return config;
+}
+
+PapyrusEventAllowConfig LoadPapyrusEventAllowConfig()
+{
+  static constexpr auto configPath =
+    "Data\\Platform\\Plugins\\skymp5-client-AllowPapyrusEvents.json";
+
+  std::error_code ec;
+  if (!std::filesystem::exists(configPath, ec)) {
+    logger::warn("Papyrus event allow config not found: {}", configPath);
+    return GetDefaultPapyrusEventAllowConfig();
+  }
+
+  try {
+    std::ifstream file(configPath);
+    if (!file.is_open()) {
+      logger::warn("Failed to open Papyrus event allow config: {}",
+                   configPath);
+      return GetDefaultPapyrusEventAllowConfig();
+    }
+
+    nlohmann::json root;
+    file >> root;
+    logger::info("Loaded Papyrus event allow config: {}", configPath);
+    return ParsePapyrusEventAllowConfig(root);
+  } catch (const std::exception& e) {
+    logger::error("Failed to load Papyrus event allow config '{}': {}",
+                  configPath, e.what());
+  }
+
+  return GetDefaultPapyrusEventAllowConfig();
+}
+
+void InitializePapyrusEventAllowConfig()
+{
+  g_papyrusEventAllowConfig = LoadPapyrusEventAllowConfig();
+}
+
+const PapyrusEventAllowConfig& GetPapyrusEventAllowConfig()
+{
+  return g_papyrusEventAllowConfig;
+}
+
+bool AnyEqualsIgnoreCase(const char* value,
+                         const std::vector<std::string>& candidates)
+{
+  for (const auto& candidate : candidates) {
+    if (EqualsIgnoreCase(value, candidate)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool AnyStartsWithIgnoreCase(const char* value,
+                             const std::vector<std::string>& prefixes)
+{
+  for (const auto& prefix : prefixes) {
+    if (StartsWithIgnoreCase(value, prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ShouldAllowPapyrusEventName(const char* eventName,
+                                 const PapyrusEventAllowConfig& config)
+{
+  return AnyStartsWithIgnoreCase(eventName, config.events.startsWithAllow) ||
+    AnyEqualsIgnoreCase(eventName, config.events.allowExplicit);
+}
+
+bool ShouldAllowPapyrusScriptName(const char* scriptName,
+                                  const PapyrusEventAllowConfig& config)
+{
+  return AnyStartsWithIgnoreCase(scriptName, config.scripts.startsWithAllow) ||
+    AnyEqualsIgnoreCase(scriptName, config.scripts.allowExplicit);
+}
+
+template <class ScriptList>
+bool ShouldAllowPapyrusEvent(const char* eventName, const ScriptList& scripts,
+                             const PapyrusEventAllowConfig& config)
+{
+  if (ShouldAllowPapyrusEventName(eventName, config)) {
+    return true;
+  }
+
+  for (size_t i = 0; i < scripts.size(); i++) {
+    auto script = scripts[i].get();
+    auto info = script->GetTypeInfo();
+    auto name = info->GetName();
+
+    if (ShouldAllowPapyrusScriptName(name, config)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+}
 
 // (VMHandle handle, const BSFixedString& eventName, IFunctionArguments* args)
 void OnSendEventEnter(GumInvocationContext* ic)
@@ -47,23 +237,10 @@ void OnSendEventEnter(GumInvocationContext* ic)
 
     if (it != vm->attachedScripts.end()) {
       auto& scripts = it->second;
-
-      for (size_t i = 0; i < scripts.size(); i++) {
-        auto script = scripts[i].get();
-        auto info = script->GetTypeInfo();
-        auto name = info->GetName();
-
-        const char* skyui_name = "SKI_"; // start skyui object name
-        if (strlen(name) >= 4 && name[0] == skyui_name[0] &&
-            name[1] == skyui_name[1] && name[2] == skyui_name[2] &&
-            name[3] == skyui_name[3]) {
-          blockEvents = false;
-          break;
-        } else if (!stricmp(name, "defaultDisableHavokOnLoad")) {
-          // Maybe worth unblocking events only for this script, not for all
-          blockEvents = false;
-          break;
-        }
+      const auto& config = GetPapyrusEventAllowConfig();
+      if (ShouldAllowPapyrusEvent(*eventName, scripts, config)) {
+        // Maybe worth unblocking events only for this script, not for all
+        blockEvents = false;
       }
     }
 
@@ -86,6 +263,8 @@ void OnSendEventLeave(GumInvocationContext* ic)
 
 void InstallSendEventHook()
 {
+  InitializePapyrusEventAllowConfig();
+
   Frida::HookHandler::GetSingleton()->Install(
     Frida::HookID::SEND_EVENT, Offsets::Hooks::SendEvent.address(),
     std::make_shared<Frida::Hook>(OnSendEventEnter, OnSendEventLeave));

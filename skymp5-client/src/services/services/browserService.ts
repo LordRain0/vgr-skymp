@@ -1,6 +1,7 @@
 
 // TODO: send event instead of direct dependency on FormView class
-import { FormView } from "../../view/formView";
+// Stock SkyMP nickname drawing is disabled; VGR nameplates own player-facing names.
+// import { FormView } from "../../view/formView";
 import { QueryKeyCodeBindings } from "../events/queryKeyCodeBindings";
 
 import { ClientListener, CombinedController, Sp } from "./clientListener";
@@ -8,6 +9,11 @@ import { BrowserMessageEvent, DxScanCode, Menu, MenuCloseEvent, MenuOpenEvent } 
 
 const unfocusEventString = `window.dispatchEvent(new CustomEvent('skymp5-client:browserUnfocused', {}))`;
 const focusEventString = `window.dispatchEvent(new CustomEvent('skymp5-client:browserFocused', {}))`;
+
+const browserEvents = {
+  frontLoaded: "front-loaded",
+  quitGame: "vgr:quit-game",
+};
 
 export class BrowserService extends ClientListener {
   constructor(private sp: Sp, private controller: CombinedController) {
@@ -24,9 +30,10 @@ export class BrowserService extends ClientListener {
 
   // TODO: keycodes should be configurable
   private onQueryKeyCodeBindings(e: QueryKeyCodeBindings) {
-    if (e.isDown([DxScanCode.F1])) {
-      FormView.isDisplayingNicknames = !FormView.isDisplayingNicknames;
-    }
+    // Stock SkyMP nickname drawing is disabled; keep this toggle commented while VGR nameplates own names.
+    // if (e.isDown([DxScanCode.F1])) {
+    //   FormView.isDisplayingNicknames = !FormView.isDisplayingNicknames;
+    // }
     if (e.isDown([DxScanCode.F2])) {
       this.sp.browser.setVisible(!this.sp.browser.isVisible());
     }
@@ -56,10 +63,17 @@ export class BrowserService extends ClientListener {
   }
 
   private onBrowserMessage(e: BrowserMessageEvent) {
-    const onFrontLoadedEventKey = "front-loaded";
+    const eventKey = e.arguments[0];
 
-    if (e.arguments[0] === onFrontLoadedEventKey) {
-      this.controller.emitter.emit("browserWindowLoaded", {});
+    switch (eventKey) {
+      case browserEvents.frontLoaded:
+        this.controller.emitter.emit("browserWindowLoaded", {});
+        break;
+      case browserEvents.quitGame:
+        this.sp.win32.exitProcess();
+        break;
+      default:
+        break;
     }
   }
 
