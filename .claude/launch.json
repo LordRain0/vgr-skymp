@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vgr-frontend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["local-dev/serve-frontend.js"],
+      "port": 8123
+    }
+  ]
+}
