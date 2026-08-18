@@ -1,6 +1,6 @@
 {
   "name": "vengeful-realms-launcher",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Launcher for the Vengeful Realms server",
   "main": "src/main.js",
   "author": "F02K, Suraru, Metadraconis",
