@@ -17,6 +17,7 @@
 #include <set>
 #include <string>
 #include <tuple>
+#include <vector>
 
 class MpObjectReference;
 class WorldState;
@@ -32,6 +33,14 @@ struct LearnedSpells
   [[nodiscard]] size_t Count() const noexcept;
 
   [[nodiscard]] bool IsSpellLearned(Data::key_type baseId) const;
+
+  template <typename Visitor>
+  void ForEachSpell(Visitor&& visitor) const
+  {
+    for (auto spellId : _learnedSpellIds) {
+      visitor(spellId);
+    }
+  }
 
   std::vector<Data::key_type> GetLearnedSpells() const;
 
@@ -54,6 +63,88 @@ private:
   Data _learnedSpellIds{};
 };
 
+struct LearnedShouts
+{
+  using Data = std::set<uint32_t>;
+
+  void LearnShout(Data::key_type baseId);
+
+  void ForgetShout(Data::key_type baseId);
+
+  [[nodiscard]] size_t Count() const noexcept;
+
+  [[nodiscard]] bool IsShoutLearned(Data::key_type baseId) const;
+
+  template <typename Visitor>
+  void ForEachShout(Visitor&& visitor) const
+  {
+    for (auto shoutId : _learnedShoutIds) {
+      visitor(shoutId);
+    }
+  }
+
+  std::vector<Data::key_type> GetLearnedShouts() const;
+
+  friend bool operator==(const LearnedShouts& lhs, const LearnedShouts& rhs)
+  {
+    return lhs._learnedShoutIds == rhs._learnedShoutIds;
+  }
+
+  friend bool operator!=(const LearnedShouts& lhs, const LearnedShouts& rhs)
+  {
+    return !(lhs == rhs);
+  }
+
+  friend bool operator<(const LearnedShouts& lhs, const LearnedShouts& rhs)
+  {
+    return lhs._learnedShoutIds < rhs._learnedShoutIds;
+  }
+
+private:
+  Data _learnedShoutIds{};
+};
+
+struct UnlockedWords
+{
+  using Data = std::set<uint32_t>;
+
+  void UnlockWord(Data::key_type baseId);
+
+  void ForgetWord(Data::key_type baseId);
+
+  [[nodiscard]] size_t Count() const noexcept;
+
+  [[nodiscard]] bool IsWordUnlocked(Data::key_type baseId) const;
+
+  template <typename Visitor>
+  void ForEachWord(Visitor&& visitor) const
+  {
+    for (auto wordId : _unlockedWordIds) {
+      visitor(wordId);
+    }
+  }
+
+  std::vector<Data::key_type> GetUnlockedWords() const;
+
+  friend bool operator==(const UnlockedWords& lhs, const UnlockedWords& rhs)
+  {
+    return lhs._unlockedWordIds == rhs._unlockedWordIds;
+  }
+
+  friend bool operator!=(const UnlockedWords& lhs, const UnlockedWords& rhs)
+  {
+    return !(lhs == rhs);
+  }
+
+  friend bool operator<(const UnlockedWords& lhs, const UnlockedWords& rhs)
+  {
+    return lhs._unlockedWordIds < rhs._unlockedWordIds;
+  }
+
+private:
+  Data _unlockedWordIds{};
+};
+
 class MpChangeFormREFR
 {
 public:
@@ -71,6 +162,8 @@ public:
   FormDesc worldOrCellDesc;
   Inventory inv;
   LearnedSpells learnedSpells;
+  LearnedShouts learnedShouts;
+  UnlockedWords unlockedWords;
 
   bool isHarvested = false;
   bool isOpen = false;
@@ -141,8 +234,9 @@ public:
       count, isRaceMenuOpen, isDead, consoleCommandsAllowed, appearanceDump,
       equipment.ToJson(), actorValues.ToTuple(), healthRespawnPercentage,
       magickaRespawnPercentage, staminaRespawnPercentage, spawnPoint,
-      dynamicFields, spawnDelay, learnedSpells, templateChain, lastAnimation,
-      setNodeTextureSet, setNodeScale, displayName);
+      dynamicFields, spawnDelay, learnedSpells, learnedShouts, unlockedWords,
+      templateChain, lastAnimation, setNodeTextureSet, setNodeScale,
+      displayName);
   }
 
   static nlohmann::json ToJson(const MpChangeFormREFR& changeForm);

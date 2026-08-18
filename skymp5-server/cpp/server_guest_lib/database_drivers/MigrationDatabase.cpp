@@ -134,6 +134,13 @@ std::vector<std::optional<MpChangeForm>>&& MigrationDatabase::UpsertImpl(
   return std::move(changeForms);
 }
 
+size_t MigrationDatabase::DeleteImpl(const std::vector<FormDesc>&)
+{
+  spdlog::error("MigrationDatabase::Delete - should never be reached");
+  pImpl->terminate();
+  return 0;
+}
+
 void MigrationDatabase::Iterate(const IterateCallback&,
                                 std::optional<std::vector<FormDesc>>)
 {

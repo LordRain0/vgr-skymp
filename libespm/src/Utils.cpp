@@ -1,4 +1,6 @@
 #include "libespm/Utils.h"
+#include "libespm/Convert.h"
+#include "libespm/LIGH.h"
 #include "libespm/RecordHeaderAccess.h"
 #include "libespm/ZlibUtils.h"
 #include <map>
@@ -45,6 +47,27 @@ bool IsItem(Type type) noexcept
     type == "WEAP" || type == "MISC" ||
     type ==
     "LIGH"; // LIGH is not always an item but here we suppose it is a torch
+}
+
+bool IsPickupableItem(const RecordHeader* rec,
+                      CompressedFieldsCache& compressedFieldsCache) noexcept
+{
+  if (!rec) {
+    return false;
+  }
+
+  const auto type = rec->GetType();
+  if (!IsItem(type)) {
+    return false;
+  }
+
+  if (Is<LIGH>(type)) {
+    const auto* light = Convert<LIGH>(rec);
+    const auto data = light->GetData(compressedFieldsCache);
+    return (data.data.flags & LIGH::Flags::CanBeCarried) != 0;
+  }
+
+  return true;
 }
 
 uint32_t CalculateHashcode(const void* readBuffer, size_t length)

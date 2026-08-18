@@ -9,6 +9,11 @@ bool Equipment::IsSpellEquipped(const uint32_t spellFormId) const
     spellFormId == voiceSpell || spellFormId == instantSpell;
 }
 
+bool Equipment::IsShoutEquipped(const uint32_t shoutFormId) const
+{
+  return shoutFormId == equippedShout;
+}
+
 nlohmann::json Equipment::ToJson() const
 {
   JsonOutputArchive ar;

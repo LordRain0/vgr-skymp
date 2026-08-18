@@ -28,7 +28,7 @@ add_subdirectory(ts)
 
 # Add C++ addon for NodeJS
 if(NOT EMSCRIPTEN)
-  file(GLOB_RECURSE sources "${SKYMP5_SERVER_SOURCE_DIR}/cpp/addon/*")
+  file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${SKYMP5_SERVER_SOURCE_DIR}/cpp/addon/*")
   if(MSVC)
     list(APPEND sources "${CMAKE_SOURCE_DIR}/.clang-format")
   endif()

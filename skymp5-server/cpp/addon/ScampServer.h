@@ -27,6 +27,10 @@ public:
   ScampServer(const Napi::CallbackInfo& info);
 
   static Napi::Value WriteLogs(const Napi::CallbackInfo& info);
+  static Napi::Value RunDatabaseLoadOrderMigrationPreflight(
+    const Napi::CallbackInfo& info);
+  static Napi::Value RunDatabaseLoadOrderMigration(
+    const Napi::CallbackInfo& info);
 
   // private methods, not intended for use in gamemode
   Napi::Value _SetSelf(const Napi::CallbackInfo& info);

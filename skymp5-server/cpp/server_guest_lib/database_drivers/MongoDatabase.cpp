@@ -51,6 +51,11 @@ std::vector<std::optional<MpChangeForm>>&& MongoDatabase::UpsertImpl(
   return std::move(changeForms);
 }
 
+size_t MongoDatabase::DeleteImpl(const std::vector<FormDesc>&)
+{
+  return 0;
+}
+
 void MongoDatabase::Iterate(const IterateCallback&,
                             std::optional<std::vector<FormDesc>>)
 {
@@ -116,6 +121,27 @@ std::vector<std::optional<MpChangeForm>>&& MongoDatabase::UpsertImpl(
       std::vector<FormDesc>>::UpsertFailedException(std::move(changeForms),
                                                     e.what());
   }
+}
+
+size_t MongoDatabase::DeleteImpl(const std::vector<FormDesc>& formDescs)
+{
+  if (formDescs.empty()) {
+    return 0;
+  }
+
+  mongocxx::v_noabi::pool::entry poolEntry = pImpl->pool->acquire();
+
+  mongocxx::v_noabi::collection collection =
+    poolEntry->database(pImpl->name).collection(pImpl->collectionName);
+
+  auto filterArr = nlohmann::json::array();
+  for (const auto& formDesc : formDescs) {
+    filterArr.push_back(formDesc.ToString());
+  }
+
+  nlohmann::json filter = { { "formDesc", { { "$in", filterArr } } } };
+  auto result = collection.delete_many(bsoncxx::from_json(filter.dump()));
+  return result ? static_cast<size_t>(result->deleted_count()) : 0;
 }
 
 void MongoDatabase::Iterate(const IterateCallback& iterateCallback,

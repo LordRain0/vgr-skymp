@@ -1,6 +1,7 @@
 #pragma once
 #include "libespm/espm.h"
 #include <chrono>
+#include <functional>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <simdjson.h>
@@ -33,6 +34,29 @@ public:
     espm::ActorValue actorValue) const noexcept;
   void Remove(espm::ActorValue actorValue) noexcept;
   void Clear() noexcept;
+  template <typename Visitor>
+  void ForEachEffect(Visitor&& visitor) const
+  {
+    for (const auto& [_, effectEntry] : effects) {
+      visitor(effectEntry.data);
+    }
+  }
+  template <typename Predicate>
+  size_t RemoveEffectsIf(Predicate&& predicate)
+  {
+    size_t removed = 0;
+    for (auto it = effects.begin(); it != effects.end();) {
+      if (predicate(it->second.data)) {
+        it = effects.erase(it);
+        ++removed;
+      } else {
+        ++it;
+      }
+    }
+    return removed;
+  }
+  void TransformEffectIds(
+    const std::function<uint32_t(uint32_t)>& transform);
   bool Has(espm::ActorValue actorValue) const noexcept;
   [[nodiscard]] bool Empty() const noexcept;
   nlohmann::json::array_t ToJson() const;

@@ -24,6 +24,11 @@ public:
     return numUpserted;
   }
 
+  size_t Delete(const std::vector<FormDescType>& formDescs)
+  {
+    return DeleteImpl(formDescs);
+  }
+
   virtual void Iterate(const IterateCallback& iterateCallback,
                        std::optional<FilterType> filter) = 0;
 
@@ -45,6 +50,7 @@ public:
 protected:
   virtual std::vector<std::optional<T>>&& UpsertImpl(
     std::vector<std::optional<T>>&& changeForms, size_t& outNumUpserted) = 0;
+  virtual size_t DeleteImpl(const std::vector<FormDescType>& formDescs) = 0;
 
   std::vector<std::optional<T>> recycledChangeFormsBuffer;
 };

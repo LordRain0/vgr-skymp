@@ -52,6 +52,8 @@ nlohmann::json MpChangeForm::ToJson(const MpChangeForm& changeForm)
   res["equipmentDump"] = changeForm.equipment.ToJson();
 
   res["learnedSpells"] = changeForm.learnedSpells.GetLearnedSpells();
+  res["learnedShouts"] = changeForm.learnedShouts.GetLearnedShouts();
+  res["unlockedWords"] = changeForm.unlockedWords.GetUnlockedWords();
 
   res["healthPercentage"] = changeForm.actorValues.healthPercentage;
   res["magickaPercentage"] = changeForm.actorValues.magickaPercentage;
@@ -136,6 +138,8 @@ MpChangeForm MpChangeForm::JsonToChangeForm(simdjson::dom::element& element)
   static const JsonPointer appearanceDump("appearanceDump");
   static const JsonPointer equipmentDump("equipmentDump");
   static const JsonPointer learnedSpells("learnedSpells");
+  static const JsonPointer learnedShouts("learnedShouts");
+  static const JsonPointer unlockedWords("unlockedWords");
   static const JsonPointer dynamicFields("dynamicFields");
   static const JsonPointer healthPercentage("healthPercentage");
   static const JsonPointer magickaPercentage("magickaPercentage");
@@ -243,6 +247,30 @@ MpChangeForm MpChangeForm::JsonToChangeForm(simdjson::dom::element& element)
 
     for (const auto spellId : learnedSpellsData) {
       res.learnedSpells.LearnSpell(spellId);
+    }
+  }
+
+  if (element.at_pointer(learnedShouts.GetData()).error() ==
+      simdjson::error_code::SUCCESS) {
+
+    std::vector<LearnedShouts::Data::key_type> learnedShoutsData;
+
+    ReadVector(element, learnedShouts, &learnedShoutsData);
+
+    for (const auto shoutId : learnedShoutsData) {
+      res.learnedShouts.LearnShout(shoutId);
+    }
+  }
+
+  if (element.at_pointer(unlockedWords.GetData()).error() ==
+      simdjson::error_code::SUCCESS) {
+
+    std::vector<UnlockedWords::Data::key_type> unlockedWordsData;
+
+    ReadVector(element, unlockedWords, &unlockedWordsData);
+
+    for (const auto wordId : unlockedWordsData) {
+      res.unlockedWords.UnlockWord(wordId);
     }
   }
 
@@ -407,4 +435,56 @@ std::vector<LearnedSpells::Data::key_type> LearnedSpells::GetLearnedSpells()
   const
 {
   return std::vector(_learnedSpellIds.begin(), _learnedSpellIds.end());
+}
+
+void LearnedShouts::LearnShout(const Data::key_type shoutId)
+{
+  _learnedShoutIds.emplace(shoutId);
+}
+
+void LearnedShouts::ForgetShout(const Data::key_type shoutId)
+{
+  _learnedShoutIds.erase(shoutId);
+}
+
+size_t LearnedShouts::Count() const noexcept
+{
+  return _learnedShoutIds.size();
+}
+
+bool LearnedShouts::IsShoutLearned(const Data::key_type shoutId) const
+{
+  return _learnedShoutIds.count(shoutId) != 0;
+}
+
+std::vector<LearnedShouts::Data::key_type> LearnedShouts::GetLearnedShouts()
+  const
+{
+  return std::vector(_learnedShoutIds.begin(), _learnedShoutIds.end());
+}
+
+void UnlockedWords::UnlockWord(const Data::key_type wordId)
+{
+  _unlockedWordIds.emplace(wordId);
+}
+
+void UnlockedWords::ForgetWord(const Data::key_type wordId)
+{
+  _unlockedWordIds.erase(wordId);
+}
+
+size_t UnlockedWords::Count() const noexcept
+{
+  return _unlockedWordIds.size();
+}
+
+bool UnlockedWords::IsWordUnlocked(const Data::key_type wordId) const
+{
+  return _unlockedWordIds.count(wordId) != 0;
+}
+
+std::vector<UnlockedWords::Data::key_type> UnlockedWords::GetUnlockedWords()
+  const
+{
+  return std::vector(_unlockedWordIds.begin(), _unlockedWordIds.end());
 }

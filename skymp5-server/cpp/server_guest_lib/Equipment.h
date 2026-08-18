@@ -4,6 +4,7 @@
 struct Equipment
 {
   [[nodiscard]] bool IsSpellEquipped(uint32_t spellFormId) const;
+  [[nodiscard]] bool IsShoutEquipped(uint32_t shoutFormId) const;
 
   // TODO: get rid in favor of Serialize
   nlohmann::json ToJson() const;
@@ -17,6 +18,7 @@ struct Equipment
       .Serialize("leftSpell", leftSpell)
       .Serialize("rightSpell", rightSpell)
       .Serialize("voiceSpell", voiceSpell)
+      .Serialize("equippedShout", equippedShout)
       .Serialize("instantSpell", instantSpell)
       .Serialize("numChanges", numChanges);
   }
@@ -25,6 +27,7 @@ struct Equipment
   std::optional<uint32_t> leftSpell;
   std::optional<uint32_t> rightSpell;
   std::optional<uint32_t> voiceSpell;
+  std::optional<uint32_t> equippedShout;
   std::optional<uint32_t> instantSpell;
   uint32_t numChanges = 0;
 
@@ -32,6 +35,7 @@ struct Equipment
   {
     return lhs.inv == rhs.inv && lhs.leftSpell == rhs.leftSpell &&
       lhs.rightSpell == rhs.rightSpell && lhs.voiceSpell == rhs.voiceSpell &&
+      lhs.equippedShout == rhs.equippedShout &&
       lhs.instantSpell == rhs.instantSpell && lhs.numChanges == rhs.numChanges;
   }
 

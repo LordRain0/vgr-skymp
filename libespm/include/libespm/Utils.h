@@ -19,6 +19,8 @@ bool Is(Type t) noexcept
 
 std::string ToString(GroupType type);
 bool IsItem(Type type) noexcept;
+bool IsPickupableItem(const RecordHeader* rec,
+                      CompressedFieldsCache& compressedFieldsCache) noexcept;
 uint32_t CalculateHashcode(const void* readBuffer, size_t length);
 uint32_t GetCorrectHashcode(const std::string& fileName);
 uint32_t GetMappedId(uint32_t id, const IdMapping& mapping) noexcept;

@@ -146,6 +146,11 @@ Napi::Object ScampServer::Init(Napi::Env env, Napi::Object exports)
   exports.Set("ScampServer", func);
 
   exports.Set("writeLogs", Napi::Function::New(env, WriteLogs));
+  exports.Set("runDatabaseLoadOrderMigrationPreflight",
+              Napi::Function::New(env,
+                                  RunDatabaseLoadOrderMigrationPreflight));
+  exports.Set("runDatabaseLoadOrderMigration",
+              Napi::Function::New(env, RunDatabaseLoadOrderMigration));
   return exports;
 }
 

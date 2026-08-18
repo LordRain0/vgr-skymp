@@ -76,6 +76,26 @@ std::vector<std::optional<MpChangeForm>>&& FileDatabase::UpsertImpl(
   }
 }
 
+size_t FileDatabase::DeleteImpl(const std::vector<FormDesc>& formDescs)
+{
+  size_t numDeleted = 0;
+  std::filesystem::path p = pImpl->changeFormsDirectory;
+
+  for (const auto& formDesc : formDescs) {
+    const auto filePath = p / (formDesc.ToString('_') + ".json");
+    std::error_code errorCode;
+    if (std::filesystem::remove(filePath, errorCode)) {
+      ++numDeleted;
+    } else if (errorCode) {
+      throw std::runtime_error(
+        fmt::format("Unable to delete {}: {}", filePath.string(),
+                    errorCode.message()));
+    }
+  }
+
+  return numDeleted;
+}
+
 void FileDatabase::Iterate(const IterateCallback& iterateCallback,
                            std::optional<std::vector<FormDesc>> filter)
 {

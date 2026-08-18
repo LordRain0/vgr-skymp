@@ -25,6 +25,14 @@ void ActiveMagicEffectsMap::Clear() noexcept
   effects.clear();
 }
 
+void ActiveMagicEffectsMap::TransformEffectIds(
+  const std::function<uint32_t(uint32_t)>& transform)
+{
+  for (auto& [_, effectEntry] : effects) {
+    effectEntry.data.effectId = transform(effectEntry.data.effectId);
+  }
+}
+
 ActiveMagicEffectsMap ActiveMagicEffectsMap::FromJson(
   const simdjson::dom::element& effects)
 {

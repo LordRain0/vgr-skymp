@@ -73,6 +73,37 @@ std::vector<std::optional<MpChangeForm>>&& ZipDatabase::UpsertImpl(
   }
 }
 
+size_t ZipDatabase::DeleteImpl(const std::vector<FormDesc>& formDescs)
+{
+  if (formDescs.empty()) {
+    return 0;
+  }
+
+  auto filePathAbsolute =
+    std::filesystem::absolute(pImpl->filePath).string();
+
+  libzippp::ZipArchive archive(filePathAbsolute.data());
+  archive.open(libzippp::ZipArchive::Write);
+
+  size_t numDeleted = 0;
+  for (const auto& formDesc : formDescs) {
+    const auto entryName = formDesc.ToString('_') + ".json";
+    if (!archive.hasEntry(entryName)) {
+      continue;
+    }
+
+    const int deleted = archive.deleteEntry(entryName);
+    if (deleted < 0) {
+      archive.discard();
+      throw std::runtime_error("Unable to delete zip entry " + entryName);
+    }
+    numDeleted += static_cast<size_t>(deleted);
+  }
+
+  archive.close();
+  return numDeleted;
+}
+
 void ZipDatabase::Iterate(const IterateCallback& iterateCallback,
                           std::optional<std::vector<FormDesc>> filter)
 {
