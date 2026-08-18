@@ -3,6 +3,11 @@
 #include "GroupStack.h"
 #include "IdMapping.h"
 #include "LookupResult.h"
+#include <array>
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace espm {
 
@@ -27,10 +32,31 @@ public:
   std::vector<const std::vector<const RecordHeader*>*> GetRecordsByType(
     const char* type) const;
 
-  std::vector<LookupResult> GetDistinctRecordsByType(const char* type) const;
+  const std::vector<LookupResult>& GetDistinctRecordsByType(
+    const char* type) const;
+
+  void PrewarmCaches(const std::vector<std::string>& recordTypes) const;
 
   std::vector<const std::vector<const RecordHeader*>*> GetRecordsAtPos(
     uint32_t cellOrWorld, int16_t cellX, int16_t cellY) const;
+
+  const std::vector<const RecordHeader*>* GetRecordsAtPos(
+    size_t fileIndex, uint32_t rawCellOrWorld, int16_t cellX,
+    int16_t cellY) const noexcept;
+
+  struct SourceRecordsAtPos
+  {
+    size_t fileIndex = 0;
+    const std::vector<const RecordHeader*>* records = nullptr;
+  };
+
+  const std::vector<SourceRecordsAtPos>& GetSourceRecordsAtPos(
+    uint32_t cellOrWorld, int16_t cellX, int16_t cellY) const;
+
+  bool IsLight(size_t fileIndex) const noexcept;
+  uint16_t GetFullIndex(size_t fileIndex) const noexcept;
+  uint16_t GetLightIndex(size_t fileIndex) const noexcept;
+  int32_t GetFileIndexByFormId(uint32_t formId) const noexcept;
 
   // Returns nullptr on failure
   const IdMapping* GetCombMapping(size_t fileIndex) const noexcept;
@@ -50,13 +76,23 @@ private:
     Browser* br = nullptr;
     std::string fileName;
     std::unique_ptr<espm::IdMapping> toComb, toRaw;
+    bool isLight = false;
+    uint16_t fullIndex = 0xffff;
+    uint16_t lightIndex = 0xffff;
   };
 
   struct Impl
   {
     CompressedFieldsCache cache;
 
-    std::array<Source, 256> sources;
+    std::vector<Source> sources;
+    std::array<int32_t, 256> sourceByFullIndex{};
+    std::array<int32_t, 4096> sourceByLightIndex{};
+    mutable std::unordered_map<uint32_t, LookupResult> lookupByIdCache;
+    mutable std::unordered_map<std::string, std::vector<LookupResult>>
+      distinctRecordsByTypeCache;
+    mutable std::unordered_map<uint64_t, std::vector<SourceRecordsAtPos>>
+      recordsAtPosCache;
     size_t numSources = 0;
     int32_t GetFileIndex(const char* fileName) const noexcept;
   };

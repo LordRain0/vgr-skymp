@@ -4,7 +4,7 @@
 
 namespace espm {
 
-BrowserInfo::BrowserInfo(const CombineBrowser* parent_, uint8_t fileIdx_)
+BrowserInfo::BrowserInfo(const CombineBrowser* parent_, size_t fileIdx_)
   : parent(parent_)
   , fileIdx(fileIdx_) {};
 

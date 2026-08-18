@@ -13,6 +13,46 @@
 #include <spdlog/spdlog.h>
 #include <vector>
 
+namespace {
+uint32_t ParseConditionParameter(const std::string& parameter)
+{
+  const char* str = parameter.c_str();
+  char* end = nullptr;
+  int base = 10;
+
+  if (parameter.length() > 2 && str[0] == '0') {
+    if (str[1] == 'x' || str[1] == 'X') {
+      base = 16;
+    } else if (str[1] == 'b' || str[1] == 'B') {
+      base = 2;
+      str += 2;
+    }
+  }
+
+  return static_cast<uint32_t>(std::strtoul(str, &end, base));
+}
+
+void MapConditionFormIdParameter(const espm::LookupResult& lookupRes,
+                                 std::string& parameter)
+{
+  const uint32_t rawId = ParseConditionParameter(parameter);
+  if (!rawId) {
+    return;
+  }
+
+  const uint32_t mappedId = lookupRes.ToGlobalId(rawId);
+  if (!mappedId || mappedId == rawId || !lookupRes.parent) {
+    return;
+  }
+
+  if (!lookupRes.parent->LookupById(mappedId).rec) {
+    return;
+  }
+
+  parameter = fmt::format("{:#x}", mappedId);
+}
+}
+
 CraftService::CraftService(PartOne& partOne_)
   : partOne(partOne_)
 {
@@ -27,28 +67,27 @@ void CraftService::OnCraftItem(const RawMessageData& rawMsgData,
 
   auto& br = partOne.worldState.GetEspm().GetBrowser();
   auto& cache = partOne.worldState.GetEspmCache();
-  auto base = br.LookupById(workbench.GetBaseId());
+  auto workbenchBase = br.LookupById(workbench.GetBaseId());
 
   spdlog::info("User {} tries to craft {:#x} on workbench {:#x}",
                rawMsgData.userId, resultObjectId, workbenchId);
 
+  if (!workbenchBase.rec) {
+    return spdlog::error("Workbench ref without base object {:x}",
+                         workbench.GetFormId());
+  }
+
   bool isFurnitureOrActivator =
-    base.rec->GetType() == "FURN" || base.rec->GetType() == "ACTI";
+    workbenchBase.rec->GetType() == "FURN" ||
+    workbenchBase.rec->GetType() == "ACTI";
   if (!isFurnitureOrActivator) {
     return spdlog::error("Unable to use {} as workbench",
-                         base.rec->GetType().ToString());
+                         workbenchBase.rec->GetType().ToString());
   }
 
   MpActor* me = partOne.serverState.ActorByUser(rawMsgData.userId);
   if (!me) {
     return spdlog::error("Unable to craft without Actor attached");
-  }
-
-  auto workbenchBase = br.LookupById(workbench.GetBaseId());
-
-  if (!workbenchBase.rec) {
-    return spdlog::error("Workbench ref without base object {:x}",
-                         workbench.GetFormId());
   }
 
   std::vector<uint32_t> workbenchKeywordIds =
@@ -76,15 +115,22 @@ void CraftService::OnCraftItem(const RawMessageData& rawMsgData,
                  recipesList.size());
   }
 
-  UseCraftRecipe(me, reinterpret_cast<const espm::COBJ*>(recipesList[0].rec),
-                 cache, br, recipesList[0].fileIdx);
+  auto recipe = espm::Convert<espm::COBJ>(recipesList[0].rec);
+  if (!recipe) {
+    return spdlog::error("Selected craft recipe is not a COBJ record");
+  }
+
+  UseCraftRecipe(me, recipe, cache, br, recipesList[0].fileIdx);
 }
 
 bool CraftService::RecipeItemsMatch(const espm::LookupResult& lookupRes,
                                     const Inventory& inputObjects,
                                     uint32_t resultObjectId)
 {
-  auto recipe = reinterpret_cast<const espm::COBJ*>(lookupRes.rec);
+  auto recipe = espm::Convert<espm::COBJ>(lookupRes.rec);
+  if (!recipe) {
+    return false;
+  }
 
   espm::CompressedFieldsCache dummyCache;
   auto recipeData = recipe->GetData(dummyCache);
@@ -120,9 +166,7 @@ std::vector<espm::LookupResult> CraftService::FindRecipe(
   const espm::CombineBrowser& br, const Inventory& inputObjects,
   uint32_t resultObjectId)
 {
-  if (allRecipes.empty()) {
-    allRecipes = br.GetDistinctRecordsByType("COBJ");
-  }
+  const auto& allRecipes = br.GetDistinctRecordsByType(espm::COBJ::kType);
 
   std::vector<espm::LookupResult> candidatesConsideredUsable;
 
@@ -152,13 +196,16 @@ bool CraftService::ConsiderRecipeCandidate(
   std::optional<std::vector<uint32_t>> workbenchKeywordIds,
   const espm::LookupResult& lookupRes)
 {
-  auto cobj = reinterpret_cast<const espm::COBJ*>(lookupRes.rec);
+  auto cobj = espm::Convert<espm::COBJ>(lookupRes.rec);
+  if (!cobj) {
+    return false;
+  }
   auto cobjData = cobj->GetData(cache);
 
   bool finalConsiderationResult = true;
 
   if (me.has_value()) {
-    bool evalRes = EvaluateCraftRecipeConditions(*me, cobjData);
+    bool evalRes = EvaluateCraftRecipeConditions(*me, lookupRes, cobjData);
     if (!evalRes) {
       spdlog::info("CraftService::ConsiderRecipeCandidate - Craft recipe "
                    "conditions are not met");
@@ -238,12 +285,19 @@ void CraftService::UseCraftRecipe(MpActor* me, const espm::COBJ* recipeUsed,
 }
 
 bool CraftService::EvaluateCraftRecipeConditions(
-  MpActor* me, const espm::COBJ::Data& recipeData)
+  MpActor* me, const espm::LookupResult& lookupRes,
+  const espm::COBJ::Data& recipeData)
 {
   std::vector<Condition> conditions;
   std::transform(recipeData.conditions.begin(), recipeData.conditions.end(),
-                 std::back_inserter(conditions),
-                 [&](const auto& ctda) { return Condition::FromCtda(ctda); });
+                 std::back_inserter(conditions), [&](const auto& ctda) {
+                   auto condition = Condition::FromCtda(ctda);
+                   MapConditionFormIdParameter(lookupRes,
+                                               condition.parameter1);
+                   MapConditionFormIdParameter(lookupRes,
+                                               condition.parameter2);
+                   return condition;
+                 });
 
   // TODO: aggressor and target terms are not relevant for crafting
   const MpActor& aggressor = *me;

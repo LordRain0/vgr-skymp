@@ -91,9 +91,31 @@ uint32_t GetCorrectHashcode(const std::string& fileName)
 
 uint32_t GetMappedId(uint32_t id, const IdMapping& mapping) noexcept
 {
-  const uint32_t shortId = id % 0x01000000;
-  const uint8_t index = id / 0x01000000;
-  return shortId + (mapping[index] * 0x01000000);
+  constexpr uint32_t kDynamicFormIdStart = 0xff000000;
+  constexpr uint32_t kLightPluginPrefix = 0xfe000000;
+  constexpr uint32_t kFullIndexStride = 0x01000000;
+
+  if (id >= kDynamicFormIdStart) {
+    return id;
+  }
+
+  const uint8_t fullIndex = static_cast<uint8_t>(id / kFullIndexStride);
+  const bool sourceIdIsLight = fullIndex == 0xfe;
+  const uint32_t shortId = sourceIdIsLight ? (id & 0xfff) : (id % kFullIndexStride);
+
+  const IdMapping::Target& target = sourceIdIsLight
+    ? mapping.GetLight((id >> 12) & 0xfff)
+    : mapping.GetFull(fullIndex);
+
+  switch (target.kind) {
+    case IdMapping::TargetKind::Full:
+      return shortId + (target.index * kFullIndexStride);
+    case IdMapping::TargetKind::Light:
+      return kLightPluginPrefix + (static_cast<uint32_t>(target.index) << 12) +
+        (shortId & 0xfff);
+    default:
+      return kDynamicFormIdStart + shortId;
+  }
 }
 
 std::wstring ReadWstring(const uint8_t* ptr)

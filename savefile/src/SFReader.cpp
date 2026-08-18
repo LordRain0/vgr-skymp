@@ -139,12 +139,25 @@ SaveFile_::Header SaveFile_::Reader::FillHeader()
 SaveFile_::PluginInfo SaveFile_::Reader::FillPluginInfo()
 {
   PluginInfo pluginInfo;
+  const auto pluginInfoStart = currentReadPositionInFile;
 
   pluginInfo.numPlugins = Read8_bit();
   pluginInfo.pluginsName.resize(pluginInfo.numPlugins);
 
   for (auto& name : pluginInfo.pluginsName)
     name = ReadString(Read16_bit());
+
+  const auto pluginInfoBytesRead = currentReadPositionInFile - pluginInfoStart;
+  const auto remainingBytes =
+    static_cast<int64_t>(structure->pluginInfoSize) - pluginInfoBytesRead;
+  if (remainingBytes >= 2) {
+    pluginInfo.hasLightPlugins = true;
+    pluginInfo.numLightPlugins = Read16_bit();
+    pluginInfo.lightPluginsName.resize(pluginInfo.numLightPlugins);
+
+    for (auto& name : pluginInfo.lightPluginsName)
+      name = ReadString(Read16_bit());
+  }
 
   return pluginInfo;
 }

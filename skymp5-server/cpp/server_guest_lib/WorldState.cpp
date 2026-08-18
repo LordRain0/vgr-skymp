@@ -23,6 +23,7 @@
 #include <optional>
 #include <save_storages/AsyncSaveStorage.h> // UpsertFailedException
 #include <save_storages/ISaveStorage.h>
+#include <spdlog/stopwatch.h>
 #include <unordered_map>
 
 namespace {
@@ -55,7 +56,7 @@ struct WorldState::Impl
   std::vector<RelootTimeForTypesEntry> relootTimeForTypes;
   std::set<std::string> forbiddenRelootTypes;
   std::vector<std::unique_ptr<IPapyrusClassBase>> classes;
-  std::array<std::shared_ptr<std::vector<uint32_t>>, 0x100>
+  std::vector<std::shared_ptr<std::vector<uint32_t>>>
     allFormsByModIndexCache;
   std::vector<uint32_t> attachEspmRecordFailures;
 };
@@ -88,6 +89,20 @@ void WorldState::AttachEspm(espm::Loader* espm_,
   formCallbacksFactory = formCallbacksFactory_;
   espmCache.reset(new espm::CompressedFieldsCache);
   espmFiles = espm->GetFileNames();
+  pImpl->allFormsByModIndexCache.assign(espmFiles.size(), nullptr);
+
+  std::vector<FormDesc::FileMetadata> metadata;
+  metadata.reserve(espmFiles.size());
+  for (size_t i = 0; i < espmFiles.size(); ++i) {
+    metadata.push_back({ espm->IsLightPlugin(i), espm->GetFullIndex(i),
+                         espm->GetLightIndex(i) });
+  }
+  FormDesc::RegisterFileMetadata(&espmFiles, metadata);
+
+  spdlog::stopwatch prewarmTimer;
+  espm->GetBrowser().PrewarmCaches({ "COBJ", "KYWD", "FACT", "CELL" });
+  spdlog::info("WorldState::AttachEspm prewarmed ESPM caches in {:.3} s",
+               prewarmTimer);
 }
 
 void WorldState::AttachSaveStorage(
@@ -368,6 +383,7 @@ const std::shared_ptr<MpForm>& WorldState::LookupFormByIdNoLoad(
 bool WorldState::AttachEspmRecord(const espm::CombineBrowser& br,
                                   const espm::RecordHeader* record,
                                   const espm::IdMapping& mapping,
+                                  size_t sourceFileIdx,
                                   std::stringstream* optionalOutTrace)
 {
   auto& cache = GetEspmCache();
@@ -378,9 +394,26 @@ bool WorldState::AttachEspmRecord(const espm::CombineBrowser& br,
   auto data = refr->GetData(cache);
 
   uint32_t baseId = espm::utils::GetMappedId(data.baseId, mapping);
+  uint32_t formId = espm::utils::GetMappedId(record->GetId(), mapping);
+  if (data.baseId == 0 || baseId == 0) {
+    logger->warn(
+      "AttachEspmRecord - skipping record without base: source={} "
+      "rawRecord={:#010x} mappedRecord={:#010x} rawBase={:#010x} "
+      "mappedBase={:#010x}",
+      sourceFileIdx < espmFiles.size() ? espmFiles[sourceFileIdx]
+                                       : std::to_string(sourceFileIdx),
+      record->GetId(), formId, data.baseId, baseId);
+    return false;
+  }
+
   espm::LookupResult base = br.LookupById(baseId);
   if (!base.rec) {
-    logger->info("baseId {} {}", baseId, static_cast<const void*>(base.rec));
+    logger->warn(
+      "AttachEspmRecord - base record not found: source={} rawRecord={:#010x} "
+      "mappedRecord={:#010x} rawBase={:#010x} mappedBase={:#010x}",
+      sourceFileIdx < espmFiles.size() ? espmFiles[sourceFileIdx]
+                                       : std::to_string(sourceFileIdx),
+      record->GetId(), formId, data.baseId, baseId);
     if (optionalOutTrace) {
       *optionalOutTrace << fmt::format(
         "AttachEspmRecord - base record not found {:x} \n", baseId);
@@ -394,12 +427,13 @@ bool WorldState::AttachEspmRecord(const espm::CombineBrowser& br,
   bool isActivator = t == "ACTI";
   bool isDoor = t == "DOOR";
   bool isContainer = t == "CONT";
+  bool isPickupableItem = espm::utils::IsPickupableItem(base.rec, cache);
   bool isFlor = t == "FLOR" &&
     reinterpret_cast<const espm::FLOR*>(base.rec)->GetData(cache).resultItem;
   bool isTree = t == "TREE" &&
     reinterpret_cast<const espm::TREE*>(base.rec)->GetData(cache).resultItem;
 
-  if (!isNpc && !isFurniture && !isActivator && !espm::utils::IsItem(t) &&
+  if (!isNpc && !isFurniture && !isActivator && !isPickupableItem &&
       !isDoor && !isContainer && !isFlor && !isTree) {
     if (optionalOutTrace) {
       *optionalOutTrace << fmt::format(
@@ -451,8 +485,6 @@ bool WorldState::AttachEspmRecord(const espm::CombineBrowser& br,
     }
     return false;
   }
-
-  uint32_t formId = espm::utils::GetMappedId(record->GetId(), mapping);
 
   if (isNpc) {
     if (NpcSourceFilesOverriden() && !IsNpcAllowed(formId)) {
@@ -658,7 +690,8 @@ bool WorldState::AttachEspmRecord(const espm::CombineBrowser& br,
   return true;
 }
 
-bool WorldState::LoadForm(uint32_t formId, std::stringstream* optionalOutTrace)
+bool WorldState::LoadForm(uint32_t formId, std::stringstream* optionalOutTrace,
+                          bool updateSubscriptions)
 {
   ANTIGO_CONTEXT_INIT(ctx);
   ctx.AddUnsigned(formId);
@@ -673,26 +706,72 @@ bool WorldState::LoadForm(uint32_t formId, std::stringstream* optionalOutTrace)
 
   auto mapping = br.GetCombMapping(lookupRes.fileIdx);
 
-  bool attached =
-    AttachEspmRecord(br, lookupRes.rec, *mapping, optionalOutTrace);
+  return LoadFormFromRecord(br, lookupRes.rec, *mapping, lookupRes.fileIdx,
+                            formId, optionalOutTrace, updateSubscriptions);
+}
+
+bool WorldState::LoadFormFromRecord(const espm::CombineBrowser& br,
+                                    const espm::RecordHeader* record,
+                                    const espm::IdMapping& mapping,
+                                    size_t sourceFileIdx,
+                                    uint32_t mappedFormId,
+                                    std::stringstream* optionalOutTrace,
+                                    bool updateSubscriptions)
+{
+  if (forms.find(mappedFormId) != forms.end()) {
+    return false;
+  }
+
+  const auto recordType = record->GetType();
+  if (recordType != "REFR" && recordType != "ACHR") {
+    spdlog::warn(
+      "WorldState::LoadFormFromRecord - skipping non-reference record: "
+      "source={} rawRecord={:#010x} mappedRecord={:#010x} type={}",
+      sourceFileIdx < espmFiles.size() ? espmFiles[sourceFileIdx]
+                                       : std::to_string(sourceFileIdx),
+      record->GetId(), mappedFormId, recordType.ToString());
+    return false;
+  }
+
+  const auto winningRecord = br.LookupById(mappedFormId);
+  if (winningRecord.rec != record || winningRecord.fileIdx != sourceFileIdx) {
+    spdlog::debug(
+      "WorldState::LoadFormFromRecord - skipping non-winning record: "
+      "source={} rawRecord={:#010x} mappedRecord={:#010x} type={} "
+      "winningSource={} winningType={}",
+      sourceFileIdx < espmFiles.size() ? espmFiles[sourceFileIdx]
+                                       : std::to_string(sourceFileIdx),
+      record->GetId(), mappedFormId, recordType.ToString(),
+      winningRecord.rec ? (winningRecord.fileIdx < espmFiles.size()
+                             ? espmFiles[winningRecord.fileIdx]
+                             : std::to_string(winningRecord.fileIdx))
+                        : "<none>",
+      winningRecord.rec ? winningRecord.rec->GetType().ToString() : "<none>");
+    return false;
+  }
+
+  bool attached = AttachEspmRecord(br, record, mapping, sourceFileIdx,
+                                   optionalOutTrace);
   if (optionalOutTrace) {
     *optionalOutTrace << "AttachEspmRecord " << (attached ? "true" : "false")
                       << std::endl;
   }
 
   if (!attached) {
-    pImpl->attachEspmRecordFailures.push_back(formId);
+    pImpl->attachEspmRecordFailures.push_back(mappedFormId);
   }
 
   if (attached) {
-    auto& refr = GetFormAt<MpObjectReference>(formId);
-    auto it = pImpl->changeFormsForDeferredLoad.find(formId);
+    auto& refr = GetFormAt<MpObjectReference>(mappedFormId);
+    auto it = pImpl->changeFormsForDeferredLoad.find(mappedFormId);
     if (it != pImpl->changeFormsForDeferredLoad.end()) {
       auto copy = it->second; // crashes without copying
       refr.ApplyChangeForm(copy);
     }
 
-    refr.ForceSubscriptionsUpdate();
+    if (updateSubscriptions) {
+      refr.ForceSubscriptionsUpdate();
+    }
   }
 
   return attached;
@@ -846,29 +925,130 @@ const std::set<MpObjectReference*>& WorldState::GetNeighborsByPosition(
     pImpl->chunkLoadingInProgress = true;
 
     auto& br = espm->GetBrowser();
+    std::vector<uint32_t> loadedForms;
+    const auto loadStart = std::chrono::steady_clock::now();
+    spdlog::debug(
+      "WorldState::GetNeighborsByPosition begin chunk load world={:#x} "
+      "center=({}, {}) files={}",
+      cellOrWorld, cellX, cellY, espmFiles.size());
     for (int16_t x = cellX - 1; x <= cellX + 1; ++x) {
       for (int16_t y = cellY - 1; y <= cellY + 1; ++y) {
         const bool loaded = grids[cellOrWorld].loadedChunks[x][y];
         if (!loaded) {
-          for (size_t i = 0; i < espmFiles.size(); ++i) {
+          size_t chunkRecordCount = 0;
+          spdlog::debug(
+            "WorldState::GetNeighborsByPosition scanning chunk world={:#x} "
+            "chunk=({}, {})",
+            cellOrWorld, x, y);
+          const auto& sourcesWithRecords = br.GetSourceRecordsAtPos(
+            cellOrWorld, x, y);
+          spdlog::debug(
+            "WorldState::GetNeighborsByPosition cached sources world={:#x} "
+            "chunk=({}, {}) sources={}",
+            cellOrWorld, x, y, sourcesWithRecords.size());
+          for (const auto& sourceRecords : sourcesWithRecords) {
+            const size_t i = sourceRecords.fileIndex;
             auto combMapping = br.GetCombMapping(i);
-            auto rawMapping = br.GetRawMapping(i);
-            uint32_t mappedCellOrWorld =
-              espm::utils::GetMappedId(cellOrWorld, *rawMapping);
-            auto records = br.GetRecordsAtPos(mappedCellOrWorld, x, y);
-            for (auto rec : *records[i]) {
+            if (!combMapping) {
+              spdlog::error(
+                "WorldState::GetNeighborsByPosition missing mapping for "
+                "source={} file={}",
+                i, i < espmFiles.size() ? espmFiles[i] : std::to_string(i));
+              continue;
+            }
+            auto records = sourceRecords.records;
+            if (!records) {
+              continue;
+            }
+            if (!records->empty()) {
+              spdlog::debug(
+                "WorldState::GetNeighborsByPosition source records world={:#x} "
+                "chunk=({}, {}) source={} file={} records={}",
+                cellOrWorld, x, y, i,
+                i < espmFiles.size() ? espmFiles[i] : std::to_string(i),
+                records->size());
+            }
+            chunkRecordCount += records->size();
+            for (auto rec : *records) {
               auto mappedId =
                 espm::utils::GetMappedId(rec->GetId(), *combMapping);
-              assert(mappedId < 0xff000000);
-              LoadForm(mappedId);
+              if (mappedId >= 0xff000000) {
+                spdlog::warn(
+                  "Skipping exterior record with invalid mapping: source={} "
+                  "rawId={:#010x} mappedId={:#010x}",
+                  i < espmFiles.size() ? espmFiles[i] : std::to_string(i),
+                  rec->GetId(), mappedId);
+                continue;
+              }
+
+              try {
+                if (LoadFormFromRecord(br, rec, *combMapping, i, mappedId,
+                                       nullptr, false)) {
+                  loadedForms.push_back(mappedId);
+                }
+              } catch (const std::exception& e) {
+                spdlog::error(
+                  "Failed to load exterior record: source={} rawId={:#010x} "
+                  "mappedId={:#010x}: {}",
+                  i < espmFiles.size() ? espmFiles[i] : std::to_string(i),
+                  rec->GetId(), mappedId, e.what());
+              } catch (...) {
+                spdlog::error(
+                  "Failed to load exterior record: source={} rawId={:#010x} "
+                  "mappedId={:#010x}: unknown exception",
+                  i < espmFiles.size() ? espmFiles[i] : std::to_string(i),
+                  rec->GetId(), mappedId);
+              }
             }
           }
           // Do not keep "loaded" reference here since LoadForm would
           // invalidate this reference
           grids[cellOrWorld].loadedChunks[x][y] = true;
+          spdlog::debug(
+            "WorldState::GetNeighborsByPosition loaded chunk world={:#x} "
+            "chunk=({}, {}) records={} totalDeferredSubscriptionUpdates={}",
+            cellOrWorld, x, y, chunkRecordCount, loadedForms.size());
         }
       }
     }
+
+    size_t deferredIndex = 0;
+    for (auto formId : loadedForms) {
+      try {
+        if (deferredIndex % 100 == 0) {
+          spdlog::debug(
+            "WorldState::GetNeighborsByPosition deferred subscription "
+            "progress {}/{} form={:#x}",
+            deferredIndex, loadedForms.size(), formId);
+        }
+        auto& form = LookupFormByIdNoLoad(formId);
+        auto refr = form ? form->AsObjectReference() : nullptr;
+        if (refr) {
+          refr->ForceSubscriptionsUpdate();
+        }
+        ++deferredIndex;
+      } catch (const std::exception& e) {
+        spdlog::error(
+          "Failed deferred subscription update for loaded form {:#x}: {}",
+          formId, e.what());
+        ++deferredIndex;
+      } catch (...) {
+        spdlog::error(
+          "Failed deferred subscription update for loaded form {:#x}: "
+          "unknown exception",
+          formId);
+        ++deferredIndex;
+      }
+    }
+    const auto loadFinish = std::chrono::steady_clock::now();
+    const auto elapsedMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(loadFinish -
+                                                            loadStart)
+        .count();
+    spdlog::debug(
+      "WorldState::GetNeighborsByPosition finished chunk load world={:#x} "
+      "center=({}, {}) loadedForms={} elapsedMs={}",
+      cellOrWorld, cellX, cellY, loadedForms.size(), elapsedMs);
   }
 
   auto& neighbours =
@@ -879,9 +1059,12 @@ const std::set<MpObjectReference*>& WorldState::GetNeighborsByPosition(
 std::shared_ptr<std::vector<uint32_t>> WorldState::GetAllForms(
   uint32_t modIndex)
 {
-  if (modIndex >= std::size(pImpl->allFormsByModIndexCache)) {
+  if ((espm && modIndex >= espmFiles.size()) || (!espm && modIndex >= 0x100)) {
     spdlog::error("WorldState::GetAllForms - Invalid mod index {}", modIndex);
     return nullptr;
+  }
+  if (!espm && pImpl->allFormsByModIndexCache.empty()) {
+    pImpl->allFormsByModIndexCache.assign(0x100, nullptr);
   }
 
   auto& resCache = pImpl->allFormsByModIndexCache[modIndex];
@@ -892,12 +1075,14 @@ std::shared_ptr<std::vector<uint32_t>> WorldState::GetAllForms(
     // so we don't need de-duplicate in runtime
     std::unordered_set<uint32_t> formIds;
     for (const auto& p : forms) {
-      if ((p.first >> 24) == modIndex) {
+      const auto fileIdx = espm ? GetFileIdx(p.first) : (p.first >> 24);
+      if (fileIdx == modIndex) {
         formIds.insert(p.first);
       }
     }
     for (const auto& p : pImpl->changeFormsForDeferredLoad) {
-      if ((p.first >> 24) == modIndex) {
+      const auto fileIdx = espm ? GetFileIdx(p.first) : (p.first >> 24);
+      if (fileIdx == modIndex) {
         formIds.insert(p.first);
       }
     }
@@ -1160,6 +1345,12 @@ bool WorldState::IsNpcAllowed(uint32_t refrId) const noexcept
 
 uint32_t WorldState::GetFileIdx(uint32_t formId) const noexcept
 {
+  if (espm) {
+    const auto sourceIndex = espm->GetBrowser().GetFileIndexByFormId(formId);
+    if (sourceIndex >= 0) {
+      return static_cast<uint32_t>(sourceIndex);
+    }
+  }
   return formId >> 24;
 }
 

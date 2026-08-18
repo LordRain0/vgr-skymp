@@ -63,6 +63,21 @@ std::vector<std::string> Loader::GetFileNames() const noexcept
   return res;
 }
 
+bool Loader::IsLightPlugin(size_t fileIndex) const noexcept
+{
+  return combineBrowser && combineBrowser->IsLight(fileIndex);
+}
+
+uint16_t Loader::GetFullIndex(size_t fileIndex) const noexcept
+{
+  return combineBrowser ? combineBrowser->GetFullIndex(fileIndex) : 0xffff;
+}
+
+uint16_t Loader::GetLightIndex(size_t fileIndex) const noexcept
+{
+  return combineBrowser ? combineBrowser->GetLightIndex(fileIndex) : 0xffff;
+}
+
 std::map<std::string, Loader::FileInfo> Loader::GetFilesInfo() const
 {
   std::map<std::string, FileInfo> res;

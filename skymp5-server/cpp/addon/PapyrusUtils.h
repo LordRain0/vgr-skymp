@@ -188,7 +188,7 @@ public:
           auto desc = NapiHelper::ExtractString(obj.Get("desc"), "desc");
           auto type = NapiHelper::ExtractString(obj.Get("type"), "type");
 
-          const auto espmFileNames = wst.GetEspm().GetFileNames();
+          const auto& espmFileNames = wst.espmFiles;
           uint32_t id = FormDesc::FromString(desc).ToFormId(espmFileNames);
 
           if (type == "form") {

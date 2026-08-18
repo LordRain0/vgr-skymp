@@ -139,6 +139,9 @@ struct PluginInfo
 {
   uint8_t numPlugins;
   std::vector<std::string> pluginsName; // plugins[pluginCount]
+  bool hasLightPlugins = false;
+  uint16_t numLightPlugins = 0;
+  std::vector<std::string> lightPluginsName; // lightPlugins[lightPluginCount]
 };
 
 struct Header
@@ -205,6 +208,8 @@ struct SaveFile
   GlobalVariables::GlobalVariable* GetGlobalvariableByRefID(RefID& refID);
   int64_t FindIndexInFormIdArray(uint32_t refID);
   void OverwritePluginInfo(std::vector<std::string>& newPlaginNames);
+  void OverwritePluginInfo(std::vector<std::string>& newPluginNames,
+                           std::vector<std::string>& newLightPluginNames);
 };
 
 struct MiscStats

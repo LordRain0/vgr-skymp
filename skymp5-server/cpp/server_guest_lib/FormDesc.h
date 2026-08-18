@@ -22,6 +22,17 @@ public:
   static FormDesc FromFormId(uint32_t formId,
                              const std::vector<std::string>& files);
 
+  struct FileMetadata
+  {
+    bool isLight = false;
+    uint16_t fullIndex = 0xffff;
+    uint16_t lightIndex = 0xffff;
+  };
+
+  static void RegisterFileMetadata(
+    const std::vector<std::string>* files,
+    const std::vector<FileMetadata>& metadata);
+
   friend bool operator==(const FormDesc& left, const FormDesc& right)
   {
     return std::make_tuple(left.shortFormId, left.file) ==

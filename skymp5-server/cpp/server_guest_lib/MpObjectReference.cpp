@@ -1447,7 +1447,8 @@ void MpObjectReference::ProcessActivateNormal(
   auto t = base.rec->GetType();
 
   bool pickable = espm::utils::Is<espm::TREE>(t) ||
-    espm::utils::Is<espm::FLOR>(t) || espm::utils::IsItem(t);
+    espm::utils::Is<espm::FLOR>(t) ||
+    espm::utils::IsPickupableItem(base.rec, compressedFieldsCache);
   if (pickable && !IsHarvested()) {
     GivePickupItemsToActivationSource(activationSource, base);
     SetHarvested(true);

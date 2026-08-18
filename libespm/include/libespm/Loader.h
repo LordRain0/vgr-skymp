@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <filesystem>
 #include <fmt/format.h>
 #include <fstream>
@@ -41,6 +42,9 @@ public:
   const CombineBrowser& GetBrowser() const noexcept;
 
   std::vector<std::string> GetFileNames() const noexcept;
+  bool IsLightPlugin(size_t fileIndex) const noexcept;
+  uint16_t GetFullIndex(size_t fileIndex) const noexcept;
+  uint16_t GetLightIndex(size_t fileIndex) const noexcept;
 
   struct FileInfo
   {

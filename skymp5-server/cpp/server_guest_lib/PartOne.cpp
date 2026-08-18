@@ -361,7 +361,8 @@ void PartOne::AttachSaveStorage(
       auto baseId = changeForm.baseDesc.ToFormId(worldState.espmFiles);
       auto lookupRes = GetEspm().GetBrowser().LookupById(baseId);
 
-      if (lookupRes.rec && espm::utils::IsItem(lookupRes.rec->GetType())) {
+      if (espm::utils::IsPickupableItem(lookupRes.rec,
+                                        worldState.GetEspmCache())) {
         pImpl->logger->info("Skipping FF item {} (type is {}), will likely "
                             "overwrite at some point",
                             changeForm.formDesc.ToString(),

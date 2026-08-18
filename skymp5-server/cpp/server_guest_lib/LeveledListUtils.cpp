@@ -133,7 +133,7 @@ std::vector<uint32_t> LeveledListUtils::EvaluateTemplateChain(
     return result;
   }
 
-  uint32_t cursorFileIdx = headNpc.fileIdx;
+  size_t cursorFileIdx = headNpc.fileIdx;
   result.push_back(headNpc.ToGlobalId(headNpc.rec->GetId()));
 
   while (true) {
@@ -163,7 +163,7 @@ const espm::NPC_* LeveledListUtils::ConvertToNpc(
 }
 
 uint32_t LeveledListUtils::GetBaseTemplateId(
-  const espm::NPC_* cursor, uint32_t fileIdx,
+  const espm::NPC_* cursor, size_t fileIdx,
   const espm::CombineBrowser& browser)
 {
   espm::CompressedFieldsCache dummyCache;
@@ -178,7 +178,7 @@ uint32_t LeveledListUtils::GetBaseTemplateId(
 
 void LeveledListUtils::UpdateCursorAndResult(
   uint32_t templateId, espm::LookupResult& templateResult,
-  const espm::NPC_*& cursor, uint32_t& cursorFileIdx,
+  const espm::NPC_*& cursor, size_t& cursorFileIdx,
   std::vector<uint32_t>& result, const espm::CombineBrowser& browser,
   uint32_t pcLevel)
 {

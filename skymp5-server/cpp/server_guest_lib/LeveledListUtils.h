@@ -1,6 +1,7 @@
 #pragma once
 #include "libespm/Combiner.h"
 #include "libespm/espm.h"
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <vector>
@@ -33,13 +34,13 @@ private:
   static const espm::NPC_* ConvertToNpc(
     const espm::LookupResult& lookupResult);
 
-  static uint32_t GetBaseTemplateId(const espm::NPC_* cursor, uint32_t fileIdx,
+  static uint32_t GetBaseTemplateId(const espm::NPC_* cursor, size_t fileIdx,
                                     const espm::CombineBrowser& browser);
 
   static void UpdateCursorAndResult(uint32_t templateId,
                                     espm::LookupResult& templateResult,
                                     const espm::NPC_*& cursor,
-                                    uint32_t& cursorFileIdx,
+                                    size_t& cursorFileIdx,
                                     std::vector<uint32_t>& result,
                                     const espm::CombineBrowser& browser,
                                     uint32_t pcLevel);

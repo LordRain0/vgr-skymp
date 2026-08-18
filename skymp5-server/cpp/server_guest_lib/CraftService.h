@@ -41,9 +41,9 @@ private:
                       const espm::CombineBrowser& br, int espmIdx);
 
   bool EvaluateCraftRecipeConditions(MpActor* me,
+                                     const espm::LookupResult& lookupRes,
                                      const espm::COBJ::Data& recipeData);
 
   PartOne& partOne;
-  std::vector<espm::LookupResult> allRecipes;
   espm::CompressedFieldsCache cache;
 };
