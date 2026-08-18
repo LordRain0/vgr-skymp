@@ -35,6 +35,7 @@ module.exports = function (mp) {
 
   // Voice mode cycling: whisper -> talk -> yell, ranges in game units (same units the agent compares against)
   const modeKey = voice.modeKey || 58; // DIK 58 = Caps Lock
+  const pttKeyCode = voice.pttKey || 47; // DIK 47 = V, drives the transmit banner
   const MODE_ORDER = ["whisper", "talk", "yell"];
   const DEFAULT_MODE = "talk";
   const modeRanges = Object.assign({ whisper: 500, talk: 1500, yell: 4500 }, voice.modes || {});
@@ -182,6 +183,10 @@ module.exports = function (mp) {
       ctx.state.vgrVoiceModeCycle = { keyDown: false };
     }
     ctx.sp.on("buttonEvent", (e) => {
+      if (e.code === ${pttKeyCode}) {
+        ctx.sp.browser.executeJavaScript("window.vgrVoiceModeShow && window.vgrVoiceModeShow(" + (e.isPressed ? "true" : "false") + ")");
+        return;
+      }
       if (e.code !== ${modeKey}) return;
       if (e.isPressed) {
         if (ctx.state.vgrVoiceModeCycle.keyDown) return;

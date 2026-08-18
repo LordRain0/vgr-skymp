@@ -1,7 +1,8 @@
 #vgr-voice-mode {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  left: 50%;
+  bottom: 5vh;
+  transform: translateX(-50%);
   z-index: 90000;
   display: flex;
   align-items: center;
@@ -17,23 +18,36 @@
   pointer-events: none;
   user-select: none;
   opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.25s ease;
 }
 
 #vgr-voice-mode.visible {
   opacity: 1;
 }
 
-/* Image icon slot; hidden until a mode icon src is configured */
+/* With a real graphic the badge chrome disappears and only the art shows */
+#vgr-voice-mode.has-icon {
+  border: none;
+  background: none;
+  padding: 0;
+}
+
 #vgr-voice-mode .voice-mode-icon {
   display: none;
-  width: 22px;
-  height: 22px;
+  width: 9vw;
+  min-width: 110px;
+  max-width: 180px;
+  height: auto;
   object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.8));
 }
 
 #vgr-voice-mode.has-icon .voice-mode-icon {
   display: block;
+}
+
+#vgr-voice-mode.has-icon .voice-mode-label {
+  display: none;
 }
 
 #vgr-voice-mode.mode-whisper .voice-mode-label {
