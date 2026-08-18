@@ -338,6 +338,9 @@ ipcMain.handle('hotkeys:load', () => {
       faction:    numOrNull(c.factionMenuKeyCode),
       interact:   numOrNull(c.interactMenuKeyCode),
       personal:   numOrNull(c.personalMenuKeyCode),
+      voicePtt:       numOrNull(c.voicePushToTalkKeyCode),
+      voiceModeCycle: numOrNull(c.voiceModeCycleKeyCode),
+      adminMenu:      numOrNull(c.adminMenuKeyCode),
     }
   } catch (err) {
     return { ok: false, error: err.message }
@@ -354,6 +357,9 @@ ipcMain.handle('hotkeys:save', (_e, h) => {
     if (typeof h.faction === 'number')     c.factionMenuKeyCode = h.faction
     if (typeof h.interact === 'number')    c.interactMenuKeyCode = h.interact
     if (typeof h.personal === 'number')    c.personalMenuKeyCode = h.personal
+    if (typeof h.voicePtt === 'number')       c.voicePushToTalkKeyCode = h.voicePtt
+    if (typeof h.voiceModeCycle === 'number') c.voiceModeCycleKeyCode  = h.voiceModeCycle
+    if (typeof h.adminMenu === 'number')      c.adminMenuKeyCode       = h.adminMenu
     const p = clientSettingsPath()
     fs.mkdirSync(path.dirname(p), { recursive: true })
     fs.writeFileSync(p, JSON.stringify(c, null, 2))
@@ -1890,6 +1896,9 @@ async function installClientFilesCore(skyrimPath, srv, serverInfo, options = {})
     })
 
     // 3. Extract either directly into Skyrim, or as the highest-priority MO2 mod.
+    // The zip's stock skymp5-client-settings.txt would clobber hotkey rebinds; snapshot it so writeClientSettings sees the pre-extract file.
+    let settingsSnapshot = null
+    try { settingsSnapshot = fs.readFileSync(clientSettingsDest, 'utf8') } catch { /* first install */ }
     let extracted
     if (viaMO2) {
       const result = await mo2.installClientZipAsMod(tempZip, serverVersion, signal, (file, i, total) => {
@@ -1902,6 +1911,12 @@ async function installClientFilesCore(skyrimPath, srv, serverInfo, options = {})
       }, signal)
     }
     log(`[install] extracted ${extracted} client file(s)`)
+    if (settingsSnapshot !== null) {
+      try {
+        fs.mkdirSync(path.dirname(clientSettingsDest), { recursive: true })
+        fs.writeFileSync(clientSettingsDest, settingsSnapshot)
+      } catch { /* fall back to zip copy */ }
+    }
     ensureClientDirs(skyrimPath, viaMO2)
 
     if (!viaMO2 && !preloaderPresent(skyrimPath)) {
@@ -2449,7 +2464,16 @@ async function runMO2Install({ deepVerify = false } = {}) {
  */
 function writeClientSettings(destPath, srv, serverInfo) {
   // Start fresh every time - do not preserve stale keys from previous writes.
+  // Exception: user hotkey bindings, owned by the Settings tab; a launch must never reset them to defaults.
+  const HOTKEY_KEYS = [
+    'chatFocusKeyCodes', 'freeCursorKeyCode', 'housingMenuKeyCode',
+    'factionMenuKeyCode', 'interactMenuKeyCode', 'personalMenuKeyCode',
+    'voicePushToTalkKeyCode', 'voiceModeCycleKeyCode', 'adminMenuKeyCode',
+  ]
+  let prev = {}
+  try { prev = JSON.parse(fs.readFileSync(destPath, 'utf8')) || {} } catch { /* first run */ }
   const settings = {}
+  for (const k of HOTKEY_KEYS) if (prev[k] !== undefined) settings[k] = prev[k]
 
   settings['server-ip']   = srv.address
   settings['server-port'] = Number(srv.port)

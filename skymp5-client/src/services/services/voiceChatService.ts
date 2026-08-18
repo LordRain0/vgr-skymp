@@ -16,6 +16,7 @@ const RECONNECT_COOLDOWN_MS = 5000;
 export class VoiceChatService extends ClientListener {
   private voiceChatAvailable = false;
   private pttKey = DEFAULT_PTT_KEY;
+  private localPttKey: number | null = null;
   private pttPressed = false;
   private lastReconnectRequestTime = 0;
   // Maps LiveKit identity -> server-side actor refrId
@@ -23,6 +24,16 @@ export class VoiceChatService extends ClientListener {
 
   constructor(private sp: Sp, private controller: CombinedController) {
     super();
+
+    // Launcher-written binding wins over the server's voiceConfig pttKey
+    this.localPttKey = this.readLocalKeyOverride("voicePushToTalkKeyCode");
+    if (this.localPttKey !== null) {
+      this.pttKey = this.localPttKey;
+    }
+
+    // Overrides go to the CEF page even without native voice; gamemode UI code reads them there
+    this.injectKeyOverrides();
+    this.controller.emitter.on("browserWindowLoaded", () => this.injectKeyOverrides());
 
     // Check if voice chat functions exist on the native plugin
     this.voiceChatAvailable = typeof this.sp.mpClientPlugin?.initVoiceChat === "function";
@@ -58,6 +69,35 @@ export class VoiceChatService extends ClientListener {
     logTrace(this, "Voice chat service initialized");
   }
 
+  // Reads a DxScanCode binding written by the launcher into skymp5-client-settings.txt
+  private readLocalKeyOverride(settingName: string): number | null {
+    try {
+      const settings = this.sp.settings["skymp5-client"] as Record<string, unknown> | undefined;
+      const value = settings ? settings[settingName] : undefined;
+      if (typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 0xff) {
+        return value;
+      }
+    } catch (_) {
+      // settings block missing, fall through
+    }
+    return null;
+  }
+
+  // Publishes launcher key overrides to the CEF page as window.vgrKeyOverrides
+  // Gamemode-injected browser code reads modeKey/adminMenuKey from there
+  private injectKeyOverrides() {
+    const overrides = {
+      pttKey: this.localPttKey,
+      modeKey: this.readLocalKeyOverride("voiceModeCycleKeyCode"),
+      adminMenuKey: this.readLocalKeyOverride("adminMenuKeyCode"),
+    };
+    try {
+      this.sp.browser.executeJavaScript(`window.vgrKeyOverrides = ${JSON.stringify(overrides)};`);
+    } catch (e) {
+      logTrace(this, "injectKeyOverrides failed: " + String(e));
+    }
+  }
+
   private onDisconnected() {
     this.shutdownVoice();
   }
@@ -85,8 +125,10 @@ export class VoiceChatService extends ClientListener {
     // Shutdown existing voice if any
     this.shutdownVoice();
 
-    // Configure PTT key
-    if (config.pttKey !== undefined) {
+    // Configure PTT key; the launcher-written local binding beats the server value
+    if (this.localPttKey !== null) {
+      this.pttKey = this.localPttKey;
+    } else if (config.pttKey !== undefined) {
       this.pttKey = config.pttKey;
     }
 

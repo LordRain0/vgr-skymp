@@ -182,12 +182,17 @@ module.exports = function (mp) {
     if (!ctx.state.vgrVoiceModeCycle) {
       ctx.state.vgrVoiceModeCycle = { keyDown: false };
     }
+    // Launcher-written rebinds in skymp5-client-settings.txt win over server defaults
+    let vgrVoiceLocal = {};
+    try { vgrVoiceLocal = ctx.sp.settings["skymp5-client"] || {}; } catch (e) { }
+    const vgrVoiceModeKey = Number(vgrVoiceLocal.voiceModeCycleKeyCode) > 0 ? Number(vgrVoiceLocal.voiceModeCycleKeyCode) : ${modeKey};
+    const vgrVoicePttKey = Number(vgrVoiceLocal.voicePushToTalkKeyCode) > 0 ? Number(vgrVoiceLocal.voicePushToTalkKeyCode) : ${pttKeyCode};
     ctx.sp.on("buttonEvent", (e) => {
-      if (e.code === ${pttKeyCode}) {
+      if (e.code === vgrVoicePttKey) {
         ctx.sp.browser.executeJavaScript("window.vgrVoiceModeShow && window.vgrVoiceModeShow(" + (e.isPressed ? "true" : "false") + ")");
         return;
       }
-      if (e.code !== ${modeKey}) return;
+      if (e.code !== vgrVoiceModeKey) return;
       if (e.isPressed) {
         if (ctx.state.vgrVoiceModeCycle.keyDown) return;
         ctx.state.vgrVoiceModeCycle.keyDown = true;

@@ -478,6 +478,12 @@ function vgrInitRegistryUI() {
 			ui.dikCode = null;
 		}
 	}
+
+	// Launcher hotkey rebinds, delivered by the client as window.vgrKeyOverrides
+	const keyOverrides = window.vgrKeyOverrides || {};
+	if (Number(keyOverrides.adminMenuKey) > 0 && VGR_REGISTERED_UI.admin_menu) {
+		VGR_REGISTERED_UI.admin_menu.dikCode = Number(keyOverrides.adminMenuKey);
+	}
 	
 	// Add DIK codes dynamically after object creation
 	for (const [key, special] of Object.entries(VGR_KEY_SPECIAL)) {

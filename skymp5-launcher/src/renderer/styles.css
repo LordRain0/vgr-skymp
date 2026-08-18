@@ -1540,7 +1540,27 @@ select.setting-input option {
 
 .settings-grid .grid-field input:focus { border-color: var(--line-strong); }
 
-select.hotkey-select { max-width: 220px; }
+/* Hotkey rows: press-to-bind button + reset-to-default */
+.hotkey-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+button.hotkey-btn {
+    max-width: 220px;
+    text-align: left;
+    cursor: pointer;
+}
+
+button.hotkey-btn:hover:not(:disabled) { border-color: var(--line-strong); }
+
+button.hotkey-btn--capturing {
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+button.hotkey-reset { flex: none; }
 
 /* ── Metrics ────────────────────────────────────────────────────────────── */
 .metrics-grid {
