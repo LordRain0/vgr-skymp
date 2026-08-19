@@ -639,6 +639,38 @@ function findDownloadByFileId(fileId) {
   return null
 }
 
+// Delete downloaded archives the manifest no longer references, so renamed
+// releases (e.g. "Mod 1.1.7z" -> "Mod 1.2.7z") don't pile up in downloads\.
+// Kept: every current archive name, renamed Nexus files whose .meta fileId
+// still matches, SKSE (installed outside the manifest), and non-archive files.
+function pruneStaleDownloads(manifest) {
+  const dir = getDownloadsDir()
+  let names
+  try { names = fs.readdirSync(dir) } catch { return { removed: [] } }
+  const archives = Array.isArray(manifest && manifest.archives) ? manifest.archives : []
+  const keepNames = new Set(archives.map(a => String(a.name || '').toLowerCase()))
+  const keepFileIds = new Set(archives.map(a => a.source && a.source.fileId).filter(Boolean).map(Number))
+  const removed = []
+  for (const name of names) {
+    if (!/\.(7z|zip|rar)$/i.test(name)) continue
+    if (/^skse/i.test(name)) continue
+    if (keepNames.has(name.toLowerCase())) continue
+    let fileId = null
+    try {
+      const meta = fs.readFileSync(path.join(dir, name + '.meta'), 'utf8')
+      fileId = Number((meta.match(/^fileID\s*=\s*(\d+)/im) || [])[1]) || null
+    } catch { /* no meta */ }
+    if (fileId && keepFileIds.has(fileId)) continue
+    try {
+      for (const p of [name, name + '.meta', name + '.unfinished']) {
+        fs.rmSync(lp(path.join(dir, p)), { force: true })
+      }
+      removed.push(name)
+    } catch { /* locked file - retry next install */ }
+  }
+  return { removed }
+}
+
 // Download any URL into the MO2 downloads folder. Returns the archive name.
 async function downloadToDownloads(url, fileName, onProgress, { overwrite = false } = {}) {
   const dest = path.join(getDownloadsDir(), fileName)
@@ -1762,6 +1794,7 @@ module.exports = {
   ensureInstance,
   registerNxmHandler,
   downloadToDownloads,
+  pruneStaleDownloads,
   findDownloadByFileId,
   findArchiveByHash,
   verifyArchive,

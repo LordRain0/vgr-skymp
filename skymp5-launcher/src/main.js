@@ -2299,6 +2299,8 @@ async function runMO2Install({ deepVerify = false } = {}) {
 
     if (modsToInstall.length === 0 && !needsRoot) {
       finishOrder()
+      const pruned = mo2.pruneStaleDownloads(manifest)
+      if (pruned.removed.length) log(`[prune] removed ${pruned.removed.length} stale archive(s): ${pruned.removed.join(', ')}`)
       store.set('modpackState', 'ready')
       send('install:complete', { success: true, mo2: true, upToDate: true, modsTotal: manifest.mods.length })
       return
@@ -2534,6 +2536,9 @@ async function runMO2Install({ deepVerify = false } = {}) {
 
     // 5. Match MO2 priority + plugin order, record the installed version
     finishOrder()
+
+    const pruned = mo2.pruneStaleDownloads(manifest)
+    if (pruned.removed.length) log(`[prune] removed ${pruned.removed.length} stale archive(s): ${pruned.removed.join(', ')}`)
 
     store.set('modpackState', 'ready')
     send('install:complete', {
