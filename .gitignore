@@ -2,6 +2,9 @@ build
 # Live server runtime deployed inside the repo (plugins, world data,
 # server-settings.json with secrets) - never commit it.
 /server/
+
+# VGR gamemode is proprietary (not under AGPL) and stays out of the public repo
+/vgr-gamemode/
 .clang-tidy
 .linter
 node_modules
