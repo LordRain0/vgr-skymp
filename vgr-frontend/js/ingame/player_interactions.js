@@ -307,6 +307,7 @@
     if (!data) return;
     if (data.action === "prompt") return showPrompt(data);
     if (data.action === "promptClear") return hidePrompt();
+    if (data.action === "pendingClear") return setPending("");
     if (data.action === "toast") {
       // A toast is a terminal server reply; always release the pending lock
       setPending("");
