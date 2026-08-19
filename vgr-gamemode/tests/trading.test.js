@@ -28,6 +28,19 @@ test("finalizeTrade rejects an offer the inventory no longer covers", () => {
   assert.deepEqual(invB.entries, []);
 });
 
+test("finalizeTrade moves a partial stack and leaves the remainder", () => {
+  const invA = { entries: [{ baseId: 0x123, count: 20 }, { baseId: 0x0000000f, count: 50 }] };
+  const invB = { entries: [] };
+
+  const result = trade.finalizeTrade(invA, invB, [{ baseId: 0x123, count: 7 }], []);
+
+  // A keeps 13 of the 20 stack, B receives exactly 7.
+  assert.equal(trade.getItemCount(result.invA, 0x123), 13);
+  assert.equal(trade.getItemCount(result.invB, 0x123), 7);
+  assert.equal(trade.getItemCount(result.invA, 0x0000000f), 50);
+  assert.deepEqual(result.invB.entries, [{ baseId: 0x123, count: 7 }]);
+});
+
 test("worn items are not counted as tradable at finalize", () => {
   const inv = { entries: [{ baseId: 0x123, count: 1, worn: true }, { baseId: 0x123, count: 1 }] };
 

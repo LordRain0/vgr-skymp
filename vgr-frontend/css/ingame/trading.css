@@ -705,3 +705,87 @@
 #vgr-game-layer .right-offer-panel .offer-item:hover {
   transform: none;
 }
+
+/* Stack amount picker */
+#vgr-game-layer .qty-picker-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.58);
+  z-index: 20;
+}
+
+#vgr-game-layer .qty-picker-overlay[hidden] {
+  display: none;
+}
+
+#vgr-game-layer .qty-picker-modal {
+  min-width: 300px;
+  max-width: 340px;
+  padding: 18px 20px 20px;
+  text-align: center;
+  background:
+        linear-gradient(180deg, rgba(14, 14, 14, 0.96), rgba(3, 3, 3, 0.94));
+  border: 1px solid var(--gold-line);
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+#vgr-game-layer .qty-picker-name {
+  margin: 8px 0 12px;
+  color: var(--parchment-bright);
+  font-size: 15px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .qty-picker-input {
+  width: 100%;
+  text-align: center;
+  font-size: 15px;
+}
+
+#vgr-game-layer .qty-picker-max {
+  margin-top: 6px;
+  color: rgba(214, 194, 160, 0.46);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .qty-picker-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+
+#vgr-game-layer .qty-quick-button {
+  height: 30px;
+  color: var(--parchment-soft);
+  background: rgba(2, 2, 2, 0.42);
+  border: 1px solid rgba(148, 109, 62, 0.27);
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: border-color 130ms ease, color 130ms ease;
+}
+
+#vgr-game-layer .qty-quick-button:hover {
+  color: var(--parchment-bright);
+  border-color: rgba(197, 163, 110, 0.72);
+}
+
+#vgr-game-layer .qty-picker-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+#vgr-game-layer .skyrim-button.compact {
+  height: 36px;
+  min-width: 110px;
+}

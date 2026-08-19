@@ -565,15 +565,20 @@ module.exports = (mp) => {
     const isA = pcFormId === session.playerA;
     const offerKey = isA ? "offerA" : "offerB";
     const inv = actors.inventory(pcFormId);
-    const amount = Math.max(1, Math.floor(Number(count) || 1));
+    const requested = Math.max(1, Math.floor(Number(count) || 1));
 
     if (baseId === VGR_GOLD_BASE_ID) return false;
-    if (getItemCount(inv, baseId) < amount) return false;
+    const available = getItemCount(inv, baseId);
+    if (available <= 0) return false;
 
     const offer = normalizeOffer(session[offerKey]);
     const existing = offer.find((e) => e.baseId === baseId);
     const alreadyOffered = existing ? existing.count : 0;
-    if (getItemCount(inv, baseId) < alreadyOffered + amount) return false;
+
+    // Never trust the client count: clamp to what the inventory still covers.
+    const headroom = available - alreadyOffered;
+    if (headroom <= 0) return false;
+    const amount = Math.min(requested, headroom);
 
     if (existing) {
       existing.count += amount;

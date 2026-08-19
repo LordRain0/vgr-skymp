@@ -188,6 +188,7 @@ function openTradingMenu(data = demoTradeData) {
 
 function closeTradingMenu() {
     tradeState.isOpen = false;
+    closeQtyPicker();
     elements["skyrim-trade"].classList.remove("visible");
     elements["skyrim-trade"].setAttribute("aria-hidden", "true");
     triggerTradeAction("close", {});
@@ -327,6 +328,7 @@ function renderTradeMenu() {
     renderSelectedItem();
     renderTotals();
     renderAcceptedStatus();
+    refreshQtyPicker();
 }
 
 function renderInventory(side) {
@@ -363,7 +365,7 @@ function renderInventory(side) {
         `;
 
         row.addEventListener("click", () => selectItem(side, item.id));
-        row.addEventListener("dblclick", () => addItemToOffer(side, item.id, 1));
+        row.addEventListener("dblclick", () => requestAddToOffer(side, item.id));
         container.appendChild(row);
     });
 }
@@ -467,6 +469,178 @@ function selectOfferItem(side, itemId) {
 
     tradeState.selected = { side, location: "offer", item: { ...item } };
     renderSelectedItem();
+}
+
+// Stacks at or above this size open the amount picker instead of adding one.
+const QTY_PICKER_MIN_STACK = 5;
+
+const qtyPickerState = { open: false, side: null, itemId: null };
+let qtyPickerEls = null;
+
+// Builds the amount picker DOM once and reuses it afterwards.
+function ensureQtyPicker() {
+    if (qtyPickerEls) return qtyPickerEls;
+
+    const overlay = document.createElement("div");
+    overlay.className = "qty-picker-overlay";
+    overlay.hidden = true;
+
+    const modal = document.createElement("div");
+    modal.className = "qty-picker-modal";
+
+    const kicker = document.createElement("span");
+    kicker.className = "trade-small-label";
+    kicker.textContent = "Select Amount";
+
+    const name = document.createElement("div");
+    name.className = "qty-picker-name";
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "gold-input qty-picker-input";
+    input.min = "1";
+    input.step = "1";
+
+    const max = document.createElement("div");
+    max.className = "qty-picker-max";
+
+    const quick = document.createElement("div");
+    quick.className = "qty-picker-quick";
+
+    const makeQuickButton = (label, pick) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "qty-quick-button";
+        button.textContent = label;
+        button.addEventListener("click", () => {
+            const limit = Math.max(1, Math.floor(Number(input.max) || 1));
+            input.value = String(Math.max(1, Math.min(pick(limit), limit)));
+            input.focus();
+        });
+        return button;
+    };
+
+    quick.appendChild(makeQuickButton("1", () => 1));
+    quick.appendChild(makeQuickButton("Half", (limit) => Math.floor(limit / 2)));
+    quick.appendChild(makeQuickButton("Max", (limit) => limit));
+
+    const actions = document.createElement("div");
+    actions.className = "qty-picker-actions";
+
+    const confirmButton = document.createElement("button");
+    confirmButton.type = "button";
+    confirmButton.className = "skyrim-button compact";
+    confirmButton.textContent = "Confirm";
+    confirmButton.addEventListener("click", confirmQtyPicker);
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "skyrim-button muted compact";
+    cancelButton.textContent = "Cancel";
+    cancelButton.addEventListener("click", () => closeQtyPicker());
+
+    actions.appendChild(confirmButton);
+    actions.appendChild(cancelButton);
+
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            confirmQtyPicker();
+        } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            closeQtyPicker();
+        }
+    });
+
+    // Clicking the dimmed backdrop cancels without adding anything.
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeQtyPicker();
+    });
+
+    modal.appendChild(kicker);
+    modal.appendChild(name);
+    modal.appendChild(input);
+    modal.appendChild(max);
+    modal.appendChild(quick);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+
+    const host = elements["skyrim-trade"] || document.body;
+    host.appendChild(overlay);
+
+    qtyPickerEls = { overlay, name, input, max };
+    return qtyPickerEls;
+}
+
+function openQtyPicker(side, itemId) {
+    const item = getListBySide(side).find((entry) => entry.id === itemId);
+    if (!item || item.qty <= 0) return;
+
+    const els = ensureQtyPicker();
+    qtyPickerState.open = true;
+    qtyPickerState.side = side;
+    qtyPickerState.itemId = itemId;
+    els.name.textContent = item.name;
+    els.max.textContent = `of ${item.qty} available`;
+    els.input.max = String(item.qty);
+    els.input.value = "1";
+    els.overlay.hidden = false;
+    window.setTimeout(() => {
+        els.input.focus();
+        els.input.select();
+    }, 0);
+}
+
+function closeQtyPicker() {
+    if (!qtyPickerState.open) return;
+    qtyPickerState.open = false;
+    qtyPickerState.side = null;
+    qtyPickerState.itemId = null;
+    if (qtyPickerEls) qtyPickerEls.overlay.hidden = true;
+}
+
+function confirmQtyPicker() {
+    if (!qtyPickerState.open || !qtyPickerEls) return;
+    const side = qtyPickerState.side;
+    const itemId = qtyPickerState.itemId;
+    const item = getListBySide(side).find((entry) => entry.id === itemId);
+    if (!item || item.qty <= 0) {
+        closeQtyPicker();
+        return;
+    }
+
+    const max = Math.max(1, Math.floor(Number(item.qty) || 1));
+    const raw = Math.floor(Number(qtyPickerEls.input.value) || 1);
+    const qty = Math.max(1, Math.min(raw, max));
+    closeQtyPicker();
+    addItemToOffer(side, itemId, qty);
+}
+
+// Keeps an open picker in sync when a server push changes the stack.
+function refreshQtyPicker() {
+    if (!qtyPickerState.open || !qtyPickerEls) return;
+    const item = getListBySide(qtyPickerState.side).find((entry) => entry.id === qtyPickerState.itemId);
+    if (!item || item.qty <= 0) {
+        closeQtyPicker();
+        return;
+    }
+    qtyPickerEls.input.max = String(item.qty);
+    qtyPickerEls.max.textContent = `of ${item.qty} available`;
+    const current = Math.floor(Number(qtyPickerEls.input.value) || 1);
+    if (current > item.qty) qtyPickerEls.input.value = String(item.qty);
+}
+
+// Small stacks keep the legacy add-one behavior; larger stacks ask for an amount.
+function requestAddToOffer(side, itemId) {
+    if (side !== "player") return;
+    const item = getListBySide(side).find((entry) => entry.id === itemId);
+    if (!item || item.qty <= 0) return;
+    if (item.qty < QTY_PICKER_MIN_STACK) {
+        addItemToOffer(side, itemId, 1);
+        return;
+    }
+    openQtyPicker(side, itemId);
 }
 
 function addItemToOffer(side, itemId, qty = 1) {
@@ -693,7 +867,7 @@ function bindEvents() {
 
     elements["offer-selected"].addEventListener("click", () => {
         if (!tradeState.selected) return;
-        addItemToOffer(tradeState.selected.side, tradeState.selected.item.id, 1);
+        requestAddToOffer(tradeState.selected.side, tradeState.selected.item.id);
     });
 
     elements["player-gold"].addEventListener("input", (event) => {
@@ -708,6 +882,11 @@ function bindEvents() {
     });
 
     document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && qtyPickerState.open) {
+            event.preventDefault();
+            closeQtyPicker();
+            return;
+        }
         if (event.key === "Escape" && tradeState.isOpen) {
             closeTradingMenu();
             return;
@@ -790,6 +969,7 @@ window.vgr_TradingUI = function (eventName, payload) {
 
 window.vgrTradingClose = function (reason) {
     tradeState.isOpen = false;
+    closeQtyPicker();
     if (!ensureTradingUiReady()) return;
     elements["skyrim-trade"].classList.remove("visible");
     elements["skyrim-trade"].setAttribute("aria-hidden", "true");
@@ -809,6 +989,7 @@ window.addEventListener("vgr:ui_manager:open:trading", () => {
 
 window.addEventListener("vgr:ui_manager:close:trading", () => {
     if (!ensureTradingUiReady()) return;
+    closeQtyPicker();
     elements["skyrim-trade"].classList.remove("visible");
     elements["skyrim-trade"].setAttribute("aria-hidden", "true");
     tradeState.isOpen = false;
