@@ -9,13 +9,11 @@
     "PG_Patcher_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/PG_Patcher_Output.7z",
     "TexGen_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/TexGen_Output.7z",
     "DynDOLOD_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/DynDOLOD_Output.7z",
-    "CS_ShaderCache_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/CS_ShaderCache_Output.7z"
+    "CS_ShaderCache_Output.7z": "https://vengefulrealms.com/VengefulRealms-Data/VGR-Mods/CS_ShaderCache_Output.7z",
+    "VengefulRealms-Additions 1.2.7z": "https://vengefulrealms.com/VengefulRealms-Data/VengefulRealms-Mods/VengefulRealms-Additions%201.2.7z"
   },
   "// gameNames": "Optional per-archive Nexus domain override, keyed by archive filename: 'Skyrim' (classic/LE) or 'SkyrimSE'. Wins over the automatic form-43 plugin detection.",
-  "gameNames": {
-  },
+  "gameNames": {},
   "// rootInclude": "Game-root files (relative to --game) to capture. ONLY files listed here are captured - nothing is auto-detected. SKSE itself is installed separately by the launcher.",
-  "rootInclude": [
-	
-  ]
+  "rootInclude": []
 }
