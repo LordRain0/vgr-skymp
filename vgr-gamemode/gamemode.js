@@ -121,7 +121,6 @@ require(path.join(extensionsDir, 'vgr_access_control.js'))(mp);
 require(path.join(extensionsDir, 'vgr_nameplates.js'))(mp);
 require(path.join(extensionsDir, 'vgr_player_interactions.js'))(mp);
 require(path.join(extensionsDir, 'vgr_respawn.js'))(mp);
-require(path.join(extensionsDir, 'vgr_actor_hygiene.js'))(mp);
 require(path.join(extensionsDir, 'vgr_restoration.js'))(mp);
 
 
