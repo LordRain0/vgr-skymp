@@ -735,13 +735,19 @@ to {
 #vgr-game-layer .remove-btn::before,
 #vgr-game-layer .popup-close::before {
   content: "\00D7"; /* multiplication-sign close glyph via ASCII-safe CSS escape */
+  /* Centered explicitly: .popup-close is not an .icon-btn, so without this the
+     glyph renders from the static top-left corner of the button */
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: auto;
   height: auto;
   color: rgba(214, 194, 160, 0.86);
-  font-size: 16px;
+  font-size: 22px;
   line-height: 1;
   font-family: Georgia, "Times New Roman", serif;
   transform: translate(-50%, -52%);
+  pointer-events: none;
 }
 
 #vgr-game-layer .popup-close {
