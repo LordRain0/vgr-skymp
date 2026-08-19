@@ -29,6 +29,11 @@ module.exports = (mp) => {
   const SESSION_IDLE_MS = Math.max(10000, Number(config.sessionIdleMs) || 60000);
   const SESSION_ABSOLUTE_MS = Math.max(60000, Number(config.sessionAbsoluteMs) || 300000);
   const SEARCH_RATE_MS = Math.max(250, Number(config.searchRateMs) || 700);
+  // Vanilla lock policy: "keyOnly" blocks only key-required locks (level 255),
+  // "all" blocks every XLOC-locked ref, "off" disables vanilla enforcement.
+  const VANILLA_LOCK_POLICIES = ["keyOnly", "all", "off"];
+  const VANILLA_LOCK_POLICY = VANILLA_LOCK_POLICIES.indexOf(config.vanillaLockPolicy) !== -1 ? config.vanillaLockPolicy : "keyOnly";
+  const LOCK_LEVEL_REQUIRES_KEY = 255;
 
   let MongoClient = null;
   try {
@@ -50,6 +55,9 @@ module.exports = (mp) => {
   const openUiActors = new Set();
   const defaultActivatePass = new Set();
   const searchRate = new Map();
+  // targetFormId -> { lockLevel, keyFormId } for XLOC-locked refs, or null.
+  // REFR lock data in espm is static, so entries never expire.
+  const vanillaLockCache = new Map();
 
   let accessClientPromise = null;
   let backendClientPromise = null;
@@ -257,14 +265,12 @@ module.exports = (mp) => {
         const classified = classifyFromRecord(lookup && lookup.record, baseDesc);
         if (classified) return classified;
       } catch (e) {
-        // Continue to container runtime fallback.
+        // Not an espm-backed base record; fall through to return null.
       }
     }
-    try {
-      if (mp.get(targetFormId, "baseContainerAdded")) return { objectType: "container", displayName: "Container" };
-    } catch (e) {
-      // Not a supported runtime container.
-    }
+    // Note: an earlier runtime fallback probed mp.get(targetFormId, "baseContainerAdded").
+    // That property was never registered, so the native layer logged a full exception
+    // block on every call and the probe never succeeded. It was removed on purpose.
     return null;
   }
 
@@ -915,6 +921,104 @@ module.exports = (mp) => {
     }
   }
 
+  // ----- vanilla lock enforcement -----
+  // The client "unlock" console command is purely local: the client unlocks its
+  // own copy of the door and then sends a normal activate. libespm never parses
+  // XLOC, so without this check the server has no concept of vanilla locks and
+  // would open or teleport any unregistered locked door. We parse XLOC from the
+  // REFR record ourselves and enforce it for doors and containers that are not
+  // registered in the access control database.
+  //
+  // XLOC byte layout (REFR subrecord, little endian):
+  //   uint8  at offset 0: lock level (255 means a key is required)
+  //   bytes  1..3: padding
+  //   uint32 at offset 4: key formId, local to the defining file; convert to a
+  //          global id via the lookup's toGlobalRecordId
+  //   remaining bytes: flags (unused here)
+  //
+  // Known limitation, intentionally unsolved: same-cell swing doors still play
+  // their open animation on the cheater's own screen because that animation is
+  // client side. Server state and what neighbors see stay closed, and teleport
+  // doors are blocked outright.
+
+  function vanillaFieldBytes(data) {
+    if (data == null) return null;
+    if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) return Array.from(data);
+    if (ArrayBuffer.isView(data)) return Array.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+    if (Array.isArray(data)) return data.map((b) => Number(b) & 0xff);
+    if (typeof data === "object") {
+      const keys = Object.keys(data).filter((key) => /^\d+$/.test(key)).sort((a, b) => Number(a) - Number(b));
+      if (keys.length) return keys.map((key) => Number(data[key]) & 0xff);
+    }
+    return null;
+  }
+
+  function readUint32LE(bytes, offset) {
+    return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+  }
+
+  function parseXlocBytes(bytes) {
+    // Defensive length check: we only need the level byte and the key formId.
+    if (!Array.isArray(bytes) || bytes.length < 8) return null;
+    return { lockLevel: bytes[0] & 0xff, localKeyId: readUint32LE(bytes, 4) };
+  }
+
+  function getVanillaLock(targetFormId) {
+    if (vanillaLockCache.has(targetFormId)) return vanillaLockCache.get(targetFormId);
+    let lock = null;
+    try {
+      const lookup = mp.lookupEspmRecordById(targetFormId);
+      const record = lookup && lookup.record;
+      const fields = record && Array.isArray(record.fields) ? record.fields : [];
+      for (let i = 0; i < fields.length; i++) {
+        const field = fields[i];
+        if (String(field && field.type ? field.type : "").toUpperCase() !== "XLOC") continue;
+        const parsed = parseXlocBytes(vanillaFieldBytes(field.data));
+        if (!parsed) continue;
+        let keyFormId = 0;
+        if (parsed.localKeyId) {
+          try {
+            keyFormId = typeof lookup.toGlobalRecordId === "function"
+              ? Number(lookup.toGlobalRecordId(parsed.localKeyId)) >>> 0
+              : parsed.localKeyId >>> 0;
+          } catch (e) {
+            keyFormId = parsed.localKeyId >>> 0;
+          }
+        }
+        lock = { lockLevel: parsed.lockLevel, keyFormId };
+        break;
+      }
+    } catch (e) {
+      // Runtime-created refs have no espm record; treat as not vanilla-locked.
+      lock = null;
+    }
+    vanillaLockCache.set(targetFormId, lock);
+    return lock;
+  }
+
+  function actorHasKey(actorFormId, keyFormId) {
+    if (!keyFormId) return false;
+    try {
+      const inventory = mp.get(actorFormId, "inventory");
+      const entries = inventory && Array.isArray(inventory.entries) ? inventory.entries : [];
+      for (const entry of entries) {
+        if (entry && Number(entry.baseId) === keyFormId && Number(entry.count) > 0) return true;
+      }
+    } catch (e) {
+      // Fail closed: unreadable inventory means no key.
+    }
+    return false;
+  }
+
+  function isVanillaLockBlocked(targetFormId, actorFormId) {
+    if (VANILLA_LOCK_POLICY === "off") return false;
+    const lock = getVanillaLock(targetFormId);
+    if (!lock) return false;
+    if (VANILLA_LOCK_POLICY === "keyOnly" && lock.lockLevel !== LOCK_LEVEL_REQUIRES_KEY) return false;
+    if (actorHasKey(actorFormId, lock.keyFormId)) return false;
+    return true;
+  }
+
   const previousOnActivate = typeof mp.onActivate === "function" ? mp.onActivate : null;
   mp.onActivate = (targetFormId, actorFormId) => {
     const key = activateKey(targetFormId, actorFormId);
@@ -932,7 +1036,20 @@ module.exports = (mp) => {
     }
 
     const doc = getDocByTarget(targetFormId);
-    if (!doc) return previousOnActivate ? previousOnActivate(targetFormId, actorFormId) : true;
+    if (!doc) {
+      // Unregistered door or container: enforce the vanilla XLOC lock so the
+      // client-local "unlock" console command cannot bypass it server-side.
+      if (isVanillaLockBlocked(targetFormId, actorFormId)) {
+        pushToast(actorFormId, "This is locked.");
+        try {
+          mp.set(targetFormId, "isOpen", false);
+        } catch (e) {
+          // Not every ref carries isOpen; re-asserting is best effort.
+        }
+        return false;
+      }
+      return previousOnActivate ? previousOnActivate(targetFormId, actorFormId) : true;
+    }
     if (doc.locked !== true) return previousOnActivate ? previousOnActivate(targetFormId, actorFormId) : true;
 
     const reach = validateTargetReach(actorFormId, targetFormId);
@@ -1107,6 +1224,8 @@ module.exports = (mp) => {
     classifyObject,
     describeTarget,
     getDocByTarget,
+    getVanillaLock,
+    isVanillaLockBlocked,
     loadCache,
     permissions,
     state: () => ({
