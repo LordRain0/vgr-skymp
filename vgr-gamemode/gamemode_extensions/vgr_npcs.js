@@ -237,6 +237,19 @@ module.exports = (mp) => {
 	mp.vgrNpcDelete = (actorId) => {
 		pendingTrigger.delete(actorId);
 		let ok = true;
+		// Persist a neutral root scale BEFORE the form goes away. ChangeForm
+		// docs are $set-only Mongo upserts and are never deleted, so a scale
+		// written at spawn (SetNodeScale above) would otherwise stay in the doc
+		// forever; after a restart the server recycles low formIds and a new
+		// player actor created on this formDesc would inherit the NPC scale.
+		// Same call shape as the spawn override, with scale 1 (idempotent).
+		try {
+			const cfg = safeGet(actorId, CFG_PROP);
+			if (!cfg || Number(cfg.scale) !== 1) {
+				mp.callPapyrusFunction("global", "NetImmerse", "SetNodeScale", null,
+					[asForm(actorId), "NPC Root [Root]", 1, false]);
+			}
+		} catch (e) { /* form may already be gone; scale reset is best-effort */ }
 		// Clear the indexed tag FIRST so findFormsByPropertyValue stops
 		// returning this id. destroyActor removes the in-memory form but does
 		// NOT clear the private.indexed reverse index, so without this the
