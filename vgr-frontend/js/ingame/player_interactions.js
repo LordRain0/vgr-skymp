@@ -11,6 +11,7 @@
     countdownTimer: null,
     toastTimer: null,
     anchor: null,
+    anchorLocked: false,
   };
 
   // Matches the injected client fallback when the target head is off-screen
@@ -110,6 +111,7 @@
   function closeMenu(sendClose) {
     state.sessionId = null;
     state.anchor = null;
+    state.anchorLocked = false;
     setPending("");
     setPanelVisible(els.menu, false);
     if (sendClose) send("vgr:playerInteraction:close", {});
@@ -175,6 +177,7 @@
     });
 
     setPanelVisible(els.menu, true);
+    state.anchorLocked = false;
     applyAnchor();
     if (data.toastMessage) showToast(data.toastMessage);
     focusSelectedAction();
@@ -202,6 +205,7 @@
     list.appendChild(makeButton("Back", "trade-request-button secondary", () => closeMenu(true)));
     els.actions.appendChild(list);
     setPanelVisible(els.menu, true);
+    state.anchorLocked = false;
     applyAnchor();
     focusSelectedAction();
   }
@@ -227,7 +231,10 @@
     const y = Number(anchor && anchor.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     state.anchor = { x, y };
+    // Place the panel at the target once per open; it must not follow them around
+    if (state.anchorLocked) return;
     applyAnchor();
+    if (els.menu && !els.menu.hidden) state.anchorLocked = true;
   }
 
   function focusSelectedAction() {
@@ -287,6 +294,17 @@
 
   function applyServerUpdate(data) {
     if (!data || data.version !== 1) return;
+    // Batched pushes: the server coalesces same-tick actions so none get lost
+    // to property-write races; apply them in order.
+    if (Array.isArray(data.batch)) {
+      data.batch.forEach(applyAction);
+      return;
+    }
+    applyAction(data);
+  }
+
+  function applyAction(data) {
+    if (!data) return;
     if (data.action === "prompt") return showPrompt(data);
     if (data.action === "promptClear") return hidePrompt();
     if (data.action === "toast") {
