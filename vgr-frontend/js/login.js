@@ -301,6 +301,13 @@
 
   function reloadForMainMenu() {
     restoreForAuth();
+
+    // The permadeath kick lands ~1.5s after this runs and re-arms the client
+    // browser-message listeners; refresh once they are live so the character
+    // list reloads and fallen characters render with the Fallen state.
+    setTimeout(function () {
+      send(EVENTS.charactersRefresh);
+    }, 2500);
   }
 
   function hideAfterSuccessfulAuth() {

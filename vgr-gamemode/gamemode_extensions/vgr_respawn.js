@@ -16,6 +16,7 @@ module.exports = (mp) => {
   const fs = require("fs");
   const path = require("path");
   const identity = require("./vgr_access_identity");
+  const actors = require("./vgr_helpers").playerInteractions.createActorHelpers(mp, {});
 
   let settings = {};
   try {
@@ -28,6 +29,17 @@ module.exports = (mp) => {
   const BLEEDOUT_SECONDS = Math.max(5, Number(settings.respawnSeconds) || 15);
   const WAKE_HEALTH = 0.01;
   const NEVER_RESPAWN = 1e12;
+
+  // Permadeath exit: delay before the kick packet, and how long the one-shot
+  // exit property stays populated before being blanked for future sessions.
+  const PERMADEATH_KICK_DELAY_MS = 1500;
+  const PERMADEATH_EXIT_CLEAR_MS = 10000;
+  // The frozen Aug-11 client reacts to this packet by closing the connection,
+  // re-arming its login browser-message listeners and showing the browser.
+  const PERMADEATH_KICK_PACKET = JSON.stringify({
+    customPacketType: "loginFailedLoadOrderMismatch",
+    reason: "This character has met permanent death. Choose or create another.",
+  });
 
   // Temple interiors (measured in-game, VGR_Locations survey)
   const SOLITUDE  = { cellOrWorldDesc: "16a02:Skyrim.esm", pos: [1676.93, 1571.19, 0],      rot: [0, 0, 15.75] };
@@ -159,6 +171,24 @@ module.exports = (mp) => {
     updateNeighbor: "",
   });
 
+  // Permadeath exit channel; one-shot per nonce. Restores the VGR login layer
+  // with the character view, focuses the browser, then quits to main menu on
+  // the next update tick so the vanilla menu never sits alone on screen.
+  mp.makeProperty("vgrPermaDeathExit", {
+    isVisibleByOwner: true,
+    isVisibleByNeighbors: false,
+    updateOwner: `
+      const value = ctx.value;
+      if (!value || !value.nonce) return;
+      if (ctx.state.vgrPermaDeathExitNonce === value.nonce) return;
+      ctx.state.vgrPermaDeathExitNonce = value.nonce;
+      ctx.sp.browser.executeJavaScript("window.VGRLoginUI && window.VGRLoginUI.reloadForMainMenu && window.VGRLoginUI.reloadForMainMenu()");
+      ctx.sp.browser.setFocused(true);
+      ctx.sp.once("update", () => ctx.sp.Game.quitToMainMenu());
+    `,
+    updateNeighbor: "",
+  });
+
   const showDeathScreen = (actorId, seconds) => {
     safeSet(actorId, "vgrDeathScreen", { nonce: Date.now() + ":" + Math.random(), show: true, seconds });
     mp.vgrOpenUI(actorId, "death_screen");
@@ -235,6 +265,24 @@ module.exports = (mp) => {
         console.error(LOG, "backend permaDead flag failed:", e && e.message ? e.message : e);
       });
     }
+
+    // Return the client to the main menu with the VGR character select up.
+    safeSet(actorId, "vgrPermaDeathExit", { nonce: Date.now() + ":" + Math.random() });
+
+    // The stored value would replay into a future session on this actor
+    // (manager un-PK), so blank it once the exit has been delivered.
+    setTimeout(() => { safeSet(actorId, "vgrPermaDeathExit", { done: true }); }, PERMADEATH_EXIT_CLEAR_MS);
+
+    // Kick after the exit starts; the client closes the connection on this
+    // packet (no auto-reconnect into the corpse) and re-arms its login UI.
+    setTimeout(() => {
+      let userId = null;
+      try { userId = actors.userFromActor(actorId); }
+      catch (e) { userId = null; }
+      if (userId === null || userId === undefined) return;
+      try { mp.sendCustomPacket(userId, PERMADEATH_KICK_PACKET); }
+      catch (e) { console.error(LOG, "permadeath kick failed:", e && e.message ? e.message : e); }
+    }, PERMADEATH_KICK_DELAY_MS);
   }
 
   // Browser -> server choice relay.

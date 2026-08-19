@@ -2,11 +2,23 @@ import { System, Log, Content, SystemContext } from "./system";
 import { Settings } from "../settings";
 import * as fetchRetry from "fetch-retry";
 import { loginsCounter, loginErrorsCounter } from "./metricsSystem";
+import { createRequire } from "module";
 
 const loginFailedNotInTheDiscordServer = JSON.stringify({ customPacketType: "loginFailedNotInTheDiscordServer" });
 const loginFailedBanned = JSON.stringify({ customPacketType: "loginFailedBanned" });
 const loginFailedIpMismatch = JSON.stringify({ customPacketType: "loginFailedIpMismatch" });
 const loginFailedSessionNotFound = JSON.stringify({ customPacketType: "loginFailedSessionNotFound" });
+
+// VGR: the frozen client closes the connection on this packet, re-arms its
+// login browser-message listeners and shows the browser with the reason.
+const loginFailedPermaDeath = JSON.stringify({
+  customPacketType: "loginFailedLoadOrderMismatch",
+  reason: "This character has met permanent death. Choose or create another.",
+});
+
+// mongodb resolves from the deployed server's node_modules at runtime;
+// createRequire keeps esbuild from bundling it and tsc from needing its types.
+const requireRuntime = createRequire(__filename);
 
 type Mp = any; // TODO
 
@@ -222,6 +234,8 @@ export class Login implements System {
 
         const rolesToAssign = isMemberOfAny ? [...new Set(fetchedRoles)] : roles;
 
+        await this.verifyNotPermaDead(userId, profile.id, ctx);
+
         this.emit(ctx, "spawnAllowed", userId, profile.id, rolesToAssign, profile.discordId);
         loginsCounter.inc();
         this.log("Logged as " + profile.id);
@@ -275,10 +289,56 @@ export class Login implements System {
     });
   }
 
+  // VGR: never spawn a character flagged permaDead by the gamemode
+  // (vgr-gamemode/gamemode_extensions/vgr_respawn.js). Any lookup failure
+  // logs and allows so a Mongo blip never locks everyone out.
+  private async verifyNotPermaDead(userId: number, profileId: number, ctx: SystemContext): Promise<void> {
+    let permaDead = false;
+    try {
+      const character = await this.findBackendCharacter(profileId);
+      permaDead = !!character && character.permaDead === true;
+    } catch (err) {
+      console.error("verifyNotPermaDead: lookup failed, allowing login:", err);
+      return;
+    }
+    if (permaDead) {
+      ctx.svr.sendCustomPacket(userId, loginFailedPermaDeath);
+      throw new Error("Character is permanently dead");
+    }
+  }
+
+  // Mirrors the gamemode backendUri() derivation: an explicit backend URI in
+  // vgrAccessControl wins, otherwise databaseUri with its pathname swapped to
+  // the backend database name.
+  private async findBackendCharacter(profileId: number): Promise<Record<string, any> | null> {
+    const allSettings = (this.settingsObject.allSettings || {}) as Record<string, any>;
+    const access = allSettings.vgrAccessControl || {};
+    const dbName: string = access.backendDatabaseName || "skymp-backend";
+    let uri: string = access.backendDatabaseUri || "";
+    if (!uri) {
+      const databaseUri = allSettings.databaseUri;
+      if (typeof databaseUri !== "string" || databaseUri === "") return null;
+      const parsed = new URL(databaseUri);
+      parsed.pathname = "/" + dbName;
+      uri = parsed.toString();
+    }
+    const { MongoClient } = requireRuntime("mongodb");
+    if (!this.mongoClientPromise) {
+      this.mongoClientPromise = MongoClient.connect(uri, { maxPoolSize: 2 }).catch((err: unknown) => {
+        this.mongoClientPromise = null;
+        throw err;
+      });
+    }
+    const client = await this.mongoClientPromise;
+    const collection: string = access.charactersCollection || "characters";
+    return client.db(dbName).collection(collection).findOne({ profileId, deletedAt: null });
+  }
+
   private emit(ctx: SystemContext, eventName: string, ...args: unknown[]) {
     (ctx.gm as any).emit(eventName, ...args);
   }
 
   private settingsObject: Settings;
+  private mongoClientPromise: Promise<any> | null = null;
   private fetchRetry = fetchRetry.default(global.fetch);
 }
