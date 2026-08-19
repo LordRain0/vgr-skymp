@@ -598,6 +598,7 @@ module.exports = (mp) => {
       focus: "grab",
       sessionId: session.id,
       targetName: getVisibleName(session.requesterIdentity, session.targetIdentity),
+      targetFormId: session.targetPcFormId,
       targetProfileId: null,
       actions: built.actions,
       toastMessage: toastMessage || null,
@@ -709,11 +710,15 @@ module.exports = (mp) => {
       updatedAt: now,
     };
 
+    // updatedAt must live in exactly one operator; $setOnInsert + $set on the same path is a Mongo path conflict
+    const insertDoc = Object.assign({}, doc);
+    delete insertDoc.updatedAt;
+
     try {
       const { introductions } = await getCollections();
       const result = await introductions.updateOne(
         { viewerCharacterId: doc.viewerCharacterId, knownCharacterId: doc.knownCharacterId },
-        { $setOnInsert: doc, $set: { updatedAt: now } },
+        { $setOnInsert: insertDoc, $set: { updatedAt: now } },
         { upsert: true }
       );
       introCache.add(key);
@@ -894,6 +899,10 @@ module.exports = (mp) => {
       return;
     }
 
+    // Close both interaction sessions so no stale menu sits under the trade window and later steals focus
+    closeSession(request.requesterPcFormId, "trade_started");
+    closeSession(request.targetPcFormId, "trade_started");
+
     pushToast(request.requesterPcFormId, "Trade request accepted.");
     pushToast(request.targetPcFormId, "Trade request accepted.");
     await writeAudit("trade_request_accepted", request.targetIdentity, { requesterCharacterId: request.requesterIdentity.characterId });
@@ -1007,6 +1016,7 @@ module.exports = (mp) => {
       focus: "grab",
       sessionId: session.id,
       targetName: getVisibleName(session.requesterIdentity, session.targetIdentity),
+      targetFormId: session.targetPcFormId,
       options: session.cuffOptions.map((entry) => ({
         baseId: entry.baseId,
         count: entry.count,
@@ -1305,18 +1315,66 @@ module.exports = (mp) => {
     isVisibleByNeighbors: false,
     updateOwner: `
       const value = ctx.value;
-      if (!ctx.state.vgrPlayerInteractionUi) ctx.state.vgrPlayerInteractionUi = { lastNonce: null };
-      if (!value || value.version !== ${UI_VERSION}) return;
-      if (ctx.state.vgrPlayerInteractionUi.lastNonce === value.nonce) return;
-      ctx.state.vgrPlayerInteractionUi.lastNonce = value.nonce;
-
-      ctx.sp.browser.executeJavaScript("window.vgrPlayerInteractionUpdate && window.vgrPlayerInteractionUpdate(" + JSON.stringify(value) + ");");
-
-      if (value.focus === "grab" && value.ui) {
-        ctx.sp.browser.executeJavaScript('window.skyrimPlatform?.sendMessage?.("vgr:ui:open", "' + value.ui + '")');
+      if (!ctx.state.vgrPlayerInteractionUi) {
+        ctx.state.vgrPlayerInteractionUi = { lastNonce: null, anchorTargetFormId: 0, anchorSentAt: 0 };
       }
-      if (value.focus === "release" && value.ui) {
-        ctx.sp.browser.executeJavaScript('window.skyrimPlatform?.sendMessage?.("vgr:ui:close", "' + value.ui + '")');
+      const uiState = ctx.state.vgrPlayerInteractionUi;
+      if (!value || value.version !== ${UI_VERSION}) return;
+
+      if (uiState.lastNonce !== value.nonce) {
+        uiState.lastNonce = value.nonce;
+
+        // Track which player the interaction panel should anchor to on screen
+        if (value.ui === "player_interaction") {
+          if (value.action === "open" || value.action === "bindOptions") {
+            uiState.anchorTargetFormId = Number(value.targetFormId) || 0;
+            uiState.anchorSentAt = 0;
+          } else if (value.action === "close") {
+            uiState.anchorTargetFormId = 0;
+          }
+        }
+
+        ctx.sp.browser.executeJavaScript("window.vgrPlayerInteractionUpdate && window.vgrPlayerInteractionUpdate(" + JSON.stringify(value) + ");");
+
+        if (value.focus === "grab" && value.ui) {
+          ctx.sp.browser.executeJavaScript('window.skyrimPlatform?.sendMessage?.("vgr:ui:open", "' + value.ui + '")');
+        }
+        if (value.focus === "release" && value.ui) {
+          ctx.sp.browser.executeJavaScript('window.skyrimPlatform?.sendMessage?.("vgr:ui:close", "' + value.ui + '")');
+        }
+      }
+
+      // updateOwner runs every client frame; while the panel is open project the
+      // target head node to normalized screen coords roughly every 150 ms
+      if (uiState.anchorTargetFormId) {
+        const anchorNow = Date.now();
+        if (anchorNow - (uiState.anchorSentAt || 0) >= 150) {
+          uiState.anchorSentAt = anchorNow;
+          let anchor = { x: 0.56, y: 0.5 };
+          try {
+            const clientFormId = ctx.getFormIdInClientFormat(uiState.anchorTargetFormId) || 0;
+            const targetRefr = clientFormId ? ctx.sp.ObjectReference.from(ctx.sp.Game.getFormEx(clientFormId)) : null;
+            if (targetRefr && typeof ctx.sp.worldPointToScreenPoint === "function") {
+              const headNode = "NPC Head [Head]";
+              const projected = ctx.sp.worldPointToScreenPoint([
+                ctx.sp.NetImmerse.getNodeWorldPositionX(targetRefr, headNode, false),
+                ctx.sp.NetImmerse.getNodeWorldPositionY(targetRefr, headNode, false),
+                ctx.sp.NetImmerse.getNodeWorldPositionZ(targetRefr, headNode, false)
+              ])[0];
+              if (
+                projected &&
+                projected[2] > 0 &&
+                projected[0] > 0 && projected[0] < 1 &&
+                projected[1] > 0 && projected[1] < 1
+              ) {
+                anchor = { x: projected[0], y: 1 - projected[1] };
+              }
+            }
+          } catch (e) {
+            // node lookup can fail on unloaded refs; keep the fallback anchor
+          }
+          ctx.sp.browser.executeJavaScript("window.vgrPlayerInteractionAnchor && window.vgrPlayerInteractionAnchor(" + JSON.stringify(anchor) + ");");
+        }
       }
     `,
     updateNeighbor: "",

@@ -30,7 +30,18 @@
   text-transform: uppercase;
 }
 
-#vgr-player-interaction,
+/* Quickloot-style panel anchored near the target; JS sets left/top in px */
+#vgr-player-interaction {
+  position: fixed;
+  left: 56vw;
+  top: 50vh;
+  z-index: 1300;
+  display: none;
+  width: 236px;
+  color: #eadca4;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
 #vgr-trade-request {
   position: fixed;
   inset: 0;
@@ -43,14 +54,18 @@
   font-family: Georgia, "Times New Roman", serif;
 }
 
-/* Push the interaction menu below screen center so it stays clear of the other player */
-#vgr-player-interaction {
-  padding-top: 24vh;
+#vgr-player-interaction.visible {
+  display: block;
 }
 
-#vgr-player-interaction.visible,
 #vgr-trade-request.visible {
   display: flex;
+}
+
+/* #vgr-game-layer ships pointer-events:none; visible panels must opt back in for mouse clicks */
+#vgr-player-interaction.visible,
+#vgr-trade-request.visible {
+  pointer-events: auto;
 }
 
 #vgr-player-interaction[hidden],
@@ -61,11 +76,19 @@
 
 #vgr-game-layer .player-interaction-panel,
 #vgr-game-layer .trade-request-panel {
-  width: min(520px, 86vw);
   border: 1px solid rgba(190, 151, 75, 0.56);
   background:
     linear-gradient(180deg, rgba(20, 15, 10, 0.96), rgba(6, 5, 4, 0.96)),
     radial-gradient(circle at 50% 0%, rgba(126, 71, 28, 0.28), transparent 70%);
+}
+
+#vgr-game-layer .player-interaction-panel {
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.72);
+}
+
+#vgr-game-layer .trade-request-panel {
+  width: min(520px, 86vw);
   box-shadow: 0 18px 52px rgba(0, 0, 0, 0.72);
 }
 
@@ -74,41 +97,84 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  border-bottom: 1px solid rgba(190, 151, 75, 0.28);
+}
+
+#vgr-game-layer .player-interaction-header {
+  gap: 10px;
+  padding: 9px 10px 7px;
+}
+
+#vgr-game-layer .trade-request-header {
   gap: 18px;
   padding: 20px 22px 14px;
-  border-bottom: 1px solid rgba(190, 151, 75, 0.28);
 }
 
 #vgr-game-layer .player-interaction-kicker,
 #vgr-game-layer .trade-request-kicker {
   display: block;
   color: #c7a45b;
+  text-transform: uppercase;
+}
+
+#vgr-game-layer .player-interaction-kicker {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+
+#vgr-game-layer .trade-request-kicker {
   font-size: 12px;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
 }
 
 #vgr-game-layer .player-interaction-header h2,
 #vgr-game-layer .trade-request-header h2 {
-  margin: 4px 0 0;
   color: #f2e6bb;
-  font-size: 25px;
   letter-spacing: 0.02em;
+}
+
+#vgr-game-layer .player-interaction-header h2 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+#vgr-game-layer .trade-request-header h2 {
+  margin: 4px 0 0;
+  font-size: 25px;
 }
 
 #vgr-game-layer .player-interaction-close,
 #vgr-game-layer .trade-request-close {
-  width: 34px;
-  height: 34px;
   border: 1px solid rgba(190, 151, 75, 0.48);
   background: rgba(0, 0, 0, 0.16);
   color: #eadca4;
-  font-size: 20px;
   cursor: pointer;
 }
 
+#vgr-game-layer .player-interaction-close {
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+#vgr-game-layer .trade-request-close {
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
+}
+
 #vgr-game-layer .player-interaction-actions,
-#vgr-game-layer .bind-option-list,
+#vgr-game-layer .bind-option-list {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px 6px;
+}
+
+#vgr-game-layer .bind-option-list {
+  padding: 0;
+}
+
 #vgr-game-layer .trade-request-actions {
   display: grid;
   gap: 10px;
@@ -118,15 +184,35 @@
 #vgr-game-layer .player-interaction-button,
 #vgr-game-layer .bind-option-button,
 #vgr-game-layer .trade-request-button {
-  min-height: 44px;
   border: 1px solid rgba(208, 155, 67, 0.62);
   background: linear-gradient(180deg, rgba(105, 12, 12, 0.92), rgba(77, 5, 5, 0.92));
   color: #f2e6bb;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 16px;
-  letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
+}
+
+#vgr-game-layer .player-interaction-button,
+#vgr-game-layer .bind-option-button {
+  min-height: 28px;
+  padding: 4px 9px;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-align: left;
+}
+
+#vgr-game-layer .trade-request-button {
+  min-height: 44px;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+
+/* Back button inside the anchored bind submenu stays compact */
+#vgr-game-layer .bind-option-list .trade-request-button {
+  min-height: 28px;
+  padding: 4px 9px;
+  font-size: 12px;
+  text-align: left;
 }
 
 #vgr-game-layer .player-interaction-button:hover:not(:disabled),
@@ -147,17 +233,17 @@
 
 #vgr-game-layer .player-interaction-reason {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   color: #bda86f;
-  font-size: 11px;
+  font-size: 9px;
   letter-spacing: 0.08em;
 }
 
 #vgr-game-layer .player-interaction-pending {
-  padding: 0 22px 18px;
-  min-height: 18px;
+  padding: 0 10px 8px;
+  min-height: 14px;
   color: #d6be76;
-  font-size: 13px;
+  font-size: 10px;
   text-align: center;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -188,11 +274,13 @@
   background: linear-gradient(180deg, rgba(47, 39, 31, 0.95), rgba(22, 18, 14, 0.95));
 }
 
+/* Fixed so it stays screen-centered regardless of the anchored panel position */
 #vgr-game-layer .player-interaction-toast {
-  position: absolute;
+  position: fixed;
   left: 50%;
   bottom: 20vh;
   transform: translateX(-50%);
+  z-index: 1350;
   min-width: 220px;
   max-width: 520px;
   padding: 10px 14px;

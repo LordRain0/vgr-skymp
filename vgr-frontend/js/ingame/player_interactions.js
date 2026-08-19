@@ -5,11 +5,19 @@
     sessionId: null,
     selectedIndex: 0,
     pending: false,
+    pendingTimer: null,
     tradeRequestId: null,
     tradeMode: null,
     countdownTimer: null,
     toastTimer: null,
+    anchor: null,
   };
+
+  // Matches the injected client fallback when the target head is off-screen
+  const ANCHOR_FALLBACK = { x: 0.56, y: 0.5 };
+  const ANCHOR_OFFSET_X = 12;
+  const ANCHOR_MARGIN = 8;
+  const PENDING_WATCHDOG_MS = 10000;
 
   const els = {};
 
@@ -35,6 +43,14 @@
     els.tradeActions = byId("tradeRequestActions");
     els.tradeClose = byId("tradeRequestClose");
     els.toast = byId("playerInteractionToast");
+    if (!els.toast && els.menu && els.menu.parentElement) {
+      // The rolled-back markup lacks the toast node; create it so toasts render
+      const toast = document.createElement("div");
+      toast.id = "playerInteractionToast";
+      toast.className = "player-interaction-toast";
+      els.menu.parentElement.appendChild(toast);
+      els.toast = toast;
+    }
   }
 
   function send(name, payload) {
@@ -83,11 +99,18 @@
   function setPending(text) {
     state.pending = !!text;
     if (els.pending) els.pending.textContent = text || "";
+    clearTimeout(state.pendingTimer);
+    state.pendingTimer = null;
+    // Watchdog: never let a lost server reply brick the menu in a pending state
+    if (state.pending) {
+      state.pendingTimer = setTimeout(() => setPending(""), PENDING_WATCHDOG_MS);
+    }
   }
 
   function closeMenu(sendClose) {
     state.sessionId = null;
-    state.pending = false;
+    state.anchor = null;
+    setPending("");
     setPanelVisible(els.menu, false);
     if (sendClose) send("vgr:playerInteraction:close", {});
   }
@@ -152,6 +175,7 @@
     });
 
     setPanelVisible(els.menu, true);
+    applyAnchor();
     if (data.toastMessage) showToast(data.toastMessage);
     focusSelectedAction();
   }
@@ -178,7 +202,32 @@
     list.appendChild(makeButton("Back", "trade-request-button secondary", () => closeMenu(true)));
     els.actions.appendChild(list);
     setPanelVisible(els.menu, true);
+    applyAnchor();
     focusSelectedAction();
+  }
+
+  // Anchored quickloot-style placement: normalized coords in, clamped px out
+  function applyAnchor() {
+    if (!els.menu || els.menu.hidden) return;
+    const anchor = state.anchor || ANCHOR_FALLBACK;
+    const vw = window.innerWidth || 1280;
+    const vh = window.innerHeight || 720;
+    const width = els.menu.offsetWidth || 240;
+    const height = els.menu.offsetHeight || 180;
+    let left = anchor.x * vw + ANCHOR_OFFSET_X;
+    let top = anchor.y * vh - height / 2;
+    left = Math.max(ANCHOR_MARGIN, Math.min(left, vw - width - ANCHOR_MARGIN));
+    top = Math.max(ANCHOR_MARGIN, Math.min(top, vh - height - ANCHOR_MARGIN));
+    els.menu.style.left = left + "px";
+    els.menu.style.top = top + "px";
+  }
+
+  function setAnchor(anchor) {
+    const x = Number(anchor && anchor.x);
+    const y = Number(anchor && anchor.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    state.anchor = { x, y };
+    applyAnchor();
   }
 
   function focusSelectedAction() {
@@ -240,7 +289,11 @@
     if (!data || data.version !== 1) return;
     if (data.action === "prompt") return showPrompt(data);
     if (data.action === "promptClear") return hidePrompt();
-    if (data.action === "toast") return showToast(data.message);
+    if (data.action === "toast") {
+      // A toast is a terminal server reply; always release the pending lock
+      setPending("");
+      return showToast(data.message);
+    }
     if (data.action === "open") return renderMenu(data);
     if (data.action === "bindOptions") return renderBindOptions(data);
     if (data.action === "tradeRequest") return renderTradeRequest(data);
@@ -290,6 +343,7 @@
     els.tradeClose?.addEventListener("click", () => closeTradeRequest(state.tradeMode === "outgoing" ? "cancel" : "deny"));
     document.addEventListener("keydown", onMenuKeyDown);
     document.addEventListener("keydown", onTradeKeyDown);
+    window.addEventListener("resize", applyAnchor);
 
     window.addEventListener("vgr:ui_manager:open:player_interaction", () => setPanelVisible(els.menu, true));
     window.addEventListener("vgr:ui_manager:close:player_interaction", () => setPanelVisible(els.menu, false));
@@ -298,6 +352,7 @@
   }
 
   window.vgrPlayerInteractionUpdate = applyServerUpdate;
+  window.vgrPlayerInteractionAnchor = setAnchor;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
