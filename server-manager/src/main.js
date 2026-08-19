@@ -260,6 +260,14 @@ async function discoverLogTargets() {
   logTargets = targets.filter(t => { try { return fs.statSync(t.file).isFile() } catch { return false } })
 }
 
+// LiveKit logs one INFO line per API poll (4/sec with voice up) and drowns the
+// console; surface only its warnings and errors.
+function filterConsoleText(label, text) {
+  if (!/^LiveKit/i.test(label)) return text
+  const kept = text.split(/\r?\n/).filter(l => l.trim() && !/\t(INFO|DEBUG)\t/.test(l))
+  return kept.length ? kept.join('\n') + '\n' : ''
+}
+
 function pollLogs() {
   for (const { file, label } of logTargets) {
     let stat
@@ -274,7 +282,8 @@ function pollLogs() {
         fs.readSync(fd, buf, 0, len, tailState[file])
         fs.closeSync(fd)
         tailState[file] = stat.size
-        send('log:data', { source: label, text: buf.toString('utf8') })
+        const text = filterConsoleText(label, buf.toString('utf8'))
+        if (text) send('log:data', { source: label, text })
       } catch { /* mid-write race, retry next tick */ }
     }
   }
