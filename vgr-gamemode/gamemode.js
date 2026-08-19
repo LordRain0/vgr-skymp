@@ -46,6 +46,8 @@ const VGR_UI_OPEN_PERMISSIONS = {
   admin_menu: "vgr.access.manage",
 };
 
+const vgrUiDenyLogAt = new Map();
+
 mp._vgrUiManager = (pcFormId, payload) => {
   if (!payload || payload.kind !== "requestOpen") return;
   const uiName = String(payload.ui || "").trim();
@@ -55,7 +57,13 @@ mp._vgrUiManager = (pcFormId, payload) => {
   if (required) {
     const perms = mp.vgrAccessPermissions;
     if (!perms || perms.hasPermission(pcFormId, required).allowed !== true) {
-      console.log("[VGR UI manager] denied", uiName, "for actor", pcFormId);
+      // Players mash the key; log and notify at most once a minute per actor
+      const now = Date.now();
+      if (now - (vgrUiDenyLogAt.get(pcFormId) || 0) > 60000) {
+        vgrUiDenyLogAt.set(pcFormId, now);
+        console.log("[VGR UI manager] denied", uiName, "for actor", pcFormId);
+        mp.vgrSendNotification(pcFormId, 2, "You are not authorized to open this menu.", { variant: "error" });
+      }
       return;
     }
   }

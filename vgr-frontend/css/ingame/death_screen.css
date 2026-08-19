@@ -1,3 +1,8 @@
+/* The game layer disables pointer events; opt back in or the buttons are click-dead */
+#vgr-game-layer #vgr-death-screen {
+  pointer-events: auto;
+}
+
 #vgr-death-screen {
   position: fixed;
   inset: 0;
