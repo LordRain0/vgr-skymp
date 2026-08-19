@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="css/ingame/notifications.css">
   <link rel="stylesheet" href="css/ingame/skills.css">
   <link rel="stylesheet" href="css/ingame/voice_mode.css">
+  <link rel="stylesheet" href="css/ingame/chat.css">
   
 </head>
 <body data-vgr-mode="login">
@@ -617,6 +618,14 @@
           <span id="vgr-voice-mode-label" class="voice-mode-label">Talk</span>
         </div>
 
+        <!-- ===== Chat ===== -->
+        <div id="vgr-chat" class="idle">
+          <div class="chat-log" id="vgrChatLog"></div>
+          <div class="chat-input-row" id="vgrChatInputRow" hidden>
+            <input id="vgrChatInput" type="text" maxlength="400" placeholder="Speak... (/s /w /y /me /do /ooc /pm /system)" autocomplete="off">
+          </div>
+        </div>
+
       	<!-- ===== Admin Menu ===== -->
       	<main id="adminMenu" class="admin-menu hidden" aria-hidden="true">
       		<div class="screen-fade"></div>
@@ -1005,6 +1014,7 @@
   <script src="js/ingame/locks.js"></script>
   <script src="js/ingame/access_control.js"></script>
   <script src="js/ingame/player_interactions.js"></script>
+  <script src="js/ingame/chat.js"></script>
   <script src="js/ingame/death_screen.js"></script>
   <script src="js/ingame/player_search.js"></script>
   <script src="js/ingame/admin_menu.js"></script>

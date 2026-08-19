@@ -1,0 +1,102 @@
+#vgr-chat {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 1100;
+  width: min(400px, 34vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: Georgia, "Times New Roman", serif;
+  pointer-events: none;
+}
+
+#vgr-chat .chat-log {
+  max-height: 30vh;
+  padding: 8px 10px;
+  overflow-y: auto;
+  border: 1px solid rgba(199, 179, 138, 0.3);
+  background: linear-gradient(180deg, rgba(24, 21, 18, 0.78), rgba(7, 6, 6, 0.7));
+  box-shadow: inset 0 0 0 1px rgba(255, 234, 190, 0.05);
+  transition: opacity 400ms ease, border-color 400ms ease, background 400ms ease;
+}
+
+/* Chrome dissolves when idle; recent lines stay readable */
+#vgr-chat.idle .chat-log {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+/* The game layer ships pointer-events:none; scrolling needs the panel live */
+#vgr-chat.focused {
+  pointer-events: auto;
+}
+
+#vgr-chat .chat-line {
+  margin: 1px 0;
+  font-size: 14px;
+  line-height: 1.3;
+  letter-spacing: 0.015em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  word-wrap: break-word;
+}
+
+#vgr-chat .chat-name {
+  color: #f2e6bb;
+}
+
+#vgr-chat .chat-verb {
+  opacity: 0.82;
+}
+
+#vgr-chat .chat-tag {
+  letter-spacing: 0.06em;
+}
+
+#vgr-chat .chat-system .chat-text {
+  text-transform: none;
+}
+
+#vgr-chat .chat-input-row {
+  pointer-events: auto;
+}
+
+#vgr-chat .chat-input-row[hidden] {
+  display: none !important;
+}
+
+#vgr-chat #vgrChatInput {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid rgba(208, 155, 67, 0.55);
+  background: linear-gradient(180deg, rgba(20, 15, 10, 0.95), rgba(6, 5, 4, 0.95));
+  color: #eadca4;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  outline: none;
+  box-sizing: border-box;
+}
+
+#vgr-chat #vgrChatInput:focus {
+  border-color: rgba(240, 213, 135, 0.85);
+  box-shadow: 0 0 10px rgba(197, 163, 110, 0.22);
+}
+
+#vgr-chat #vgrChatInput::placeholder {
+  color: rgba(214, 194, 160, 0.4);
+}
+
+#vgr-chat .chat-log::-webkit-scrollbar {
+  width: 6px;
+}
+
+#vgr-chat .chat-log::-webkit-scrollbar-thumb {
+  background: rgba(197, 163, 110, 0.34);
+}
+
+#vgr-chat .chat-log::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+}

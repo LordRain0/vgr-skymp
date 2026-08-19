@@ -322,6 +322,17 @@ let VGR_REGISTERED_UI = {
     interactionType: 'press',
     blocking: false,
     z_index: 11
+  },
+
+  "chat": {
+    active: false,
+    keyCode: 'Enter',
+    persistent: false,
+    need_focus: true,   // Enter opens the input line and grabs focus
+    interactionType: 'press',
+    blocking: false,
+    cefKeyForwarding: false, // in-game Enter opens; chat.js closes via vgr:ui:close
+    z_index: 9
   }
 
 };
@@ -397,8 +408,9 @@ function vgrConsumeKeyEvent(e) {
 function initCloseKeys() {
 	
 	const vgr_close_keys = Object.values(VGR_REGISTERED_UI)
-	  .filter(ui => //ui.interactionType === 'press' && 
+	  .filter(ui => //ui.interactionType === 'press' &&
 					ui.blocking === false &&
+					ui.cefKeyForwarding !== false && // chat: Enter must stay usable in other inputs/buttons
 					ui.keyCode !== null)
 	  .map(ui => ui.keyCode)
 	  .filter(keyCode => keyCode !== null); // Exclude null values
