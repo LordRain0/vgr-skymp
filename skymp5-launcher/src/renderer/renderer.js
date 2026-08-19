@@ -106,7 +106,7 @@ function getKey(id) { const el = document.getElementById(id); return el ? (parse
 // Backspace-unbind is not allowed: every server hotkey keeps a binding.
 const HK_DEFAULTS = {
   'hk-voice-ptt': 47,  // V
-  'hk-voice-mode': 58, // Caps Lock
+  'hk-voice-mode': 49, // N
   'hk-admin': 61,      // F3
   'hk-social': 34,     // G
   'hk-emote': 48,      // B

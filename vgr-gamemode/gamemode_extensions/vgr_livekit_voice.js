@@ -34,7 +34,7 @@ module.exports = function (mp) {
   const reconnectCooldownMs = voice.voiceReconnectCooldownMs || 5000;
 
   // Voice mode cycling: whisper -> talk -> yell, ranges in game units (same units the agent compares against)
-  const modeKey = voice.modeKey || 58; // DIK 58 = Caps Lock
+  const modeKey = voice.modeKey || 49; // DIK 49 = N
   const pttKeyCode = voice.pttKey || 47; // DIK 47 = V, drives the transmit banner
   const MODE_ORDER = ["whisper", "talk", "yell"];
   const DEFAULT_MODE = "talk";
