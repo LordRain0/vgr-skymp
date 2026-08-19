@@ -34,11 +34,18 @@ module.exports = (mp) => {
   // exit property stays populated before being blanked for future sessions.
   const PERMADEATH_KICK_DELAY_MS = 1500;
   const PERMADEATH_EXIT_CLEAR_MS = 10000;
-  // The frozen Aug-11 client reacts to this packet by closing the connection,
-  // re-arming its login browser-message listeners and showing the browser.
+  const PERMADEATH_KICK_REASON = "This character has met permanent death. Choose or create another.";
+  // Canonical kick packet; clients with the vgrCharacterKill handler act on it.
   const PERMADEATH_KICK_PACKET = JSON.stringify({
+    customPacketType: "vgrCharacterKill",
+    reason: PERMADEATH_KICK_REASON,
+  });
+  // TODO remove once the client fleet runs a bundle with the vgrCharacterKill
+  // handler; older clients only react to this packet (loadOrderMismatch is
+  // reserved for real load-order kicks going forward).
+  const PERMADEATH_KICK_PACKET_LEGACY = JSON.stringify({
     customPacketType: "loginFailedLoadOrderMismatch",
-    reason: "This character has met permanent death. Choose or create another.",
+    reason: PERMADEATH_KICK_REASON,
   });
 
   // Temple interiors (measured in-game, VGR_Locations survey)
@@ -280,7 +287,10 @@ module.exports = (mp) => {
       try { userId = actors.userFromActor(actorId); }
       catch (e) { userId = null; }
       if (userId === null || userId === undefined) return;
-      try { mp.sendCustomPacket(userId, PERMADEATH_KICK_PACKET); }
+      try {
+        mp.sendCustomPacket(userId, PERMADEATH_KICK_PACKET);
+        mp.sendCustomPacket(userId, PERMADEATH_KICK_PACKET_LEGACY);
+      }
       catch (e) { console.error(LOG, "permadeath kick failed:", e && e.message ? e.message : e); }
     }, PERMADEATH_KICK_DELAY_MS);
   }

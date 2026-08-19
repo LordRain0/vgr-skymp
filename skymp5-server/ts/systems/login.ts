@@ -9,11 +9,18 @@ const loginFailedBanned = JSON.stringify({ customPacketType: "loginFailedBanned"
 const loginFailedIpMismatch = JSON.stringify({ customPacketType: "loginFailedIpMismatch" });
 const loginFailedSessionNotFound = JSON.stringify({ customPacketType: "loginFailedSessionNotFound" });
 
-// VGR: the frozen client closes the connection on this packet, re-arms its
-// login browser-message listeners and shows the browser with the reason.
+// VGR: canonical permadeath kick; clients with the vgrCharacterKill handler
+// close the connection, re-arm their login listeners and show the reason.
+const permaDeathReason = "This character has met permanent death. Choose or create another.";
 const loginFailedPermaDeath = JSON.stringify({
+  customPacketType: "vgrCharacterKill",
+  reason: permaDeathReason,
+});
+// TODO remove once the client fleet runs a bundle with the vgrCharacterKill
+// handler; loadOrderMismatch is reserved for real load-order kicks.
+const loginFailedPermaDeathLegacy = JSON.stringify({
   customPacketType: "loginFailedLoadOrderMismatch",
-  reason: "This character has met permanent death. Choose or create another.",
+  reason: permaDeathReason,
 });
 
 // mongodb resolves from the deployed server's node_modules at runtime;
@@ -303,6 +310,7 @@ export class Login implements System {
     }
     if (permaDead) {
       ctx.svr.sendCustomPacket(userId, loginFailedPermaDeath);
+      ctx.svr.sendCustomPacket(userId, loginFailedPermaDeathLegacy);
       throw new Error("Character is permanently dead");
     }
   }
