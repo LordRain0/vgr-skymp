@@ -1,6 +1,5 @@
-// ---------- MMO STYLE FRIENDSHIP + PARTY SYSTEM + PRIVATE POPUP CHAT ----------
+// ---------- MMO STYLE FRIENDSHIP + PRIVATE POPUP CHAT ----------
 const MAX_FRIENDS = 12;
-const MAX_PARTY_SIZE = 4;
 
 // Server-driven limits; the friends payload overrides these defaults
 let maxFriendsLimit = MAX_FRIENDS;
@@ -9,7 +8,6 @@ let maxMessageLength = 250;
 let friends = [];
 let incomingRequests = [];
 let outgoingRequests = [];
-let partyMembers = [];
 let currentFilter = "all";
 let currentSort = "default";
 let chatHistories = new Map();
@@ -115,7 +113,7 @@ function renderPopupMessages(popupElement, friendIdValue) {
         emptyDiv.style.color = '#8a8a6e';
         emptyDiv.style.padding = '2rem';
         emptyDiv.style.fontSize = '0.8rem';
-        emptyDiv.innerText = '✨ No messages yet. Start the conversation!';
+        emptyDiv.innerText = 'No messages yet. Start the conversation!';
         messagesContainer.appendChild(emptyDiv);
     } else {
         history.forEach(msg => {
@@ -146,7 +144,7 @@ function openChatPopup(friendIdValue) {
     popupDiv.className = 'popup-chat-window';
     popupDiv.dataset.friendId = friendIdValue;
 
-    const statusText = friend.status === 'online' ? '🟢 Online' : '⚫ Offline';
+    const statusText = friend.status === 'online' ? 'Online' : 'Offline';
     const avatarLetter = friend.name.charAt(0).toUpperCase();
 
     popupDiv.innerHTML = `
@@ -156,12 +154,12 @@ function openChatPopup(friendIdValue) {
                 <span class="popup-name">${escapeHtml(friend.name)}</span>
                 <span class="popup-status-badge">${statusText}</span>
             </div>
-            <button class="popup-close">✕</button>
+            <button class="popup-close" title="Close chat">X</button>
         </div>
         <div class="popup-messages"></div>
         <div class="popup-input-area">
             <input type="text" class="popup-message-input" placeholder="Write a pigeon message..." maxlength="${maxMessageLength}">
-            <button class="popup-send-btn">🕊️ SEND</button>
+            <button class="popup-send-btn">SEND</button>
         </div>
     `;
 
@@ -226,103 +224,9 @@ function updatePopupStatusBadges() {
         if (!friend) return;
         const badge = popup.windowElement.querySelector('.popup-status-badge');
         if (badge) {
-            badge.innerText = friend.status === 'online' ? '🟢 Online' : '⚫ Offline';
+            badge.innerText = friend.status === 'online' ? 'Online' : 'Offline';
         }
     });
-}
-
-// ========== PARTY SYSTEM (local-only for now) ==========
-function updatePartyUI() {
-    const partyListContainer = document.getElementById('partyListContainer');
-    const partySizeSpan = document.getElementById('partySize');
-
-    if (partySizeSpan) partySizeSpan.innerText = `${partyMembers.length}/${MAX_PARTY_SIZE}`;
-
-    if (!partyListContainer) return;
-
-    if (partyMembers.length === 0) {
-        partyListContainer.innerHTML = '<div class="party-empty">No party members<br>Invite friends via ⚔️ button</div>';
-        return;
-    }
-
-    partyListContainer.innerHTML = '';
-    partyMembers.forEach((member) => {
-        const memberDiv = document.createElement('div');
-        memberDiv.className = 'party-member';
-        const avatarLetter = member.name.charAt(0).toUpperCase();
-        const statusIcon = member.status === 'online' ? '🟢' : '⚫';
-        memberDiv.innerHTML = `
-            <div class="party-member-info">
-                <div class="party-member-avatar">${escapeHtml(avatarLetter)}</div>
-                <div class="party-member-name">${escapeHtml(member.name)}</div>
-                <div class="party-member-status">${statusIcon} ${member.status}</div>
-            </div>
-            <button class="party-member-kick" data-id="${member.id}" title="Kick from party">✖</button>
-        `;
-        partyListContainer.appendChild(memberDiv);
-    });
-
-    document.querySelectorAll('.party-member-kick').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            kickFromParty(btn.dataset.id);
-        });
-    });
-}
-
-function addToParty(friendIdValue) {
-    const friend = findFriend(friendIdValue);
-    if (!friend) {
-        notifySocial("Friend not found!", 2200, "warning");
-        return false;
-    }
-
-    if (partyMembers.some(m => friendId(m) === friendIdValue)) {
-        notifySocial(`${friend.name} is already in your party!`);
-        return false;
-    }
-
-    if (partyMembers.length >= MAX_PARTY_SIZE) {
-        notifySocial(`Party is full! (${MAX_PARTY_SIZE}/${MAX_PARTY_SIZE})`, 2600, "warning");
-        return false;
-    }
-
-    if (friend.status !== "online") {
-        notifySocial(`${friend.name} is ${friend.status} and cannot join the party.`, 2600, "warning");
-        return false;
-    }
-
-    partyMembers.push({ ...friend, id: friendIdValue });
-    updatePartyUI();
-    notifySocial(`${friend.name} joined your party!`, 2400, "success");
-    addChatMessage(friendIdValue, `${friend.name} has joined the party!`, false);
-    return true;
-}
-
-function kickFromParty(friendIdValue) {
-    const memberIndex = partyMembers.findIndex(m => friendId(m) === friendIdValue);
-    if (memberIndex !== -1) {
-        const kicked = partyMembers[memberIndex];
-        partyMembers.splice(memberIndex, 1);
-        updatePartyUI();
-        notifySocial(`${kicked.name} was kicked from the party.`, 2400, "warning");
-        addChatMessage(friendIdValue, `You were kicked from the party.`, false);
-    }
-}
-
-function leaveParty() {
-    if (partyMembers.length === 0) {
-        notifySocial("You're not in a party!", 2200, "warning");
-        return;
-    }
-
-    partyMembers.forEach(member => {
-        addChatMessage(friendId(member), `${member.name} has left the party.`, false);
-    });
-
-    partyMembers = [];
-    updatePartyUI();
-    notifySocial("You left the party.", 2200, "info");
 }
 
 // ========== FRIEND LIST RENDERING ==========
@@ -443,7 +347,7 @@ function renderFriendList() {
     let processed = applySort(filtered);
 
     if (processed.length === 0) {
-        container.innerHTML = `<div class="empty-message">🧙 No friends yet ...<br>♢ invite allies ♢</div>`;
+        container.innerHTML = `<div class="empty-message">No friends yet ...<br>invite allies</div>`;
         updateCounterUI();
         return;
     }
@@ -477,9 +381,8 @@ function renderFriendList() {
                 </div>
             </div>
             <div class="friend-actions">
-                <button class="icon-btn chat-popup-btn" data-id="${escapeHtml(fid)}" data-name="${escapeHtml(friend.name)}" title="Send pigeon">🕊️</button>
-                <button class="icon-btn party-invite-btn" data-id="${escapeHtml(fid)}" data-name="${escapeHtml(friend.name)}">⚔️</button>
-                <button class="icon-btn remove-btn" data-id="${escapeHtml(fid)}">✖</button>
+                <button class="icon-btn chat-popup-btn" data-id="${escapeHtml(fid)}" data-name="${escapeHtml(friend.name)}" title="Send pigeon">MSG</button>
+                <button class="icon-btn remove-btn" data-id="${escapeHtml(fid)}" title="Remove friend">X</button>
             </div>
         `;
         container.appendChild(card);
@@ -489,13 +392,6 @@ function renderFriendList() {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             openChatPopup(btn.dataset.id);
-        });
-    });
-
-    document.querySelectorAll('.party-invite-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            addToParty(btn.dataset.id);
         });
     });
 
@@ -549,14 +445,8 @@ function applyFriendsPayload(payload) {
         status: f.status || "offline"
     }));
 
-    partyMembers = partyMembers
-        .map(m => findFriend(friendId(m)))
-        .filter(Boolean)
-        .map(f => ({ ...f, id: friendId(f) }));
-
     renderFriendRequests();
     renderFriendList();
-    updatePartyUI();
 }
 
 window.vgrSocialUpdate = function(data) {
@@ -606,20 +496,14 @@ function bindUiEvents() {
     document.getElementById('showOnlineBtn').addEventListener('click', setFilterOnline);
     document.getElementById('showAllBtn').addEventListener('click', setFilterAll);
     document.getElementById('sortByNameBtn').addEventListener('click', setSortByName);
-    document.getElementById('leavePartyBtn').addEventListener('click', leaveParty);
 }
 
 // ========== UI VISIBILITY ==========
 socialChamberToggle(false);
-partyUIToggle(false);
 document.getElementById('popupContainer').style.display = 'none';
 
 function socialChamberToggle(unhideUI) {
     document.getElementById('friendsContainer').style.display = unhideUI ? 'block' : 'none';
-}
-
-function partyUIToggle(unhideUI) {
-    document.getElementById('partyPanel').style.display = unhideUI ? 'block' : 'none';
 }
 
 window.addEventListener('vgr:ui_manager:open:social', () => {
@@ -637,7 +521,6 @@ function init() {
     bindUiEvents();
     renderFriendRequests();
     renderFriendList();
-    updatePartyUI();
 }
 
 init();
